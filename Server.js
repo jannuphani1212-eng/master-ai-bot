@@ -63,5 +63,5 @@ status: "Initial backend ready"
 });
 
 app.listen(PORT, "0.0.0.0", () => {
-console.log("Master AI Bot running on port ${PORT}");
+console.log(`Master AI Bot running on port ${PORT}`);
 });
