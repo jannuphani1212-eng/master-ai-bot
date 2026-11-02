@@ -1,0 +1,61 @@
+<!DOCTYPE html><html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#101827">
+  <meta name="description" content="Master AI Bot dashboard for managing five specialist AI bots.">
+  <title>Master AI Bot</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>🤖 Master AI Bot</h1>
+      <p>One controller. Five specialist bots.</p>
+    </div>
+    <span id="connectionStatus" class="status">Checking...</span>
+  </header>  <main class="container">
+    <section class="welcome">
+      <h2>Your AI Command Center</h2>
+      <p>Describe what you want to accomplish. Your Master AI Bot will help plan the work and coordinate the specialist bots.</p>
+    </section><section class="panel">
+  <h2>Give Your Bot a Task</h2>
+  <form id="taskForm">
+    <label for="taskInput">What would you like to create or accomplish?</label>
+    <textarea id="taskInput" rows="4" placeholder="Example: Help me plan and build an Android expense-tracking app." required></textarea>
+
+    <label for="agentSelect">Choose an agent</label>
+    <select id="agentSelect">
+      <option value="master">Master AI Bot — Coordinate my task</option>
+      <option value="affiliate">Affiliate Marketing Bot</option>
+      <option value="youtube">YouTube Bot</option>
+      <option value="blogging">Blogging Bot</option>
+      <option value="app-development">App Development Bot</option>
+      <option value="seo">SEO Bot</option>
+    </select>
+
+    <button type="submit" id="submitButton">Prepare My Task</button>
+  </form>
+  <div id="taskResult" class="result" aria-live="polite">
+    Your task results will appear here.
+  </div>
+</section>
+
+<section class="panel">
+  <h2>Meet Your Six AI Agents</h2>
+  <p class="muted">The agents are registered in the backend. Their AI capabilities will be connected in a later step.</p>
+  <div id="agentList" class="agent-grid">
+    <p>Loading agents...</p>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>System Status</h2>
+  <button type="button" id="refreshButton" class="secondary">Refresh Status</button>
+  <pre id="systemStatus">Checking backend...</pre>
+</section>
+
+  </main>  <footer>
+    <p>Master AI Bot · Built step by step</p>
+  </footer>  <script src="/script.js" defer></script></body>
+</html>
