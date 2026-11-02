@@ -14,36 +14,32 @@ async function loadSystemStatus() {
 
   try {
     const response = await fetch("/api/status");
+
     if (!response.ok) {
-      throw new Error("Server returned an error.");
+      throw new Error("Backend request failed.");
     }
 
     const data = await response.json();
 
     connectionStatus.textContent = "● Connected";
-    systemStatus.textContent = JSON.stringify(
-      {
-        success: data.success,
-        message: data.message,
-        agentsAvailable: data.agents.length
-      },
-      null,
-      2
-    );
+    systemStatus.textContent = JSON.stringify({
+      status: data.message,
+      aiConfigured: data.aiConfigured,
+      agentsAvailable: data.agents.length
+    }, null, 2);
 
     displayAgents(data.agents);
   } catch (error) {
     connectionStatus.textContent = "● Offline";
     systemStatus.textContent =
-      "Could not connect to the backend.\n" +
-      "Make sure the server is running and try again.";
-    agentList.innerHTML =
-      "<p>The agent list will appear when the backend is available.</p>";
+      "Backend is not reachable yet. Deploy the application and try again.";
+
+    agentList.textContent = "Agent information is unavailable.";
   }
 }
 
 function displayAgents(agents) {
-  agentList.innerHTML = "";
+  agentList.replaceChildren();
 
   agents.forEach((agent) => {
     const card = document.createElement("article");
@@ -55,8 +51,7 @@ function displayAgents(agents) {
     const description = document.createElement("p");
     description.textContent = agent.role;
 
-    card.appendChild(title);
-    card.appendChild(description);
+    card.append(title, description);
     agentList.appendChild(card);
   });
 }
@@ -65,26 +60,43 @@ taskForm.addEventListener("submit", async (event) => {
   event.preventDefault();
 
   const task = taskInput.value.trim();
-  const selectedAgent = agentSelect.value;
+  const agentId = agentSelect.value;
 
   if (!task) {
-    taskResult.textContent = "Please enter a task first.";
+    taskResult.textContent = "Please enter a task.";
     return;
   }
 
-  taskResult.textContent =
-    "Your task has been recorded in the dashboard form.\n\n" +
-    "Selected agent: " + selectedAgent + "\n" +
-    "Task: " + task + "\n\n" +
-    "AI task processing will be connected in the next development step.";
-
   submitButton.disabled = true;
-  submitButton.textContent = "Task Prepared";
+  submitButton.textContent = "Working...";
+  taskResult.textContent = "Sending your task to the AI backend...";
 
-  setTimeout(() => {
+  try {
+    const response = await fetch("/api/task", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ task, agentId })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || "The task could not be completed.");
+    }
+
+    taskResult.textContent =
+      "Agent: " + data.agent + "\n\n" + data.result;
+  } catch (error) {
+    taskResult.textContent =
+      "Task not completed.\n\n" +
+      error.message +
+      "\n\nCheck that the backend is deployed and the AI API key is configured.";
+  } finally {
     submitButton.disabled = false;
     submitButton.textContent = "Prepare My Task";
-  }, 1500);
+  }
 });
 
 refreshButton.addEventListener("click", loadSystemStatus);
