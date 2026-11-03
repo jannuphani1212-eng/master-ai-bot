@@ -41,11 +41,15 @@ const agents = [
   }
 ];
 
+const specialistAgents = agents.filter(
+  agent => agent.id !== "master"
+);
+
 const agentInstructions = {
   master:
-    "You are the Master AI Bot. Break tasks into clear steps. " +
-    "Identify relevant specialist agents. Be realistic and never " +
-    "claim work was executed or tested unless it actually was.",
+    "You are the Master AI Bot. Coordinate specialist agents, " +
+    "break tasks into steps, and combine their results. " +
+    "Never claim an action was executed unless it actually was.",
 
   affiliate:
     "You are the Affiliate Marketing specialist. Help with ethical " +
@@ -70,35 +74,6 @@ const agentInstructions = {
     "guarantee rankings."
 };
 
-app.get("/api/health", (req, res) => {
-  res.json({
-    success: true,
-    status: "healthy"
-  });
-});
-
-app.get("/api/status", (req, res) => {
-  res.json({
-    success: true,
-    message: "Master AI Bot server is running.",
-    providers: {
-      geminiConfigured: Boolean(process.env.GEMINI_API_KEY),
-      groqConfigured: Boolean(process.env.GROQ_API_KEY),
-      geminiModel:
-        process.env.GEMINI_MODEL || "gemini-3.8-flash"
-    },
-    agents
-  });
-});
-
-app.get("/api", (req, res) => {
-  res.json({
-    name: "Master AI Bot",
-    message: "Welcome to your AI automation platform.",
-    status: "Backend ready"
-  });
-});
-
 function wait(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -113,6 +88,10 @@ function isTemporaryError(error) {
   );
 }
 
+// ------------------------------
+// GEMINI PRIMARY AI
+// ------------------------------
+
 async function callGemini(task, instructions) {
   const ai = new GoogleGenAI({
     apiKey: process.env.GEMINI_API_KEY
@@ -120,7 +99,6 @@ async function callGemini(task, instructions) {
 
   let lastError;
 
-  // Two attempts: original request plus one retry.
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const response = await ai.models.generateContent({
@@ -152,13 +130,21 @@ async function callGemini(task, instructions) {
   throw lastError;
 }
 
+// ------------------------------
+// GROQ BACKUP AI
+// ------------------------------
+
 async function callGroq(task, instructions) {
   if (!process.env.GROQ_API_KEY) {
     throw new Error("Groq backup is not configured.");
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 45000);
+
+  const timeout = setTimeout(
+    () => controller.abort(),
+    45000
+  );
 
   try {
     const response = await fetch(
@@ -192,14 +178,21 @@ async function callGroq(task, instructions) {
     if (!response.ok) {
       const details = await response.text();
 
-      // Log diagnostic information without printing API keys.
-      console.error("Groq API error:", response.status, details);
+      console.error(
+        "Groq API error:",
+        response.status,
+        details
+      );
 
-      throw new Error(`Groq API returned HTTP ${response.status}.`);
+      throw new Error(
+        `Groq API returned HTTP ${response.status}.`
+      );
     }
 
     const data = await response.json();
-    const result = data.choices?.[0]?.message?.content;
+
+    const result =
+      data.choices?.[0]?.message?.content;
 
     if (!result) {
       throw new Error("Groq returned no text.");
@@ -210,6 +203,437 @@ async function callGroq(task, instructions) {
     clearTimeout(timeout);
   }
 }
+
+// ------------------------------
+// AUTOMATIC AI PROVIDER SWITCHING
+// ------------------------------
+
+async function generateAI(task, instructions) {
+  const failures = [];
+
+  if (process.env.GEMINI_API_KEY) {
+    try {
+      const result = await callGemini(
+        task,
+        instructions
+      );
+
+      return {
+        result,
+        provider: "Gemini"
+      };
+    } catch (error) {
+      console.error("Gemini failed:", error.message);
+
+      failures.push(
+        "Gemini: " + error.message
+      );
+    }
+  }
+
+  if (process.env.GROQ_API_KEY) {
+    try {
+      const result = await callGroq(
+        task,
+        instructions
+      );
+
+      return {
+        result,
+        provider: "Groq (backup)"
+      };
+    } catch (error) {
+      console.error("Groq failed:", error.message);
+
+      failures.push(
+        "Groq: " + error.message
+      );
+    }
+  }
+
+  throw new Error(
+    failures.join(" | ") ||
+    "No AI provider is configured."
+  );
+}
+
+// ------------------------------
+// FALLBACK AGENT SELECTION
+// ------------------------------
+
+function fallbackAgentSelection(task) {
+  const text = task.toLowerCase();
+  const selected = [];
+
+  function add(id) {
+    if (
+      !selected.includes(id) &&
+      selected.length < 3
+    ) {
+      selected.push(id);
+    }
+  }
+
+  if (/affiliate|commission|amazon|meesho|flipkart|product marketing/.test(text)) {
+    add("affiliate");
+  }
+
+  if (/youtube|video|channel|reels|shorts|rhymes/.test(text)) {
+    add("youtube");
+  }
+
+  if (/blog|article|website content|writing/.test(text)) {
+    add("blogging");
+  }
+
+  if (/app|android|software|code|website development|programming/.test(text)) {
+    add("app-development");
+  }
+
+  if (/seo|keyword|google ranking|search engine/.test(text)) {
+    add("seo");
+  }
+
+  if (selected.length === 0) {
+    add("app-development");
+  }
+
+  return selected;
+}
+
+// ------------------------------
+// CENTRAL AI BRAIN: PLAN TASK
+// ------------------------------
+
+function extractJson(text) {
+  const cleaned = text
+    .replace(/```json/gi, "")
+    .replace(/```/g, "")
+    .trim();
+
+  const start = cleaned.indexOf("{");
+  const end = cleaned.lastIndexOf("}");
+
+  if (start === -1 || end === -1) {
+    throw new Error("AI did not return valid JSON.");
+  }
+
+  return JSON.parse(
+    cleaned.slice(start, end + 1)
+  );
+}
+
+async function createBrainPlan(task) {
+  const availableAgents = specialistAgents
+    .map(agent =>
+      `${agent.id}: ${agent.role}`
+    )
+    .join("\n");
+
+  const instructions =
+    "You are the planning brain of a multi-agent AI system. " +
+    "Choose only the relevant specialist agents. " +
+    "Return ONLY valid JSON. Do not use markdown.\n\n" +
+    "Available agents:\n" +
+    availableAgents +
+    "\n\nJSON format:\n" +
+    '{"tasks":[{"agentId":"affiliate","task":"Specific work to complete"}]}\n' +
+    "Choose between one and three agents. " +
+    "Do not select the master agent. " +
+    "Give each agent a clear and useful task.";
+
+  const response = await generateAI(
+    task,
+    instructions
+  );
+
+  const plan = extractJson(response.result);
+
+  if (!Array.isArray(plan.tasks)) {
+    throw new Error("Invalid task plan.");
+  }
+
+  const validTasks = [];
+
+  for (const item of plan.tasks) {
+    if (
+      !item ||
+      typeof item.agentId !== "string" ||
+      typeof item.task !== "string"
+    ) {
+      continue;
+    }
+
+    const agent = specialistAgents.find(
+      a => a.id === item.agentId
+    );
+
+    if (
+      agent &&
+      item.task.trim() &&
+      !validTasks.some(
+        t => t.agentId === agent.id
+      )
+    ) {
+      validTasks.push({
+        agentId: agent.id,
+        task: item.task.trim()
+      });
+    }
+
+    if (validTasks.length >= 3) {
+      break;
+    }
+  }
+
+  if (validTasks.length === 0) {
+    throw new Error("No suitable specialist selected.");
+  }
+
+  return {
+    tasks: validTasks,
+    provider: response.provider
+  };
+}
+
+// ------------------------------
+// CENTRAL AI BRAIN: EXECUTE AGENTS
+// ------------------------------
+
+async function runCentralBrain(task) {
+  let plan;
+  let planningProvider = "Fallback selection";
+
+  try {
+    plan = await createBrainPlan(task);
+    planningProvider = plan.provider;
+  } catch (error) {
+    console.error(
+      "AI planning unavailable:",
+      error.message
+    );
+
+    plan = {
+      tasks: fallbackAgentSelection(task).map(
+        agentId => ({
+          agentId,
+          task
+        })
+      )
+    };
+  }
+
+  const specialistResults = [];
+  const providersUsed = new Set();
+
+  if (planningProvider !== "Fallback selection") {
+    providersUsed.add(planningProvider);
+  }
+
+  // Run specialists one at a time to reduce API load.
+  for (const item of plan.tasks) {
+    const agent = specialistAgents.find(
+      a => a.id === item.agentId
+    );
+
+    if (!agent) continue;
+
+    try {
+      const response = await generateAI(
+        item.task,
+        agentInstructions[item.agentId]
+      );
+
+      providersUsed.add(response.provider);
+
+      specialistResults.push({
+        agentId: item.agentId,
+        name: agent.name,
+        success: true,
+        result: response.result
+      });
+    } catch (error) {
+      console.error(
+        `${agent.name} failed:`,
+        error.message
+      );
+
+      specialistResults.push({
+        agentId: item.agentId,
+        name: agent.name,
+        success: false,
+        result: "This specialist could not complete the task. " +
+          "Please try again later."
+      });
+    }
+  }
+
+  const successfulResults =
+    specialistResults.filter(item => item.success);
+
+  if (successfulResults.length === 0) {
+    throw new Error(
+      "The selected specialist bots could not complete the task."
+    );
+  }
+
+  const specialistSummary = successfulResults
+    .map(item =>
+      `SPECIALIST: ${item.name}\n${item.result}`
+    )
+    .join("\n\n--------------------\n\n");
+
+  const synthesisInstructions =
+    "You are the Master AI Bot. Combine the specialist " +
+    "reports into one useful, well-organised answer. " +
+    "Remove repetition, identify practical next steps, " +
+    "and clearly mention any limitations. " +
+    "Never claim external actions were completed.";
+
+  let finalResult;
+
+  try {
+    const synthesis = await generateAI(
+      "USER'S ORIGINAL GOAL:\n" +
+      task +
+      "\n\nSPECIALIST REPORTS:\n" +
+      specialistSummary,
+      synthesisInstructions
+    );
+
+    providersUsed.add(synthesis.provider);
+    finalResult = synthesis.result;
+  } catch (error) {
+    console.error(
+      "Final synthesis failed:",
+      error.message
+    );
+
+    finalResult =
+      "The specialist bots completed their reports. " +
+      "The final combined summary could not be generated, " +
+      "so their individual results are shown below.\n\n" +
+      specialistSummary;
+  }
+
+  return {
+    success: true,
+    agent: "master",
+    provider: [...providersUsed].join(" + "),
+    selectedAgents: successfulResults.map(
+      item => ({
+        id: item.agentId,
+        name: item.name
+      })
+    ),
+    specialistResults,
+    result: finalResult
+  };
+}
+
+// ------------------------------
+// API: HEALTH
+// ------------------------------
+
+app.get("/api/health", (req, res) => {
+  res.json({
+    success: true,
+    status: "healthy"
+  });
+});
+
+// ------------------------------
+// API: STATUS
+// ------------------------------
+
+app.get("/api/status", (req, res) => {
+  res.json({
+    success: true,
+    message: "Master AI Bot server is running.",
+    centralBrain: true,
+    providers: {
+      geminiConfigured: Boolean(
+        process.env.GEMINI_API_KEY
+      ),
+      groqConfigured: Boolean(
+        process.env.GROQ_API_KEY
+      ),
+      geminiModel:
+        process.env.GEMINI_MODEL ||
+        "gemini-3.8-flash"
+    },
+    agents
+  });
+});
+
+// ------------------------------
+// API: WELCOME
+// ------------------------------
+
+app.get("/api", (req, res) => {
+  res.json({
+    name: "Master AI Bot",
+    message: "Welcome to your AI automation platform.",
+    status: "Backend ready",
+    centralBrain: true
+  });
+});
+
+// ------------------------------
+// API: CENTRAL AI BRAIN
+// ------------------------------
+
+app.post("/api/brain", async (req, res) => {
+  const task =
+    typeof req.body?.task === "string"
+      ? req.body.task.trim()
+      : "";
+
+  if (!task) {
+    return res.status(400).json({
+      success: false,
+      error: "Please enter a task."
+    });
+  }
+
+  if (task.length > 10000) {
+    return res.status(400).json({
+      success: false,
+      error: "Please keep your task under 10,000 characters."
+    });
+  }
+
+  if (
+    !process.env.GEMINI_API_KEY &&
+    !process.env.GROQ_API_KEY
+  ) {
+    return res.status(503).json({
+      success: false,
+      error: "No AI provider is configured."
+    });
+  }
+
+  try {
+    const result = await runCentralBrain(task);
+
+    return res.json(result);
+  } catch (error) {
+    console.error(
+      "Central Brain failed:",
+      error.message
+    );
+
+    return res.status(502).json({
+      success: false,
+      error: "The Central AI Brain could not complete this task. Please try again.",
+      details: error.message
+    });
+  }
+});
+
+// ------------------------------
+// API: EXISTING TASK ENDPOINT
+// ------------------------------
 
 app.post("/api/task", async (req, res) => {
   const task =
@@ -253,51 +677,47 @@ app.post("/api/task", async (req, res) => {
     });
   }
 
-  const instructions = agentInstructions[agentId];
-  const failures = [];
+  try {
+    // Master agent now uses the Central AI Brain.
+    if (agentId === "master") {
+      const result = await runCentralBrain(task);
 
-  // Try Gemini first.
-  if (process.env.GEMINI_API_KEY) {
-    try {
-      const result = await callGemini(task, instructions);
-
-      return res.json({
-        success: true,
-        agent: agentId,
-        provider: "Gemini",
-        result
-      });
-    } catch (error) {
-      console.error("Gemini failed:", error.message);
-      failures.push("Gemini: " + error.message);
+      return res.json(result);
     }
+
+    // Other agents continue working individually.
+    const response = await generateAI(
+      task,
+      agentInstructions[agentId]
+    );
+
+    return res.json({
+      success: true,
+      agent: agentId,
+      provider: response.provider,
+      result: response.result
+    });
+  } catch (error) {
+    console.error(
+      "Task processing failed:",
+      error.message
+    );
+
+    return res.status(502).json({
+      success: false,
+      error: "Task processing failed. Please try again.",
+      details: error.message
+    });
   }
-
-  // Automatically try Groq if Gemini fails.
-  if (process.env.GROQ_API_KEY) {
-    try {
-      const result = await callGroq(task, instructions);
-
-      return res.json({
-        success: true,
-        agent: agentId,
-        provider: "Groq (backup)",
-        result
-      });
-    } catch (error) {
-      console.error("Groq failed:", error.message);
-      failures.push("Groq: " + error.message);
-    }
-  }
-
-  return res.status(502).json({
-    success: false,
-    error:
-      "All configured AI providers failed. Please try again later.",
-    details: failures
-  });
 });
+
+// ------------------------------
+// START SERVER
+// ------------------------------
 
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Master AI Bot running on port ${PORT}`);
-});
+  console.log(
+    `Master AI Bot running on port ${PORT}`
+  );
+  console.log("Central AI Brain enabled.");
+});    
