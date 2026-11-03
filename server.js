@@ -9,41 +9,40 @@ app.use(express.json({ limit: "1mb" }));
 app.use(express.static("public"));
 
 // =====================================
-// AI PROVIDER COOLDOWN
+// PROVIDER COOLDOWNS
 // =====================================
 
-let geminiCooldownUntil = 0;
+const cooldowns = {
+  gemini: 0,
+  groq: 0,
+  openrouter: 0
+};
 
-function isGeminiCoolingDown() {
-  return Date.now() < geminiCooldownUntil;
+function isCoolingDown(provider) {
+  return Date.now() < cooldowns[provider];
 }
 
-function setGeminiCooldown(error) {
-  const message = String(error?.message || error);
-
-  let cooldown = 2 * 60 * 1000;
-
-  // Daily free-tier quota exhausted.
-  if (
-    /RESOURCE_EXHAUSTED|429/i.test(message) &&
-    /per day|daily|free tier|GenerateRequestsPerDay/i.test(message)
-  ) {
-    cooldown = 60 * 60 * 1000;
-  }
-
-  // Temporary Gemini overload.
-  if (/503|UNAVAILABLE|high demand/i.test(message)) {
-    cooldown = 2 * 60 * 1000;
-  }
-
-  geminiCooldownUntil = Math.max(
-    geminiCooldownUntil,
-    Date.now() + cooldown
+function setCooldown(provider, seconds = 60) {
+  cooldowns[provider] = Math.max(
+    cooldowns[provider],
+    Date.now() + seconds * 1000
   );
 
   console.log(
-    `Gemini cooldown enabled for ${Math.ceil(cooldown / 60000)} minutes.`
+    `${provider} cooldown: ${seconds} seconds.`
   );
+}
+
+function getRetrySeconds(message) {
+  const match = String(message).match(
+    /try again in ([\d.]+)\s*s/i
+  );
+
+  if (match) {
+    return Math.min(120, Math.max(10, Math.ceil(Number(match[1]))));
+  }
+
+  return 60;
 }
 
 // =====================================
@@ -121,19 +120,28 @@ const agentInstructions = {
 };
 
 // =====================================
-// GEMINI
+// GEMINI PROVIDER
 // =====================================
 
-async function callGemini(task, instructions) {
+async function callGemini(task, instructions, maxTokens = 900) {
+
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error("Gemini API key not configured.");
+  }
+
   const ai = new GoogleGenAI({
     apiKey: process.env.GEMINI_API_KEY
   });
 
   const response = await ai.models.generateContent({
     model: process.env.GEMINI_MODEL || "gemini-3.8-flash",
+
     contents: task,
+
     config: {
-      systemInstruction: instructions
+      systemInstruction: instructions,
+      maxOutputTokens: maxTokens,
+      temperature: 0.4
     }
   });
 
@@ -147,12 +155,13 @@ async function callGemini(task, instructions) {
 }
 
 // =====================================
-// GROQ
+// GROQ PROVIDER
 // =====================================
 
-async function callGroq(task, instructions) {
+async function callGroq(task, instructions, maxTokens = 900) {
+
   if (!process.env.GROQ_API_KEY) {
-    throw new Error("Groq backup is not configured.");
+    throw new Error("Groq API key not configured.");
   }
 
   const controller = new AbortController();
@@ -163,17 +172,19 @@ async function callGroq(task, instructions) {
   );
 
   try {
+
     const response = await fetch(
       "https://api.groq.com/openai/v1/chat/completions",
       {
         method: "POST",
+
         headers: {
           "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
           "Content-Type": "application/json"
         },
+
         body: JSON.stringify({
-          model:
-            process.env.GROQ_MODEL || "openai/gpt-oss-20b",
+          model: process.env.GROQ_MODEL || "openai/gpt-oss-20b",
 
           messages: [
             {
@@ -186,15 +197,24 @@ async function callGroq(task, instructions) {
             }
           ],
 
-          temperature: 0.5,
-          max_completion_tokens: 2048
+          temperature: 0.4,
+          max_completion_tokens: maxTokens
         }),
+
         signal: controller.signal
       }
     );
 
     if (!response.ok) {
+
       const details = await response.text();
+
+      if (response.status === 429) {
+        setCooldown(
+          "groq",
+          getRetrySeconds(details)
+        );
+      }
 
       console.error(
         "Groq API error:",
@@ -203,7 +223,7 @@ async function callGroq(task, instructions) {
       );
 
       throw new Error(
-        `Groq API returned HTTP ${response.status}.`
+        `Groq HTTP ${response.status}: ${details}`
       );
     }
 
@@ -226,95 +246,212 @@ async function callGroq(task, instructions) {
 }
 
 // =====================================
-// AUTOMATIC PROVIDER SWITCHING
+// OPENROUTER PROVIDER
 // =====================================
 
-async function generateAI(task, instructions) {
+async function callOpenRouter(
+  task,
+  instructions,
+  maxTokens = 900
+) {
+
+  if (!process.env.OPENROUTER_API_KEY) {
+    throw new Error("OpenRouter API key not configured.");
+  }
+
+  const controller = new AbortController();
+
+  const timeout = setTimeout(
+    () => controller.abort(),
+    45000
+  );
+
+  try {
+
+    const response = await fetch(
+      "https://openrouter.ai/api/v1/chat/completions",
+      {
+        method: "POST",
+
+        headers: {
+          "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json",
+          "X-Title": "Master AI Bot"
+        },
+
+        body: JSON.stringify({
+          model:
+            process.env.OPENROUTER_MODEL || "openrouter/free",
+
+          messages: [
+            {
+              role: "system",
+              content: instructions
+            },
+            {
+              role: "user",
+              content: task
+            }
+          ],
+
+          temperature: 0.4,
+          max_tokens: maxTokens
+        }),
+
+        signal: controller.signal
+      }
+    );
+
+    if (!response.ok) {
+
+      const details = await response.text();
+
+      if (response.status === 429) {
+        setCooldown(
+          "openrouter",
+          getRetrySeconds(details)
+        );
+      }
+
+      console.error(
+        "OpenRouter API error:",
+        response.status,
+        details
+      );
+
+      throw new Error(
+        `OpenRouter HTTP ${response.status}: ${details}`
+      );
+    }
+
+    const data = await response.json();
+
+    const result =
+      data.choices?.[0]?.message?.content;
+
+    if (!result) {
+      throw new Error("OpenRouter returned no text.");
+    }
+
+    console.log("OpenRouter AI response successful.");
+
+    return result;
+
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// =====================================
+// THREE-PROVIDER AUTOMATIC SWITCHING
+// =====================================
+
+async function generateAI(
+  task,
+  instructions,
+  maxTokens = 900
+) {
+
+  const providers = [
+    {
+      id: "gemini",
+      name: "Gemini",
+      call: callGemini
+    },
+    {
+      id: "groq",
+      name: "Groq",
+      call: callGroq
+    },
+    {
+      id: "openrouter",
+      name: "OpenRouter",
+      call: callOpenRouter
+    }
+  ];
+
   const failures = [];
-
-  const geminiAvailable =
-    Boolean(process.env.GEMINI_API_KEY) &&
-    !isGeminiCoolingDown();
-
-  const groqAvailable =
-    Boolean(process.env.GROQ_API_KEY);
-
-  // During Gemini cooldown, Groq gets priority.
-  const providers = isGeminiCoolingDown()
-    ? ["groq", "gemini"]
-    : ["gemini", "groq"];
 
   for (const provider of providers) {
 
-    if (
-      provider === "gemini" &&
-      !geminiAvailable &&
-      isGeminiCoolingDown()
-    ) {
+    if (!process.env[
+      provider.id === "gemini"
+        ? "GEMINI_API_KEY"
+        : provider.id === "groq"
+          ? "GROQ_API_KEY"
+          : "OPENROUTER_API_KEY"
+    ]) {
       continue;
     }
 
-    if (
-      provider === "gemini" &&
-      !process.env.GEMINI_API_KEY
-    ) {
-      continue;
-    }
+    if (isCoolingDown(provider.id)) {
+      console.log(
+        `${provider.name} skipped because of cooldown.`
+      );
 
-    if (
-      provider === "groq" &&
-      !groqAvailable
-    ) {
       continue;
     }
 
     try {
-      if (provider === "gemini") {
-        const result = await callGemini(
-          task,
-          instructions
-        );
 
-        console.log("AI provider successful: Gemini");
+      console.log(
+        `Trying AI provider: ${provider.name}`
+      );
 
-        return {
-          result,
-          provider: "Gemini"
-        };
+      const result = await provider.call(
+        task,
+        instructions,
+        maxTokens
+      );
+
+      if (provider.id === "gemini") {
+        console.log("Gemini AI response successful.");
       }
 
-      if (provider === "groq") {
-        const result = await callGroq(
-          task,
-          instructions
-        );
-
-        return {
-          result,
-          provider: "Groq"
-        };
-      }
+      return {
+        result,
+        provider: provider.name
+      };
 
     } catch (error) {
 
       console.error(
-        `${provider.toUpperCase()} failed:`,
+        `${provider.name} failed:`,
         error.message
       );
 
       failures.push(
-        `${provider}: ${error.message}`
+        `${provider.name}: ${error.message}`
       );
 
-      if (provider === "gemini") {
-        setGeminiCooldown(error);
+      if (
+        provider.id === "gemini" &&
+        /429|RESOURCE_EXHAUSTED|503|UNAVAILABLE/i.test(error.message)
+      ) {
+        setCooldown("gemini", 3600);
+      }
+
+      if (
+        provider.id === "groq" &&
+        !isCoolingDown("groq") &&
+        /429|rate_limit/i.test(error.message)
+      ) {
+        setCooldown("groq", 60);
+      }
+
+      if (
+        provider.id === "openrouter" &&
+        !isCoolingDown("openrouter") &&
+        /429|rate_limit/i.test(error.message)
+      ) {
+        setCooldown("openrouter", 60);
       }
     }
   }
 
   throw new Error(
     failures.join(" | ") ||
-    "No available AI provider."
+    "No available AI provider. Check API configuration."
   );
 }
 
@@ -323,10 +460,12 @@ async function generateAI(task, instructions) {
 // =====================================
 
 function fallbackAgentSelection(task) {
+
   const text = task.toLowerCase();
   const selected = [];
 
   function add(id) {
+
     if (
       !selected.includes(id) &&
       selected.length < 3
@@ -367,6 +506,7 @@ function fallbackAgentSelection(task) {
 // =====================================
 
 function extractJson(text) {
+
   const cleaned = text
     .replace(/```json/gi, "")
     .replace(/```/g, "")
@@ -389,6 +529,7 @@ function extractJson(text) {
 // =====================================
 
 async function createBrainPlan(task) {
+
   const availableAgents = specialistAgents
     .map(agent =>
       `${agent.id}: ${agent.role}`
@@ -408,7 +549,8 @@ async function createBrainPlan(task) {
 
   const response = await generateAI(
     task,
-    instructions
+    instructions,
+    350
   );
 
   const plan = extractJson(response.result);
@@ -420,6 +562,7 @@ async function createBrainPlan(task) {
   const validTasks = [];
 
   for (const item of plan.tasks) {
+
     if (
       !item ||
       typeof item.agentId !== "string" ||
@@ -461,14 +604,36 @@ async function createBrainPlan(task) {
 }
 
 // =====================================
+// LIMIT SPECIALIST REPORT SIZE
+// =====================================
+
+function compactReport(text, maxLength = 1800) {
+
+  const cleaned = String(text || "").trim();
+
+  if (cleaned.length <= maxLength) {
+    return cleaned;
+  }
+
+  return (
+    cleaned.slice(0, maxLength) +
+    "\n\n[Report shortened to save AI tokens.]"
+  );
+}
+
+// =====================================
 // CENTRAL AI BRAIN: EXECUTION
 // =====================================
 
 async function runCentralBrain(task) {
+
   let plan;
-  let planningProvider = "Fallback selection";
+
+  let planningProvider =
+    "Fallback selection";
 
   try {
+
     plan = await createBrainPlan(task);
 
     planningProvider = plan.provider;
@@ -497,7 +662,7 @@ async function runCentralBrain(task) {
     providersUsed.add(planningProvider);
   }
 
-  // Run specialists one at a time.
+  // Execute specialists sequentially.
   for (const item of plan.tasks) {
 
     const agent = specialistAgents.find(
@@ -507,9 +672,17 @@ async function runCentralBrain(task) {
     if (!agent) continue;
 
     try {
+
+      const conciseInstructions =
+        agentInstructions[item.agentId] +
+        " Keep your report concise, practical and structured. " +
+        "Prioritise important findings and actionable recommendations. " +
+        "Avoid repeating the user's task.";
+
       const response = await generateAI(
         item.task,
-        agentInstructions[item.agentId]
+        conciseInstructions,
+        700
       );
 
       providersUsed.add(response.provider);
@@ -541,41 +714,48 @@ async function runCentralBrain(task) {
     specialistResults.filter(item => item.success);
 
   if (successfulResults.length === 0) {
+
     throw new Error(
       "The specialist bots could not complete the task."
     );
   }
 
-  // Keep the synthesis input concise.
+  // Compact specialist reports.
   const specialistSummary = successfulResults
     .map(item =>
-      `SPECIALIST: ${item.name}\n${item.result}`
+      `SPECIALIST: ${item.name}\n` +
+      compactReport(item.result, 1800)
     )
     .join("\n\n--------------------\n\n");
 
   const synthesisInstructions =
     "You are the Master AI Bot. Combine the specialist " +
-    "reports into one clear, useful answer. " +
-    "Remove repetition. Organise the answer with headings " +
-    "and practical next steps. Preserve important facts. " +
-    "Never invent information or claim external actions were completed.";
+    "reports into one useful final answer. " +
+    "Remove repetition. Compare recommendations. " +
+    "Identify the best strategy. Provide practical next steps. " +
+    "Preserve important facts. Never invent information. " +
+    "Keep the final answer clear and concise.";
 
   let finalResult;
 
   try {
+
     const synthesis = await generateAI(
       "ORIGINAL USER TASK:\n" +
-      task +
+      task.slice(0, 2500) +
       "\n\nSPECIALIST REPORTS:\n" +
       specialistSummary,
-      synthesisInstructions
+      synthesisInstructions,
+      1200
     );
 
     providersUsed.add(synthesis.provider);
 
     finalResult = synthesis.result;
 
-    console.log("Final AI synthesis successful.");
+    console.log(
+      "Final AI synthesis successful."
+    );
 
   } catch (error) {
 
@@ -584,11 +764,11 @@ async function runCentralBrain(task) {
       error.message
     );
 
-    // Preserve specialist reports if synthesis fails.
+    // Preserve all specialist results.
     finalResult =
-      "The specialist bots completed their reports. " +
-      "The final combined summary could not be generated. " +
-      "Their individual results are shown below.\n\n" +
+      "The specialist bots completed their reports, " +
+      "but the final AI synthesis was unavailable. " +
+      "Here are the collected reports:\n\n" +
       specialistSummary;
   }
 
@@ -616,10 +796,12 @@ async function runCentralBrain(task) {
 // =====================================
 
 app.get("/api/health", (req, res) => {
+
   res.json({
     success: true,
     status: "healthy"
   });
+
 });
 
 // =====================================
@@ -628,44 +810,55 @@ app.get("/api/health", (req, res) => {
 
 app.get("/api/status", (req, res) => {
 
-  const cooldownRemaining = isGeminiCoolingDown()
-    ? Math.ceil(
-        (geminiCooldownUntil - Date.now()) / 1000
-      )
-    : 0;
+  function remaining(provider) {
+
+    return isCoolingDown(provider)
+      ? Math.ceil(
+          (cooldowns[provider] - Date.now()) / 1000
+        )
+      : 0;
+  }
+
+  const providers = {
+    gemini: {
+      configured: Boolean(process.env.GEMINI_API_KEY),
+      coolingDown: isCoolingDown("gemini"),
+      cooldownRemainingSeconds: remaining("gemini")
+    },
+
+    groq: {
+      configured: Boolean(process.env.GROQ_API_KEY),
+      coolingDown: isCoolingDown("groq"),
+      cooldownRemainingSeconds: remaining("groq")
+    },
+
+    openrouter: {
+      configured: Boolean(process.env.OPENROUTER_API_KEY),
+      coolingDown: isCoolingDown("openrouter"),
+      cooldownRemainingSeconds: remaining("openrouter")
+    }
+  };
 
   res.json({
+
     success: true,
 
     message: "Master AI Bot server is running.",
 
     centralBrain: true,
 
-    providers: {
-      geminiConfigured: Boolean(
-        process.env.GEMINI_API_KEY
-      ),
+    providers,
 
-      groqConfigured: Boolean(
-        process.env.GROQ_API_KEY
-      ),
-
-      geminiModel:
-        process.env.GEMINI_MODEL ||
-        "gemini-3.8-flash",
-
-      preferredProvider:
-        isGeminiCoolingDown() ? "Groq" : "Gemini",
-
-      geminiCoolingDown:
-        isGeminiCoolingDown(),
-
-      geminiCooldownRemainingSeconds:
-        cooldownRemaining
+    models: {
+      gemini: process.env.GEMINI_MODEL || "gemini-3.8-flash",
+      groq: process.env.GROQ_MODEL || "openai/gpt-oss-20b",
+      openrouter: process.env.OPENROUTER_MODEL || "openrouter/free"
     },
 
     agents
+
   });
+
 });
 
 // =====================================
@@ -673,12 +866,14 @@ app.get("/api/status", (req, res) => {
 // =====================================
 
 app.get("/api", (req, res) => {
+
   res.json({
     name: "Master AI Bot",
     message: "Welcome to your AI automation platform.",
     status: "Backend ready",
     centralBrain: true
   });
+
 });
 
 // =====================================
@@ -693,27 +888,34 @@ app.post("/api/brain", async (req, res) => {
       : "";
 
   if (!task) {
+
     return res.status(400).json({
       success: false,
       error: "Please enter a task."
     });
+
   }
 
   if (task.length > 10000) {
+
     return res.status(400).json({
       success: false,
       error: "Please keep your task under 10,000 characters."
     });
+
   }
 
   if (
     !process.env.GEMINI_API_KEY &&
-    !process.env.GROQ_API_KEY
+    !process.env.GROQ_API_KEY &&
+    !process.env.OPENROUTER_API_KEY
   ) {
+
     return res.status(503).json({
       success: false,
       error: "No AI provider is configured."
     });
+
   }
 
   try {
@@ -734,7 +936,9 @@ app.post("/api/brain", async (req, res) => {
       error: "The Central AI Brain could not complete this task.",
       details: error.message
     });
+
   }
+
 });
 
 // =====================================
@@ -754,83 +958,23 @@ app.post("/api/task", async (req, res) => {
       : "master";
 
   if (!task) {
+
     return res.status(400).json({
       success: false,
       error: "Please enter a task."
     });
+
   }
 
   if (task.length > 10000) {
+
     return res.status(400).json({
       success: false,
       error: "Please keep your task under 10,000 characters."
     });
+
   }
 
   if (!agentInstructions[agentId]) {
-    return res.status(400).json({
-      success: false,
-      error: "Unknown agent selected."
-    });
-  }
 
-  if (
-    !process.env.GEMINI_API_KEY &&
-    !process.env.GROQ_API_KEY
-  ) {
-    return res.status(503).json({
-      success: false,
-      error: "No AI provider is configured."
-    });
-  }
-
-  try {
-
-    if (agentId === "master") {
-
-      const result = await runCentralBrain(task);
-
-      return res.json(result);
-    }
-
-    const response = await generateAI(
-      task,
-      agentInstructions[agentId]
-    );
-
-    return res.json({
-      success: true,
-      agent: agentId,
-      provider: response.provider,
-      result: response.result
-    });
-
-  } catch (error) {
-
-    console.error(
-      "Task processing failed:",
-      error.message
-    );
-
-    return res.status(502).json({
-      success: false,
-      error: "Task processing failed. Please try again.",
-      details: error.message
-    });
-  }
-});
-
-// =====================================
-// START SERVER
-// =====================================
-
-app.listen(PORT, "0.0.0.0", () => {
-
-  console.log(
-    `Master AI Bot running on port ${PORT}`
-  );
-
-  console.log("Central AI Brain enabled.");
-
-  console.log("Automatic Gemini and Groq switching enabled.");
-});
+    r
