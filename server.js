@@ -28,9 +28,7 @@ function setCooldown(provider, seconds = 60) {
     Date.now() + seconds * 1000
   );
 
-  console.log(
-    `${provider} cooldown: ${seconds} seconds.`
-  );
+  console.log(`${provider} cooldown: ${seconds} seconds.`);
 }
 
 function getRetrySeconds(message) {
@@ -39,7 +37,10 @@ function getRetrySeconds(message) {
   );
 
   if (match) {
-    return Math.min(120, Math.max(10, Math.ceil(Number(match[1]))));
+    return Math.min(
+      120,
+      Math.max(10, Math.ceil(Number(match[1])))
+    );
   }
 
   return 60;
@@ -135,9 +136,7 @@ async function callGemini(task, instructions, maxTokens = 900) {
 
   const response = await ai.models.generateContent({
     model: process.env.GEMINI_MODEL || "gemini-3.8-flash",
-
     contents: task,
-
     config: {
       systemInstruction: instructions,
       maxOutputTokens: maxTokens,
@@ -177,15 +176,12 @@ async function callGroq(task, instructions, maxTokens = 900) {
       "https://api.groq.com/openai/v1/chat/completions",
       {
         method: "POST",
-
         headers: {
           "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
           "Content-Type": "application/json"
         },
-
         body: JSON.stringify({
           model: process.env.GROQ_MODEL || "openai/gpt-oss-20b",
-
           messages: [
             {
               role: "system",
@@ -196,11 +192,9 @@ async function callGroq(task, instructions, maxTokens = 900) {
               content: task
             }
           ],
-
           temperature: 0.4,
           max_completion_tokens: maxTokens
         }),
-
         signal: controller.signal
       }
     );
@@ -210,10 +204,7 @@ async function callGroq(task, instructions, maxTokens = 900) {
       const details = await response.text();
 
       if (response.status === 429) {
-        setCooldown(
-          "groq",
-          getRetrySeconds(details)
-        );
+        setCooldown("groq", getRetrySeconds(details));
       }
 
       console.error(
@@ -272,17 +263,13 @@ async function callOpenRouter(
       "https://openrouter.ai/api/v1/chat/completions",
       {
         method: "POST",
-
         headers: {
           "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
           "Content-Type": "application/json",
           "X-Title": "Master AI Bot"
         },
-
         body: JSON.stringify({
-          model:
-            process.env.OPENROUTER_MODEL || "openrouter/free",
-
+          model: process.env.OPENROUTER_MODEL || "openrouter/free",
           messages: [
             {
               role: "system",
@@ -293,11 +280,9 @@ async function callOpenRouter(
               content: task
             }
           ],
-
           temperature: 0.4,
           max_tokens: maxTokens
         }),
-
         signal: controller.signal
       }
     );
@@ -307,10 +292,7 @@ async function callOpenRouter(
       const details = await response.text();
 
       if (response.status === 429) {
-        setCooldown(
-          "openrouter",
-          getRetrySeconds(details)
-        );
+        setCooldown("openrouter", getRetrySeconds(details));
       }
 
       console.error(
@@ -356,16 +338,19 @@ async function generateAI(
     {
       id: "gemini",
       name: "Gemini",
+      key: "GEMINI_API_KEY",
       call: callGemini
     },
     {
       id: "groq",
       name: "Groq",
+      key: "GROQ_API_KEY",
       call: callGroq
     },
     {
       id: "openrouter",
       name: "OpenRouter",
+      key: "OPENROUTER_API_KEY",
       call: callOpenRouter
     }
   ];
@@ -374,13 +359,7 @@ async function generateAI(
 
   for (const provider of providers) {
 
-    if (!process.env[
-      provider.id === "gemini"
-        ? "GEMINI_API_KEY"
-        : provider.id === "groq"
-          ? "GROQ_API_KEY"
-          : "OPENROUTER_API_KEY"
-    ]) {
+    if (!process.env[provider.key]) {
       continue;
     }
 
@@ -388,7 +367,6 @@ async function generateAI(
       console.log(
         `${provider.name} skipped because of cooldown.`
       );
-
       continue;
     }
 
@@ -531,9 +509,7 @@ function extractJson(text) {
 async function createBrainPlan(task) {
 
   const availableAgents = specialistAgents
-    .map(agent =>
-      `${agent.id}: ${agent.role}`
-    )
+    .map(agent => `${agent.id}: ${agent.role}`)
     .join("\n");
 
   const instructions =
@@ -629,8 +605,7 @@ async function runCentralBrain(task) {
 
   let plan;
 
-  let planningProvider =
-    "Fallback selection";
+  let planningProvider = "Fallback selection";
 
   try {
 
@@ -714,13 +689,11 @@ async function runCentralBrain(task) {
     specialistResults.filter(item => item.success);
 
   if (successfulResults.length === 0) {
-
     throw new Error(
       "The specialist bots could not complete the task."
     );
   }
 
-  // Compact specialist reports.
   const specialistSummary = successfulResults
     .map(item =>
       `SPECIALIST: ${item.name}\n` +
@@ -753,9 +726,7 @@ async function runCentralBrain(task) {
 
     finalResult = synthesis.result;
 
-    console.log(
-      "Final AI synthesis successful."
-    );
+    console.log("Final AI synthesis successful.");
 
   } catch (error) {
 
@@ -764,7 +735,6 @@ async function runCentralBrain(task) {
       error.message
     );
 
-    // Preserve all specialist results.
     finalResult =
       "The specialist bots completed their reports, " +
       "but the final AI synthesis was unavailable. " +
@@ -775,18 +745,14 @@ async function runCentralBrain(task) {
   return {
     success: true,
     agent: "master",
-
     provider: [...providersUsed].join(" + "),
-
     selectedAgents: successfulResults.map(
       item => ({
         id: item.agentId,
         name: item.name
       })
     ),
-
     specialistResults,
-
     result: finalResult
   };
 }
@@ -840,23 +806,16 @@ app.get("/api/status", (req, res) => {
   };
 
   res.json({
-
     success: true,
-
     message: "Master AI Bot server is running.",
-
     centralBrain: true,
-
     providers,
-
     models: {
       gemini: process.env.GEMINI_MODEL || "gemini-3.8-flash",
       groq: process.env.GROQ_MODEL || "openai/gpt-oss-20b",
       openrouter: process.env.OPENROUTER_MODEL || "openrouter/free"
     },
-
     agents
-
   });
 
 });
@@ -977,4 +936,22 @@ app.post("/api/task", async (req, res) => {
 
   if (!agentInstructions[agentId]) {
 
-    r
+    return res.status(400).json({
+      success: false,
+      error: "Invalid agent selected."
+    });
+
+  }
+
+  if (
+    !process.env.GEMINI_API_KEY &&
+    !process.env.GROQ_API_KEY &&
+    !process.env.OPENROUTER_API_KEY
+  ) {
+
+    return res.status(500).json({
+  success: false,
+  error: "No AI provider API key configured.",
+  message: "Please configure GEMINI_API_KEY, GROQ_API_KEY or OPENROUTER_API_KEY."
+});
+  }
