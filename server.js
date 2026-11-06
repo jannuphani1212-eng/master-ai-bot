@@ -955,3 +955,44 @@ app.post("/api/task", async (req, res) => {
   message: "Please configure GEMINI_API_KEY, GROQ_API_KEY or OPENROUTER_API_KEY."
 });
   }
+  try {
+
+    if (agentId === "master") {
+      const result = await runCentralBrain(task);
+      return res.json(result);
+    }
+
+    const response = await generateAI(
+      task,
+      agentInstructions[agentId],
+      1200
+    );
+
+    return res.json({
+      success: true,
+      agent: agentId,
+      provider: response.provider,
+      result: response.result
+    });
+
+  } catch (error) {
+
+    console.error("Task API failed:", error.message);
+
+    return res.status(502).json({
+      success: false,
+      error: "The selected AI agent could not complete this task.",
+      details: error.message
+    });
+
+  }
+
+});
+
+// =====================================
+// START SERVER
+// =====================================
+
+app.listen(PORT, () => {
+  console.log(`Master AI Bot running on port ${PORT}`);
+});
