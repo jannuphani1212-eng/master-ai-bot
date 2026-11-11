@@ -7,6 +7,52 @@ import { runProviderFallback } from "./lib/provider-fallback.js";
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Render runs behind a trusted reverse proxy. This allows req.ip to identify
+// the originating client for the lightweight API request limit below.
+app.set("trust proxy", 1);
+
+const apiRequestWindows = new Map();
+const API_WINDOW_MS = 60 * 1000;
+const API_MAX_REQUESTS = 15;
+
+function limitApiRequests(req, res, next) {
+  const now = Date.now();
+  const key = req.ip || req.socket?.remoteAddress || "unknown";
+  let bucket = apiRequestWindows.get(key);
+
+  if (!bucket || now - bucket.startedAt >= API_WINDOW_MS) {
+    bucket = { startedAt: now, count: 0 };
+  }
+
+  bucket.count += 1;
+  apiRequestWindows.set(key, bucket);
+
+  if (apiRequestWindows.size > 1000) {
+    for (const [ip, item] of apiRequestWindows) {
+      if (now - item.startedAt >= API_WINDOW_MS) {
+        apiRequestWindows.delete(ip);
+      }
+    }
+  }
+
+  if (bucket.count > API_MAX_REQUESTS) {
+    const retryAfter = Math.max(
+      1,
+      Math.ceil((bucket.startedAt + API_WINDOW_MS - now) / 1000)
+    );
+    res.set("Retry-After", String(retryAfter));
+    return res.status(429).json({
+      success: false,
+      error: "Too many AI requests. Please wait before trying again.",
+      retryAfterSeconds: retryAfter
+    });
+  }
+
+  next();
+}
+
+app.use(["/api/task", "/api/brain"], limitApiRequests);
+
 app.use(express.json({ limit: "1mb" }));
 app.use(express.static("public"));
 
