@@ -122,6 +122,14 @@ function displayTaskResult(data, selectedAgent) {
   addText(taskResult, "h3", "Specialist response");
   addText(taskResult, "p", `AI provider: ${data.provider || "Not reported"}`);
   addText(taskResult, "p", data.result || "No response was returned.");
+  if (data.requiresHumanApproval) {
+    addText(
+      taskResult,
+      "p",
+      data.approvalNotice || "Review this draft before taking external action.",
+      "approval-notice"
+    );
+  }
 }
 
 taskForm.addEventListener("submit", async (event) => {
