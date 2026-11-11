@@ -438,7 +438,7 @@ async function generateAI(
 // =====================================
 
 function requestsAllSpecialists(task) {
-  return /\ball\s*(five|5)\b|\bevery\s+(specialist|agent)\b|\ball\s+(specialist|agents)\b/i.test(
+  return /\ball\s*(five|5)\b|\bevery\s+(specialist|agent)s?\b|\ball\s+(specialist|agent)s?\b/i.test(
     String(task || "")
   );
 }
@@ -766,7 +766,8 @@ async function runCentralBrain(task) {
   }
 
   return {
-    success: true,
+    success: successfulResults.length === specialistResults.length,
+    partialSuccess: successfulResults.length > 0 && successfulResults.length < specialistResults.length,
     agent: "master",
     provider: [...providersUsed].join(" + "),
     selectedAgents: successfulResults.map(
