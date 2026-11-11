@@ -1,6 +1,7 @@
 import express from "express";
 import "dotenv/config";
 import { GoogleGenAI } from "@google/genai";
+import { fallbackAgentSelection, requestsAllSpecialists } from "./lib/routing.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -93,31 +94,41 @@ const specialistAgents = agents.filter(
 
 const agentInstructions = {
   master:
-    "You are the Master AI Bot. Coordinate specialist agents, " +
-    "break tasks into steps, and combine their results. " +
-    "Never claim an action was executed unless it actually was.",
+    "You are the CEO and coordinator of Master AI Bot. Understand the goal, " +
+    "delegate to the most relevant specialists, compare their work, resolve " +
+    "conflicts, and deliver one practical plan. State assumptions and risks. " +
+    "Never claim an external action was executed. All publishing, spending, " +
+    "sending, deleting, account changes, and deployment require explicit user approval.",
 
   affiliate:
-    "You are the Affiliate Marketing specialist. Help with ethical " +
-    "product research, commission calculations, content planning, " +
-    "and affiliate disclosures. Never invent live prices or rates.",
+    "You are the Affiliate Marketing specialist for an India-first business. " +
+    "Create ethical product-research plans, commission calculations, comparison " +
+    "criteria, Telugu and English content angles when relevant, and clear affiliate " +
+    "disclosures. Never invent current prices, commission rates, stock, or approvals. " +
+    "Give a low-cost action plan and measurable conversion KPIs. Do not promise income.",
 
   youtube:
-    "You are the YouTube specialist. Create original video ideas, " +
-    "scripts, titles, descriptions, and channel plans.",
+    "You are the YouTube specialist. Create original channel strategies, audience " +
+    "ideas, scripts, hooks, titles, descriptions, thumbnail concepts, and retention " +
+    "plans. Respect the requested language and audience. Flag copyright, child-safety, " +
+    "and platform-policy risks. Never promise views or revenue.",
 
   blogging:
-    "You are the Blogging specialist. Create original, useful " +
-    "article outlines and drafts. Do not invent sources.",
+    "You are the Blogging specialist. Create original, useful, well-structured " +
+    "articles with search intent, headings, internal-link ideas, and clear calls to " +
+    "action. Do not fabricate research, citations, quotations, or statistics. Mark " +
+    "facts that need verification before publication.",
 
   "app-development":
-    "You are the App Development specialist. Explain architecture, " +
-    "generate code when requested, and provide testing steps.",
+    "You are the App Development specialist. Prefer beginner-friendly, mobile-first " +
+    "solutions when appropriate. Provide complete runnable files rather than fragments, " +
+    "explain where each file goes, include validation and testing steps, and identify " +
+    "security, hosting, and maintenance costs. Never claim code was tested unless it was.",
 
   seo:
-    "You are the SEO specialist. Suggest keywords, useful content, " +
-    "site structure, and ethical search optimisation. Never " +
-    "guarantee rankings."
+    "You are the SEO specialist. Build practical keyword clusters, search-intent maps, " +
+    "technical and on-page checklists, content briefs, and ethical link-building plans. " +
+    "Do not guarantee rankings or invent search volumes. Separate verified facts from estimates."
 };
 
 // =====================================
@@ -437,58 +448,6 @@ async function generateAI(
 // FALLBACK AGENT SELECTION
 // =====================================
 
-function requestsAllSpecialists(task) {
-  return /\ball\s*(five|5)\b|\bevery\s+(specialist|agent)s?\b|\ball\s+(specialist|agent)s?\b/i.test(
-    String(task || "")
-  );
-}
-
-function fallbackAgentSelection(task) {
-
-  if (requestsAllSpecialists(task)) {
-    return specialistAgents.map(agent => agent.id);
-  }
-
-  const text = task.toLowerCase();
-  const selected = [];
-
-  function add(id) {
-
-    if (
-      !selected.includes(id) &&
-      selected.length < 3
-    ) {
-      selected.push(id);
-    }
-  }
-
-  if (/affiliate|commission|amazon|meesho|flipkart|product marketing/.test(text)) {
-    add("affiliate");
-  }
-
-  if (/youtube|video|channel|reels|shorts|rhymes/.test(text)) {
-    add("youtube");
-  }
-
-  if (/blog|article|website content|writing/.test(text)) {
-    add("blogging");
-  }
-
-  if (/app|android|software|code|website development|programming/.test(text)) {
-    add("app-development");
-  }
-
-  if (/seo|keyword|google ranking|search engine/.test(text)) {
-    add("seo");
-  }
-
-  if (selected.length === 0) {
-    add("app-development");
-  }
-
-  return selected;
-}
-
 // =====================================
 // JSON EXTRACTION
 // =====================================
@@ -644,7 +603,7 @@ async function runCentralBrain(task) {
     );
 
     plan = {
-      tasks: fallbackAgentSelection(task).map(
+      tasks: fallbackAgentSelection(task, specialistAgents).map(
         agentId => ({
           agentId,
           task
@@ -765,17 +724,24 @@ async function runCentralBrain(task) {
       specialistSummary;
   }
 
+  const failedResults = specialistResults.filter(item => !item.success);
+
   return {
-    success: successfulResults.length === specialistResults.length,
-    partialSuccess: successfulResults.length > 0 && successfulResults.length < specialistResults.length,
+    success: failedResults.length === 0 && specialistResults.length > 0,
+    partialSuccess: successfulResults.length > 0 && failedResults.length > 0,
     agent: "master",
-    provider: [...providersUsed].join(" + "),
-    selectedAgents: successfulResults.map(
-      item => ({
-        id: item.agentId,
-        name: item.name
-      })
-    ),
+    provider: [...providersUsed].join(" + ") || "Unknown",
+    totalSpecialists: specialistResults.length,
+    successfulSpecialists: successfulResults.length,
+    failedSpecialists: failedResults.length,
+    requiresHumanApproval: true,
+    executionMode: "proposal_only",
+    approvalNotice: "This response is a proposal. Review it before publishing, spending, sending, deleting, or deploying anything.",
+    selectedAgents: specialistResults.map(item => ({
+      id: item.agentId,
+      name: item.name,
+      success: item.success
+    })),
     specialistResults,
     result: finalResult
   };
@@ -839,6 +805,8 @@ app.get("/api/status", (req, res) => {
       groq: process.env.GROQ_MODEL || "openai/gpt-oss-20b",
       openrouter: process.env.OPENROUTER_MODEL || "openrouter/free"
     },
+    providerOrder: ["Gemini", "Groq", "OpenRouter"],
+    approvalPolicy: "Proposal only: external actions require explicit user approval.",
     agents
   });
 
