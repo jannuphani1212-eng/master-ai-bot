@@ -1,0 +1,58 @@
+name: Render production smoke test
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  production-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Wait for the merged version to become healthy
+        env:
+          SERVICE_URL: https://master-ai-bot-iskj.onrender.com
+        run: |
+          for attempt in $(seq 1 24); do
+            echo "Production check attempt $attempt/24"
+            HEALTH="$(curl -fsS --max-time 15 "$SERVICE_URL/api/health" 2>/dev/null || true)"
+            if [ -n "$HEALTH" ]; then
+              STATUS="$(curl -fsS --max-time 15 "$SERVICE_URL/api/status" 2>/dev/null || true)"
+              if [ -n "$STATUS" ]; then
+                printf '%s' "$STATUS" | node -e '
+                  let input = "";
+                  process.stdin.on("data", chunk => input += chunk);
+                  process.stdin.on("end", () => {
+                    try {
+                      const data = JSON.parse(input);
+                      const expected = ["Gemini", "Groq", "OpenRouter"];
+                      const agents = (data.agents || []).map(agent => agent.id);
+                      const requiredAgents = ["master", "affiliate", "youtube", "blogging", "app-development", "seo"];
+                      if (!Array.isArray(data.providerOrder) ||
+                          JSON.stringify(data.providerOrder) !== JSON.stringify(expected)) {
+                        throw new Error("New provider order is not live yet.");
+                      }
+                      if (!requiredAgents.every(id => agents.includes(id))) {
+                        throw new Error("One or more expected agents are missing.");
+                      }
+                      if (!String(data.approvalPolicy || "").includes("explicit user approval")) {
+                        throw new Error("Approval policy is not present in the live version.");
+                      }
+                      console.log("Production smoke test passed.");
+                      console.log("All six agents are registered.");
+                      console.log("Gemini → Groq → OpenRouter order is live.");
+                      console.log("Approval policy is live.");
+                    } catch (error) {
+                      console.error(error.message);
+                      process.exitCode = 1;
+                    }
+                  });
+                '
+                exit $?
+              fi
+            fi
+            sleep 15
+          done
+          echo "The expected version did not become available within the check window."
+          exit 1
