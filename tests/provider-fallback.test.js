@@ -24,13 +24,26 @@ test("provider fallback skips providers in cooldown or without configuration", a
   assert.equal(result.provider, "OpenRouter");
 });
 
-test("provider fallback reports failure when every configured provider fails", async () => {
+test("provider fallback reaches OpenRouter after Gemini and Groq fail", async () => {
+  const attempts = [];
+  const result = await runProviderFallback([
+    { id: "gemini", name: "Gemini", call: async () => { attempts.push("Gemini"); throw new Error("quota"); } },
+    { id: "groq", name: "Groq", call: async () => { attempts.push("Groq"); throw new Error("busy"); } },
+    { id: "openrouter", name: "OpenRouter", call: async () => { attempts.push("OpenRouter"); return "router answer"; } }
+  ]);
+
+  assert.deepEqual(attempts, ["Gemini", "Groq", "OpenRouter"]);
+  assert.deepEqual(result, { result: "router answer", provider: "OpenRouter" });
+});
+
+test("provider fallback reports every failure when all three providers fail", async () => {
   await assert.rejects(
     runProviderFallback([
       { id: "gemini", name: "Gemini", call: async () => { throw new Error("quota"); } },
-      { id: "groq", name: "Groq", call: async () => { throw new Error("busy"); } }
+      { id: "groq", name: "Groq", call: async () => { throw new Error("busy"); } },
+      { id: "openrouter", name: "OpenRouter", call: async () => { throw new Error("unavailable"); } }
     ]),
-    /Gemini: quota \| Groq: busy/
+    /Gemini: quota \| Groq: busy \| OpenRouter: unavailable/
   );
 });
 
