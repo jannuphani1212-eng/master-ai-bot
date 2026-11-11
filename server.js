@@ -944,6 +944,9 @@ app.post("/api/task", async (req, res) => {
       success: true,
       agent: agentId,
       provider: response.provider,
+      requiresHumanApproval: true,
+      executionMode: "proposal_only",
+      approvalNotice: "This is a draft. Review it before publishing, spending, sending, deleting, or deploying anything.",
       result: response.result
     });
 
