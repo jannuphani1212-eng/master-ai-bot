@@ -1,45 +1,74 @@
-🤖 MASTER AI BOT
+# Master AI Bot
 
-Overview
+A mobile-friendly AI command center with one Master AI Brain and five specialist agents.
 
-MASTER AI BOT is a mobile-friendly AI assistant project designed to coordinate five specialist modules using Google's Gemini AI.
+## Agents
 
-🎯 Main Modules
+- **Master AI Brain** — plans work, delegates to specialists, compares their outputs, and produces a combined response.
+- **Affiliate Marketing** — India-first affiliate research, ethical promotion, commission calculations, disclosures, and conversion planning.
+- **YouTube** — original video concepts, scripts, titles, descriptions, audience and retention planning.
+- **Blogging** — useful article outlines and drafts, search intent, structure, and fact-check reminders.
+- **App Development** — beginner-friendly application planning, complete code files, troubleshooting, and testing guidance.
+- **SEO** — keyword clusters, technical and on-page SEO, content briefs, and ethical optimisation.
 
-1. Affiliate Marketing — Research affiliate opportunities and create promotional content.
-2. App Development — Assist with Android app and game development.
-3. YouTube — Generate video ideas, scripts, titles, and descriptions.
-4. Blogging — Research topics and create blog articles.
-5. SEO — Help improve search visibility and optimize content.
+## AI provider fallback
 
-✨ Planned Features
+The backend tries providers in this order:
 
-- Mobile-friendly dashboard
-- AI-assisted content generation
-- Task management
-- Approval queue for important actions
-- Secure Gemini API integration
-- Local task and project storage
+1. Gemini
+2. Groq
+3. OpenRouter
 
-🛠️ Technology
+Configure keys only as server-side environment variables. Optional model overrides are GEMINI_MODEL, GROQ_MODEL, and OPENROUTER_MODEL.
 
-- Google Gemini API
-- Node.js
-- Express
-- HTML, CSS, and JavaScript
+The fallback layer skips providers without configured keys or providers currently in cooldown. A successful provider response is required; empty responses count as failures. Cooldowns are process-local and reset when the server restarts.
 
-🔐 Security
+## Safety and approvals
 
-API keys must be stored in server-side environment variables, never in frontend HTML or JavaScript or committed to GitHub.
+This application currently generates plans and draft content. It does **not** publish content, send messages, spend money, delete data, change accounts, or deploy code automatically.
 
-🚀 Project Status
+A person must review and explicitly approve any external action. API keys must never be placed in frontend files or committed to GitHub.
 
-The project is under development. Features must be tested before being considered fully operational.
+The task and brain endpoints have a basic per-IP request limit to reduce accidental overuse. This is an in-memory limit and is not a substitute for authentication or a production abuse-prevention service.
 
-⚠️ Disclaimer
+## Run locally
 
-AI-generated results can contain errors and should be reviewed. Earnings are not guaranteed. Users should approve publishing, financial transactions, and other important actions.
+Requirements: Node.js 20 or newer.
 
-📄 License
+```bash
+npm install
+npm test
+npm start
+```
 
-No license has been selected yet.
+Set the provider keys in a local .env file or your hosting provider's environment settings. Never commit .env.
+
+## API
+
+- GET /api/health — basic health check.
+- GET /api/status — configured providers, cooldowns, models, and agent list. It does not return API keys.
+- POST /api/task — run a selected agent or the Master Brain.
+- POST /api/brain — run the Master Brain.
+
+Example request:
+
+```json
+{
+  "agentId": "master",
+  "task": "Use all five specialists to create a practical launch plan."
+}
+```
+
+For a Master request, the response includes each specialist's status and report, the combined response, provider information, and an approval notice. Partial results are returned with partialSuccess: true when at least one specialist succeeds and another fails.
+
+## Tests
+
+Run npm test for routing and provider-fallback unit tests. GitHub Actions also checks JavaScript syntax, runs the tests, and validates package.json on the feature branch and pull requests to main.
+
+These tests validate the routing and fallback orchestration logic. They do not prove that live Gemini, Groq, or OpenRouter credentials are valid or that all live provider APIs are available.
+
+## Deployment status
+
+Do not consider a change live until it has been merged and the hosting deployment has completed. Check /api/health and /api/status after deployment, then test real AI requests.
+
+Earnings are not guaranteed. AI output can contain mistakes; verify facts, platform rules, legal requirements, prices, and commission rates before acting.
