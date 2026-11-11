@@ -1,0 +1,28 @@
+name: Backend checks
+
+on:
+  push:
+    branches:
+      - fix/central-brain-all-five-specialists
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Validate JavaScript syntax
+        run: node --check server.js
+      - name: Validate dashboard JavaScript syntax
+        run: node --check public/script.js
+      - name: Run unit tests
+        run: npm test
+      - name: Validate package.json
+        run: node -e "JSON.parse(require('fs').readFileSync('package.json', 'utf8')); console.log('package.json is valid JSON')"

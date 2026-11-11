@@ -1,9 +1,57 @@
 import express from "express";
 import "dotenv/config";
 import { GoogleGenAI } from "@google/genai";
+import { fallbackAgentSelection, requestsAllSpecialists } from "./lib/routing.js";
+import { runProviderFallback } from "./lib/provider-fallback.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Render runs behind a trusted reverse proxy. This allows req.ip to identify
+// the originating client for the lightweight API request limit below.
+app.set("trust proxy", 1);
+
+const apiRequestWindows = new Map();
+const API_WINDOW_MS = 60 * 1000;
+const API_MAX_REQUESTS = 15;
+
+function limitApiRequests(req, res, next) {
+  const now = Date.now();
+  const key = req.ip || req.socket?.remoteAddress || "unknown";
+  let bucket = apiRequestWindows.get(key);
+
+  if (!bucket || now - bucket.startedAt >= API_WINDOW_MS) {
+    bucket = { startedAt: now, count: 0 };
+  }
+
+  bucket.count += 1;
+  apiRequestWindows.set(key, bucket);
+
+  if (apiRequestWindows.size > 1000) {
+    for (const [ip, item] of apiRequestWindows) {
+      if (now - item.startedAt >= API_WINDOW_MS) {
+        apiRequestWindows.delete(ip);
+      }
+    }
+  }
+
+  if (bucket.count > API_MAX_REQUESTS) {
+    const retryAfter = Math.max(
+      1,
+      Math.ceil((bucket.startedAt + API_WINDOW_MS - now) / 1000)
+    );
+    res.set("Retry-After", String(retryAfter));
+    return res.status(429).json({
+      success: false,
+      error: "Too many AI requests. Please wait before trying again.",
+      retryAfterSeconds: retryAfter
+    });
+  }
+
+  next();
+}
+
+app.use(["/api/task", "/api/brain"], limitApiRequests);
 
 app.use(express.json({ limit: "1mb" }));
 app.use(express.static("public"));
@@ -93,31 +141,41 @@ const specialistAgents = agents.filter(
 
 const agentInstructions = {
   master:
-    "You are the Master AI Bot. Coordinate specialist agents, " +
-    "break tasks into steps, and combine their results. " +
-    "Never claim an action was executed unless it actually was.",
+    "You are the CEO and coordinator of Master AI Bot. Understand the goal, " +
+    "delegate to the most relevant specialists, compare their work, resolve " +
+    "conflicts, and deliver one practical plan. State assumptions and risks. " +
+    "Never claim an external action was executed. All publishing, spending, " +
+    "sending, deleting, account changes, and deployment require explicit user approval.",
 
   affiliate:
-    "You are the Affiliate Marketing specialist. Help with ethical " +
-    "product research, commission calculations, content planning, " +
-    "and affiliate disclosures. Never invent live prices or rates.",
+    "You are the Affiliate Marketing specialist for an India-first business. " +
+    "Create ethical product-research plans, commission calculations, comparison " +
+    "criteria, Telugu and English content angles when relevant, and clear affiliate " +
+    "disclosures. Never invent current prices, commission rates, stock, or approvals. " +
+    "Give a low-cost action plan and measurable conversion KPIs. Do not promise income.",
 
   youtube:
-    "You are the YouTube specialist. Create original video ideas, " +
-    "scripts, titles, descriptions, and channel plans.",
+    "You are the YouTube specialist. Create original channel strategies, audience " +
+    "ideas, scripts, hooks, titles, descriptions, thumbnail concepts, and retention " +
+    "plans. Respect the requested language and audience. Flag copyright, child-safety, " +
+    "and platform-policy risks. Never promise views or revenue.",
 
   blogging:
-    "You are the Blogging specialist. Create original, useful " +
-    "article outlines and drafts. Do not invent sources.",
+    "You are the Blogging specialist. Create original, useful, well-structured " +
+    "articles with search intent, headings, internal-link ideas, and clear calls to " +
+    "action. Do not fabricate research, citations, quotations, or statistics. Mark " +
+    "facts that need verification before publication.",
 
   "app-development":
-    "You are the App Development specialist. Explain architecture, " +
-    "generate code when requested, and provide testing steps.",
+    "You are the App Development specialist. Prefer beginner-friendly, mobile-first " +
+    "solutions when appropriate. Provide complete runnable files rather than fragments, " +
+    "explain where each file goes, include validation and testing steps, and identify " +
+    "security, hosting, and maintenance costs. Never claim code was tested unless it was.",
 
   seo:
-    "You are the SEO specialist. Suggest keywords, useful content, " +
-    "site structure, and ethical search optimisation. Never " +
-    "guarantee rankings."
+    "You are the SEO specialist. Build practical keyword clusters, search-intent maps, " +
+    "technical and on-page checklists, content briefs, and ethical link-building plans. " +
+    "Do not guarantee rankings or invent search volumes. Separate verified facts from estimates."
 };
 
 // =====================================
@@ -328,12 +386,7 @@ async function callOpenRouter(
 // THREE-PROVIDER AUTOMATIC SWITCHING
 // =====================================
 
-async function generateAI(
-  task,
-  instructions,
-  maxTokens = 900
-) {
-
+async function generateAI(task, instructions, maxTokens = 900) {
   const providers = [
     {
       id: "gemini",
@@ -353,130 +406,26 @@ async function generateAI(
       key: "OPENROUTER_API_KEY",
       call: callOpenRouter
     }
-  ];
+  ].map((provider) => ({
+    ...provider,
+    available: Boolean(process.env[provider.key]),
+    call: () => provider.call(task, instructions, maxTokens)
+  }));
 
-  const failures = [];
-
-  for (const provider of providers) {
-
-    if (!process.env[provider.key]) {
-      continue;
-    }
-
-    if (isCoolingDown(provider.id)) {
-      console.log(
-        `${provider.name} skipped because of cooldown.`
-      );
-      continue;
-    }
-
-    try {
-
-      console.log(
-        `Trying AI provider: ${provider.name}`
-      );
-
-      const result = await provider.call(
-        task,
-        instructions,
-        maxTokens
-      );
+  return runProviderFallback(providers, {
+    isCoolingDown,
+    onFailure(provider, error) {
+      console.error(`${provider.name} failed:`, error.message);
 
       if (provider.id === "gemini") {
-        console.log("Gemini AI response successful.");
-      }
-
-      return {
-        result,
-        provider: provider.name
-      };
-
-    } catch (error) {
-
-      console.error(
-        `${provider.name} failed:`,
-        error.message
-      );
-
-      failures.push(
-        `${provider.name}: ${error.message}`
-      );
-
-      if (
-        provider.id === "gemini" &&
-        /429|RESOURCE_EXHAUSTED|503|UNAVAILABLE/i.test(error.message)
-      ) {
-        setCooldown("gemini", 3600);
-      }
-
-      if (
-        provider.id === "groq" &&
-        !isCoolingDown("groq") &&
-        /429|rate_limit/i.test(error.message)
-      ) {
-        setCooldown("groq", 60);
-      }
-
-      if (
-        provider.id === "openrouter" &&
-        !isCoolingDown("openrouter") &&
-        /429|rate_limit/i.test(error.message)
-      ) {
-        setCooldown("openrouter", 60);
+        if (/429|RESOURCE_EXHAUSTED/i.test(error.message)) {
+          setCooldown("gemini", 3600);
+        } else if (/503|UNAVAILABLE|timeout|fetch failed/i.test(error.message)) {
+          setCooldown("gemini", getRetrySeconds(error.message));
+        }
       }
     }
-  }
-
-  throw new Error(
-    failures.join(" | ") ||
-    "No available AI provider. Check API configuration."
-  );
-}
-
-// =====================================
-// FALLBACK AGENT SELECTION
-// =====================================
-
-function fallbackAgentSelection(task) {
-
-  const text = task.toLowerCase();
-  const selected = [];
-
-  function add(id) {
-
-    if (
-      !selected.includes(id) &&
-      selected.length < 3
-    ) {
-      selected.push(id);
-    }
-  }
-
-  if (/affiliate|commission|amazon|meesho|flipkart|product marketing/.test(text)) {
-    add("affiliate");
-  }
-
-  if (/youtube|video|channel|reels|shorts|rhymes/.test(text)) {
-    add("youtube");
-  }
-
-  if (/blog|article|website content|writing/.test(text)) {
-    add("blogging");
-  }
-
-  if (/app|android|software|code|website development|programming/.test(text)) {
-    add("app-development");
-  }
-
-  if (/seo|keyword|google ranking|search engine/.test(text)) {
-    add("seo");
-  }
-
-  if (selected.length === 0) {
-    add("app-development");
-  }
-
-  return selected;
+  });
 }
 
 // =====================================
@@ -508,19 +457,32 @@ function extractJson(text) {
 
 async function createBrainPlan(task) {
 
+  const requireAllSpecialists = requestsAllSpecialists(task);
+
   const availableAgents = specialistAgents
     .map(agent => `${agent.id}: ${agent.role}`)
     .join("\n");
 
+  if (requireAllSpecialists) {
+    return {
+      tasks: specialistAgents.map(agent => ({
+        agentId: agent.id,
+        task
+      })),
+      provider: "Fallback selection"
+    };
+  }
+
   const instructions =
     "You are the planning brain of a multi-agent AI system. " +
-    "Choose only relevant specialist agents. " +
+    (requireAllSpecialists
+      ? "The user explicitly requested ALL FIVE specialist agents. You MUST assign a distinct task to every available specialist: affiliate, youtube, blogging, app-development, and seo. Do not omit any specialist. "
+      : "Choose only relevant specialist agents. Choose between one and three agents. ") +
     "Return ONLY valid JSON without markdown.\n\n" +
     "Available agents:\n" +
     availableAgents +
     "\n\nJSON format:\n" +
     '{"tasks":[{"agentId":"affiliate","task":"Specific work"}]}\n' +
-    "Choose between one and three agents. " +
     "Do not select the master agent.";
 
   const response = await generateAI(
@@ -564,7 +526,7 @@ async function createBrainPlan(task) {
       });
     }
 
-    if (validTasks.length >= 3) {
+    if (validTasks.length >= (requireAllSpecialists ? specialistAgents.length : 3)) {
       break;
     }
   }
@@ -621,7 +583,7 @@ async function runCentralBrain(task) {
     );
 
     plan = {
-      tasks: fallbackAgentSelection(task).map(
+      tasks: fallbackAgentSelection(task, specialistAgents).map(
         agentId => ({
           agentId,
           task
@@ -742,16 +704,24 @@ async function runCentralBrain(task) {
       specialistSummary;
   }
 
+  const failedResults = specialistResults.filter(item => !item.success);
+
   return {
-    success: true,
+    success: failedResults.length === 0 && specialistResults.length > 0,
+    partialSuccess: successfulResults.length > 0 && failedResults.length > 0,
     agent: "master",
-    provider: [...providersUsed].join(" + "),
-    selectedAgents: successfulResults.map(
-      item => ({
-        id: item.agentId,
-        name: item.name
-      })
-    ),
+    provider: [...providersUsed].join(" + ") || "Unknown",
+    totalSpecialists: specialistResults.length,
+    successfulSpecialists: successfulResults.length,
+    failedSpecialists: failedResults.length,
+    requiresHumanApproval: true,
+    executionMode: "proposal_only",
+    approvalNotice: "This response is a proposal. Review it before publishing, spending, sending, deleting, or deploying anything.",
+    selectedAgents: specialistResults.map(item => ({
+      id: item.agentId,
+      name: item.name,
+      success: item.success
+    })),
     specialistResults,
     result: finalResult
   };
@@ -815,6 +785,8 @@ app.get("/api/status", (req, res) => {
       groq: process.env.GROQ_MODEL || "openai/gpt-oss-20b",
       openrouter: process.env.OPENROUTER_MODEL || "openrouter/free"
     },
+    providerOrder: ["Gemini", "Groq", "OpenRouter"],
+    approvalPolicy: "Proposal only: external actions require explicit user approval.",
     agents
   });
 
@@ -972,6 +944,9 @@ app.post("/api/task", async (req, res) => {
       success: true,
       agent: agentId,
       provider: response.provider,
+      requiresHumanApproval: true,
+      executionMode: "proposal_only",
+      approvalNotice: "This is a draft. Review it before publishing, spending, sending, deleting, or deploying anything.",
       result: response.result
     });
 
