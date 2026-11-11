@@ -2,6 +2,7 @@ import express from "express";
 import "dotenv/config";
 import { GoogleGenAI } from "@google/genai";
 import { fallbackAgentSelection, requestsAllSpecialists } from "./lib/routing.js";
+import { runProviderFallback } from "./lib/provider-fallback.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -339,12 +340,7 @@ async function callOpenRouter(
 // THREE-PROVIDER AUTOMATIC SWITCHING
 // =====================================
 
-async function generateAI(
-  task,
-  instructions,
-  maxTokens = 900
-) {
-
+async function generateAI(task, instructions, maxTokens = 900) {
   const providers = [
     {
       id: "gemini",
@@ -364,89 +360,27 @@ async function generateAI(
       key: "OPENROUTER_API_KEY",
       call: callOpenRouter
     }
-  ];
+  ].map((provider) => ({
+    ...provider,
+    available: Boolean(process.env[provider.key]),
+    call: () => provider.call(task, instructions, maxTokens)
+  }));
 
-  const failures = [];
-
-  for (const provider of providers) {
-
-    if (!process.env[provider.key]) {
-      continue;
-    }
-
-    if (isCoolingDown(provider.id)) {
-      console.log(
-        `${provider.name} skipped because of cooldown.`
-      );
-      continue;
-    }
-
-    try {
-
-      console.log(
-        `Trying AI provider: ${provider.name}`
-      );
-
-      const result = await provider.call(
-        task,
-        instructions,
-        maxTokens
-      );
+  return runProviderFallback(providers, {
+    isCoolingDown,
+    onFailure(provider, error) {
+      console.error(`${provider.name} failed:`, error.message);
 
       if (provider.id === "gemini") {
-        console.log("Gemini AI response successful.");
-      }
-
-      return {
-        result,
-        provider: provider.name
-      };
-
-    } catch (error) {
-
-      console.error(
-        `${provider.name} failed:`,
-        error.message
-      );
-
-      failures.push(
-        `${provider.name}: ${error.message}`
-      );
-
-      if (
-        provider.id === "gemini" &&
-        /429|RESOURCE_EXHAUSTED|503|UNAVAILABLE/i.test(error.message)
-      ) {
-        setCooldown("gemini", 3600);
-      }
-
-      if (
-        provider.id === "groq" &&
-        !isCoolingDown("groq") &&
-        /429|rate_limit/i.test(error.message)
-      ) {
-        setCooldown("groq", 60);
-      }
-
-      if (
-        provider.id === "openrouter" &&
-        !isCoolingDown("openrouter") &&
-        /429|rate_limit/i.test(error.message)
-      ) {
-        setCooldown("openrouter", 60);
+        if (/429|RESOURCE_EXHAUSTED/i.test(error.message)) {
+          setCooldown("gemini", 3600);
+        } else if (/503|UNAVAILABLE|timeout|fetch failed/i.test(error.message)) {
+          setCooldown("gemini", getRetrySeconds(error.message));
+        }
       }
     }
-  }
-
-  throw new Error(
-    failures.join(" | ") ||
-    "No available AI provider. Check API configuration."
-  );
+  });
 }
-
-// =====================================
-// FALLBACK AGENT SELECTION
-// =====================================
 
 // =====================================
 // JSON EXTRACTION
