@@ -438,7 +438,7 @@ async function generateAI(
 // =====================================
 
 function requestsAllSpecialists(task) {
-  return /\\ball\\s*(five|5)\\b|\\bevery\\s+(specialist|agent)\\b|\\ball\\s+(specialist|agents)\\b/i.test(
+  return /\ball\s*(five|5)\b|\bevery\s+(specialist|agent)\b|\ball\s+(specialist|agents)\b/i.test(
     String(task || "")
   );
 }
