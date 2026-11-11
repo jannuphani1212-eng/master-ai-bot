@@ -3,7 +3,7 @@ name: Backend checks
 on:
   push:
     branches:
-      - fix/central-brain-all-five-specialists
+      - main
   pull_request:
     branches:
       - main
