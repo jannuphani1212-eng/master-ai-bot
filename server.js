@@ -524,6 +524,16 @@ async function createBrainPlan(task) {
     .map(agent => `${agent.id}: ${agent.role}`)
     .join("\n");
 
+  if (requireAllSpecialists) {
+    return {
+      tasks: specialistAgents.map(agent => ({
+        agentId: agent.id,
+        task
+      })),
+      provider: "Fallback selection"
+    };
+  }
+
   const instructions =
     "You are the planning brain of a multi-agent AI system. " +
     (requireAllSpecialists
