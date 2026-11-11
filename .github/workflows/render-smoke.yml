@@ -20,7 +20,7 @@ jobs:
             if [ -n "$HEALTH" ]; then
               STATUS="$(curl -fsS --max-time 15 "$SERVICE_URL/api/status" 2>/dev/null || true)"
               if [ -n "$STATUS" ]; then
-                printf '%s' "$STATUS" | node -e '
+                if printf '%s' "$STATUS" | node -e '
                   let input = "";
                   process.stdin.on("data", chunk => input += chunk);
                   process.stdin.on("end", () => {
@@ -49,7 +49,9 @@ jobs:
                     }
                   });
                 '
-                exit $?
+                then
+                  exit 0
+                fi
               fi
             fi
             sleep 15
