@@ -61,8 +61,7 @@ Example request:
 
 For a Master request, the response includes each specialist's status and report, the combined response, provider information, and an approval notice. Partial results are returned with partialSuccess: true when at least one specialist succeeds and another fails.
 
-## Tests
-
+See [the five specialist income workflows](docs/income-workflows.md) for the India-first planning steps and approval checkpoints.\n\n## Tests\n
 Run npm test for routing and provider-fallback unit tests. GitHub Actions also checks JavaScript syntax, runs the tests, and validates package.json on the feature branch and pull requests to main.
 
 These tests validate the routing and fallback orchestration logic. They do not prove that live Gemini, Groq, or OpenRouter credentials are valid or that all live provider APIs are available.
