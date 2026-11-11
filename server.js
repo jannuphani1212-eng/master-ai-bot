@@ -437,7 +437,17 @@ async function generateAI(
 // FALLBACK AGENT SELECTION
 // =====================================
 
+function requestsAllSpecialists(task) {
+  return /\\ball\\s*(five|5)\\b|\\bevery\\s+(specialist|agent)\\b|\\ball\\s+(specialist|agents)\\b/i.test(
+    String(task || "")
+  );
+}
+
 function fallbackAgentSelection(task) {
+
+  if (requestsAllSpecialists(task)) {
+    return specialistAgents.map(agent => agent.id);
+  }
 
   const text = task.toLowerCase();
   const selected = [];
@@ -508,19 +518,22 @@ function extractJson(text) {
 
 async function createBrainPlan(task) {
 
+  const requireAllSpecialists = requestsAllSpecialists(task);
+
   const availableAgents = specialistAgents
     .map(agent => `${agent.id}: ${agent.role}`)
     .join("\n");
 
   const instructions =
     "You are the planning brain of a multi-agent AI system. " +
-    "Choose only relevant specialist agents. " +
+    (requireAllSpecialists
+      ? "The user explicitly requested ALL FIVE specialist agents. You MUST assign a distinct task to every available specialist: affiliate, youtube, blogging, app-development, and seo. Do not omit any specialist. "
+      : "Choose only relevant specialist agents. Choose between one and three agents. ") +
     "Return ONLY valid JSON without markdown.\n\n" +
     "Available agents:\n" +
     availableAgents +
     "\n\nJSON format:\n" +
     '{"tasks":[{"agentId":"affiliate","task":"Specific work"}]}\n' +
-    "Choose between one and three agents. " +
     "Do not select the master agent.";
 
   const response = await generateAI(
@@ -564,7 +577,7 @@ async function createBrainPlan(task) {
       });
     }
 
-    if (validTasks.length >= 3) {
+    if (validTasks.length >= (requireAllSpecialists ? specialistAgents.length : 3)) {
       break;
     }
   }
