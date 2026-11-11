@@ -1,4 +1,4 @@
-name: Backend syntax check
+name: Backend checks
 
 on:
   push:
@@ -9,7 +9,7 @@ on:
       - main
 
 jobs:
-  syntax:
+  backend:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -18,7 +18,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Check server.js syntax
+      - name: Validate JavaScript syntax
         run: node --check server.js
-      - name: Check package.json syntax
+      - name: Run routing tests
+        run: npm test
+      - name: Validate package.json
         run: node -e "JSON.parse(require('fs').readFileSync('package.json', 'utf8')); console.log('package.json is valid JSON')"
