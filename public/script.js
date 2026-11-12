@@ -96,7 +96,14 @@ function displayTaskResult(data, selectedAgent) {
         addText(
           card,
           "p",
-          item.success ? item.result : "This specialist could not complete the task."
+          "Actual provider: " + (item.provider || (item.success ? "Not reported" : "No successful provider"))
+        );
+        addText(
+          card,
+          "p",
+          item.success
+            ? item.result
+            : "Failure reason: " + (item.error || "No error details were returned.")
         );
         taskResult.appendChild(card);
       });
