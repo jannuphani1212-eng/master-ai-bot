@@ -3,6 +3,7 @@ import "dotenv/config";
 import { GoogleGenAI } from "@google/genai";
 import { fallbackAgentSelection, requestsAllSpecialists } from "./lib/routing.js";
 import { runProviderFallback } from "./lib/provider-fallback.js";
+import { extractCompletionText } from "./lib/completion-text.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -230,6 +231,9 @@ async function callGroq(task, instructions, maxTokens = 900) {
 
   try {
 
+    const groqModel = process.env.GROQ_MODEL || "openai/gpt-oss-20b";
+    const usesGptOss = groqModel.toLowerCase().startsWith("openai/gpt-oss");
+
     const response = await fetch(
       "https://api.groq.com/openai/v1/chat/completions",
       {
@@ -239,7 +243,7 @@ async function callGroq(task, instructions, maxTokens = 900) {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          model: process.env.GROQ_MODEL || "openai/gpt-oss-20b",
+          model: groqModel,
           messages: [
             {
               role: "system",
@@ -251,7 +255,8 @@ async function callGroq(task, instructions, maxTokens = 900) {
             }
           ],
           temperature: 0.4,
-          max_completion_tokens: maxTokens
+          max_completion_tokens: Math.max(maxTokens + 600, 1400),
+          ...(usesGptOss ? { reasoning_effort: "low" } : {})
         }),
         signal: controller.signal
       }
@@ -277,13 +282,7 @@ async function callGroq(task, instructions, maxTokens = 900) {
     }
 
     const data = await response.json();
-
-    const result =
-      data.choices?.[0]?.message?.content;
-
-    if (!result) {
-      throw new Error("Groq returned no text.");
-    }
+    const result = extractCompletionText(data, "Groq");
 
     console.log("Groq AI response successful.");
 
@@ -365,13 +364,7 @@ async function callOpenRouter(
     }
 
     const data = await response.json();
-
-    const result =
-      data.choices?.[0]?.message?.content;
-
-    if (!result) {
-      throw new Error("OpenRouter returned no text.");
-    }
+    const result = extractCompletionText(data, "OpenRouter");
 
     console.log("OpenRouter AI response successful.");
 
@@ -656,6 +649,11 @@ async function runCentralBrain(task) {
 
       const conciseInstructions =
         agentInstructions[item.agentId] +
+        "Avoid stating or guessing the name of the AI model or provider. " +
+        "The server adds verified provider information separately. " +
+        "Never label your report as GPT-4, Gemini, or another model unless " +
+        "the user explicitly asks for a comparison of models. " +
+        "Keep your report concise, practical and structured. " +
         " Keep your report concise, practical and structured. " +
         "Prioritise important findings and actionable recommendations. " +
         "Avoid repeating the user's task.";
