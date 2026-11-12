@@ -433,22 +433,57 @@ async function generateAI(task, instructions, maxTokens = 900) {
 // =====================================
 
 function extractJson(text) {
-
-  const cleaned = text
-    .replace(/```json/gi, "")
-    .replace(/```/g, "")
-    .trim();
-
-  const start = cleaned.indexOf("{");
-  const end = cleaned.lastIndexOf("}");
-
-  if (start === -1 || end === -1) {
-    throw new Error("AI did not return valid JSON.");
+  if (typeof text !== "string" || !text.trim()) {
+    throw new Error("AI returned an empty planning response.");
   }
 
-  return JSON.parse(
-    cleaned.slice(start, end + 1)
-  );
+  const cleaned = text.replace(/\x60{3}(?:json)?/gi, "").trim();
+  const start = cleaned.indexOf("{");
+
+  if (start === -1) {
+    throw new Error("AI did not return a JSON object.");
+  }
+
+  // Match the JSON object's closing brace while respecting quoted strings.
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = start; i < cleaned.length; i += 1) {
+    const char = cleaned[i];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+    } else if (char === "{") {
+      depth += 1;
+    } else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        try {
+          const parsed = JSON.parse(cleaned.slice(start, i + 1));
+          if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+            throw new Error("Planning response must be a JSON object.");
+          }
+          return parsed;
+        } catch (error) {
+          throw new Error("AI returned invalid planning JSON: " + error.message);
+        }
+      }
+    }
+  }
+
+  throw new Error("AI returned incomplete planning JSON.");
 }
 
 // =====================================
