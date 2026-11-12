@@ -414,8 +414,17 @@ async function generateAI(task, instructions, maxTokens = 900) {
 
   return runProviderFallback(providers, {
     isCoolingDown,
+    onAttempt(provider) {
+      console.log(provider.name + " attempt started.");
+    },
+    onSkipped(provider, reason) {
+      console.log(provider.name + " skipped: " + reason + ".");
+    },
+    onSuccess(provider) {
+      console.log(provider.name + " fallback succeeded.");
+    },
     onFailure(provider, error) {
-      console.error(`${provider.name} failed:`, error.message);
+      console.error(provider.name + " failed:", error.message);
 
       if (provider.id === "gemini") {
         if (/429|RESOURCE_EXHAUSTED/i.test(error.message)) {
