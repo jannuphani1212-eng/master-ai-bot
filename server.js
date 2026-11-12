@@ -437,17 +437,14 @@ function extractJson(text) {
     throw new Error("AI returned an empty planning response.");
   }
 
-  const cleaned = text
-    .replace(/\u0060\u0060\u0060(?:json)?/gi, "")
-    .trim();
-
+  const cleaned = text.replace(/\x60{3}(?:json)?/gi, "").trim();
   const start = cleaned.indexOf("{");
+
   if (start === -1) {
     throw new Error("AI did not return a JSON object.");
   }
 
-  // Find the matching closing brace without being confused by braces
-  // inside quoted strings or escaped quote characters.
+  // Match the JSON object's closing brace while respecting quoted strings.
   let depth = 0;
   let inString = false;
   let escaped = false;
@@ -458,7 +455,7 @@ function extractJson(text) {
     if (inString) {
       if (escaped) {
         escaped = false;
-      } else if (char === "\\\\") {
+      } else if (char === "\\") {
         escaped = true;
       } else if (char === '"') {
         inString = false;
@@ -480,7 +477,7 @@ function extractJson(text) {
           }
           return parsed;
         } catch (error) {
-          throw new Error(`AI returned invalid planning JSON: ${error.message}`);
+          throw new Error("AI returned invalid planning JSON: " + error.message);
         }
       }
     }
