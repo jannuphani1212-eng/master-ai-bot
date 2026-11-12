@@ -729,9 +729,9 @@ async function runCentralBrain(task) {
     failedResults.length
       ? "**Overall status:** Partial completion. Do not treat this task as fully completed."
       : "**Overall status:** All requested specialists completed successfully."
-  ].join("\\n");
+  ].join("\n");
 
-  finalResult = `${finalResult}\\n\\n${executionAudit}`;
+  finalResult = `${finalResult}\n\n${executionAudit}`;
 
   return {
     success: failedResults.length === 0 && specialistResults.length > 0,
