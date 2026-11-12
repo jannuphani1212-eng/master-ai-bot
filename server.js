@@ -414,8 +414,17 @@ async function generateAI(task, instructions, maxTokens = 900) {
 
   return runProviderFallback(providers, {
     isCoolingDown,
+    onAttempt(provider) {
+      console.log(provider.name + " attempt started.");
+    },
+    onSkipped(provider, reason) {
+      console.log(provider.name + " skipped: " + reason + ".");
+    },
+    onSuccess(provider) {
+      console.log(provider.name + " fallback succeeded.");
+    },
     onFailure(provider, error) {
-      console.error(`${provider.name} failed:`, error.message);
+      console.error(provider.name + " failed:", error.message);
 
       if (provider.id === "gemini") {
         if (/429|RESOURCE_EXHAUSTED/i.test(error.message)) {
@@ -663,6 +672,7 @@ async function runCentralBrain(task) {
         agentId: item.agentId,
         name: agent.name,
         success: true,
+        provider: response.provider,
         result: response.result
       });
 
@@ -677,6 +687,8 @@ async function runCentralBrain(task) {
         agentId: item.agentId,
         name: agent.name,
         success: false,
+        provider: null,
+        error: String(error.message || "Unknown provider error").slice(0, 300),
         result: "This specialist could not complete the task."
       });
     }
@@ -694,6 +706,7 @@ async function runCentralBrain(task) {
   const specialistSummary = successfulResults
     .map(item =>
       `SPECIALIST: ${item.name}\n` +
+      `VERIFIED PROVIDER: ${item.provider || "Not available"}\n` +
       compactReport(item.result, 1800)
     )
     .join("\n\n--------------------\n\n");
@@ -704,6 +717,10 @@ async function runCentralBrain(task) {
     "Remove repetition. Compare recommendations. " +
     "Identify the best strategy. Provide practical next steps. " +
     "Preserve important facts. Never invent information. " +
+    "Do not guess or invent AI provider names. Provider identity is supplied " +
+    "separately by verified server metadata; do not claim a provider unless " +
+    "that exact name appears in the metadata. " +
+    "Do not mark a missing or failed specialist as successful. " +
     "Keep the final answer clear and concise.";
 
   let finalResult;
@@ -740,6 +757,24 @@ async function runCentralBrain(task) {
   }
 
   const failedResults = specialistResults.filter(item => !item.success);
+
+  // Build the audit from actual server results, not model-generated claims.
+  const executionAudit = [
+    "",
+    "## Verified specialist execution audit",
+    "| Specialist | Result | Actual provider |",
+    "|---|---|---|",
+    ...specialistResults.map(item =>
+      `| ${item.name} | ${item.success ? "Success" : "Failed"} | ${item.provider || "No successful provider"} |`
+    ),
+    "",
+    `**Verified totals:** ${successfulResults.length}/${specialistAgents.length} specialists succeeded; ${failedResults.length} failed.`,
+    failedResults.length
+      ? "**Overall status:** Partial completion. Do not treat this task as fully completed."
+      : "**Overall status:** All requested specialists completed successfully."
+  ].join("\n");
+
+  finalResult = finalResult + "\n\n" + executionAudit;
 
   return {
     success: failedResults.length === 0 && specialistResults.length > 0,
