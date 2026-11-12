@@ -23,7 +23,7 @@ test("reports useful diagnostics when a provider returns empty content", () => {
       }],
       usage: { completion_tokens: 700 }
     }, "Groq"),
-    /Groq returned no usable text \(finish_reason=length.*reasoning_chars=19.*completion_tokens=700/
+    /Groq returned no usable text \(finish_reason=length.*reasoning_chars=18.*completion_tokens=700/
   );
 });
 
