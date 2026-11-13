@@ -4,6 +4,8 @@ import { GoogleGenAI } from "@google/genai";
 import { fallbackAgentSelection, requestsAllSpecialists } from "./lib/routing.js";
 import { runProviderFallback } from "./lib/provider-fallback.js";
 import { extractCompletionText } from "./lib/completion-text.js";
+import { getMasterInstructions, getSpecialistInstructions } from "./lib/specialist-prompts.js";
+import { reviewSpecialistReport } from "./lib/quality-review.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -141,42 +143,12 @@ const specialistAgents = agents.filter(
 // =====================================
 
 const agentInstructions = {
-  master:
-    "You are the CEO and coordinator of Master AI Bot. Understand the goal, " +
-    "delegate to the most relevant specialists, compare their work, resolve " +
-    "conflicts, and deliver one practical plan. State assumptions and risks. " +
-    "Never claim an external action was executed. All publishing, spending, " +
-    "sending, deleting, account changes, and deployment require explicit user approval.",
-
-  affiliate:
-    "You are the Affiliate Marketing specialist for an India-first business. " +
-    "Create ethical product-research plans, commission calculations, comparison " +
-    "criteria, Telugu and English content angles when relevant, and clear affiliate " +
-    "disclosures. Never invent current prices, commission rates, stock, or approvals. " +
-    "Give a low-cost action plan and measurable conversion KPIs. Do not promise income.",
-
-  youtube:
-    "You are the YouTube specialist. Create original channel strategies, audience " +
-    "ideas, scripts, hooks, titles, descriptions, thumbnail concepts, and retention " +
-    "plans. Respect the requested language and audience. Flag copyright, child-safety, " +
-    "and platform-policy risks. Never promise views or revenue.",
-
-  blogging:
-    "You are the Blogging specialist. Create original, useful, well-structured " +
-    "articles with search intent, headings, internal-link ideas, and clear calls to " +
-    "action. Do not fabricate research, citations, quotations, or statistics. Mark " +
-    "facts that need verification before publication.",
-
-  "app-development":
-    "You are the App Development specialist. Prefer beginner-friendly, mobile-first " +
-    "solutions when appropriate. Provide complete runnable files rather than fragments, " +
-    "explain where each file goes, include validation and testing steps, and identify " +
-    "security, hosting, and maintenance costs. Never claim code was tested unless it was.",
-
-  seo:
-    "You are the SEO specialist. Build practical keyword clusters, search-intent maps, " +
-    "technical and on-page checklists, content briefs, and ethical link-building plans. " +
-    "Do not guarantee rankings or invent search volumes. Separate verified facts from estimates."
+  master: getMasterInstructions(),
+  affiliate: getSpecialistInstructions("affiliate"),
+  youtube: getSpecialistInstructions("youtube"),
+  blogging: getSpecialistInstructions("blogging"),
+  "app-development": getSpecialistInstructions("app-development"),
+  seo: getSpecialistInstructions("seo")
 };
 
 // =====================================
@@ -653,8 +625,7 @@ async function runCentralBrain(task) {
         "The server adds verified provider information separately. " +
         "Never label your report as GPT-4, Gemini, or another model unless " +
         "the user explicitly asks for a comparison of models. " +
-        "Keep your report concise, practical and structured. " +
-        " Keep your report concise, practical and structured. " +
+        "Use the required professional report format from your role instructions. " +
         "Prioritise important findings and actionable recommendations. " +
         "Avoid repeating the user's task.";
 
@@ -671,6 +642,7 @@ async function runCentralBrain(task) {
         name: agent.name,
         success: true,
         provider: response.provider,
+        qualityReview: reviewSpecialistReport(response.result),
         result: response.result
       });
 
@@ -705,6 +677,10 @@ async function runCentralBrain(task) {
     .map(item =>
       `SPECIALIST: ${item.name}\n` +
       `VERIFIED PROVIDER: ${item.provider || "Not available"}\n` +
+      `STRUCTURAL QUALITY REVIEW: ${item.qualityReview?.score ?? "Not scored"}/100 (${item.qualityReview?.status || "not available"})\n` +
+      (item.qualityReview?.warnings?.length
+        ? `QUALITY WARNINGS: ${item.qualityReview.warnings.join("; ")}\n`
+        : "") +
       compactReport(item.result, 1800)
     )
     .join("\n\n--------------------\n\n");
@@ -760,13 +736,14 @@ async function runCentralBrain(task) {
   const executionAudit = [
     "",
     "## Verified specialist execution audit",
-    "| Specialist | Result | Actual provider |",
-    "|---|---|---|",
+    "| Specialist | Result | Actual provider | Structural quality |",
+    "|---|---|---|---|",
     ...specialistResults.map(item =>
-      `| ${item.name} | ${item.success ? "Success" : "Failed"} | ${item.provider || "No successful provider"} |`
+      `| ${item.name} | ${item.success ? "Success" : "Failed"} | ${item.provider || "No successful provider"} | ${item.qualityReview ? item.qualityReview.score + "/100 (" + item.qualityReview.status + ")" : "Not scored"} |`
     ),
     "",
-    `**Verified totals:** ${successfulResults.length}/${specialistAgents.length} specialists succeeded; ${failedResults.length} failed.`,
+    `**Verified totals:** ${successfulResults.length}/${specialistResults.length} requested specialists succeeded; ${failedResults.length} failed.`,
+    `**Average structural quality:** ${successfulResults.length ? Math.round(successfulResults.reduce((sum, item) => sum + (item.qualityReview?.score || 0), 0) / successfulResults.length) + "/100" : "Not available"} (structure-only; factual accuracy is not independently verified).`,
     failedResults.length
       ? "**Overall status:** Partial completion. Do not treat this task as fully completed."
       : "**Overall status:** All requested specialists completed successfully."
@@ -1012,6 +989,7 @@ app.post("/api/task", async (req, res) => {
       success: true,
       agent: agentId,
       provider: response.provider,
+      qualityReview: reviewSpecialistReport(response.result),
       requiresHumanApproval: true,
       executionMode: "proposal_only",
       approvalNotice: "This is a draft. Review it before publishing, spending, sending, deleting, or deploying anything.",

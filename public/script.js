@@ -98,6 +98,17 @@ function displayTaskResult(data, selectedAgent) {
           "p",
           "Actual provider: " + (item.provider || (item.success ? "Not reported" : "No successful provider"))
         );
+        if (item.qualityReview) {
+          addText(
+            card,
+            "p",
+            `Structural quality review: ${item.qualityReview.score}/100 — ${item.qualityReview.status}`,
+            item.qualityReview.status === "passed" ? "quality-passed" : "warning-text"
+          );
+          if (Array.isArray(item.qualityReview.warnings) && item.qualityReview.warnings.length) {
+            addText(card, "p", "Quality checks: " + item.qualityReview.warnings.join(" "), "warning-text");
+          }
+        }
         addText(
           card,
           "p",
@@ -128,6 +139,17 @@ function displayTaskResult(data, selectedAgent) {
 
   addText(taskResult, "h3", "Specialist response");
   addText(taskResult, "p", `AI provider: ${data.provider || "Not reported"}`);
+  if (data.qualityReview) {
+    addText(
+      taskResult,
+      "p",
+      `Structural quality review: ${data.qualityReview.score}/100 — ${data.qualityReview.status}`,
+      data.qualityReview.status === "passed" ? "quality-passed" : "warning-text"
+    );
+    if (Array.isArray(data.qualityReview.warnings) && data.qualityReview.warnings.length) {
+      addText(taskResult, "p", "Quality checks: " + data.qualityReview.warnings.join(" "), "warning-text");
+    }
+  }
   addText(taskResult, "p", data.result || "No response was returned.");
   if (data.requiresHumanApproval) {
     addText(
