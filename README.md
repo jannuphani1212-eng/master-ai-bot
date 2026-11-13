@@ -53,6 +53,7 @@ Set the provider keys in a local .env file or your hosting provider's environmen
 - GET /api/status — configured providers, cooldowns, models, and agent list. It does not return API keys.
 - POST /api/task — run a selected agent or the Master Brain.
 - POST /api/brain — run the Master Brain.
+- GET /api/approvals/config — returns only the public Supabase URL and anon key needed for owner sign-in; it never returns the owner UUID or service-role key.
 - GET /api/approvals — list the owner's approval proposals (requires a Supabase access token).
 - POST /api/approvals — save a proposal (requires a Supabase access token).
 - PATCH /api/approvals/:id/decision — approve or reject a pending proposal (requires a Supabase access token).
@@ -67,6 +68,8 @@ Example request:
 ```
 
 For a Master request, the response includes each specialist's status and report, the combined response, provider information, and an approval notice. Partial results are returned with partialSuccess: true when at least one specialist succeeds and another fails.
+
+The dashboard includes an owner sign-in and approval queue. The Supabase anon key is public by design; access is restricted by Auth verification, the server-side owner allowlist, and database RLS. The access token is kept in page memory and cleared on refresh/sign-out.
 
 See [the five specialist income workflows](docs/income-workflows.md) for the India-first planning steps and approval checkpoints.\n\n## Tests\n
 Run npm test for routing and provider-fallback unit tests. GitHub Actions also checks JavaScript syntax, runs the tests, and validates package.json on the feature branch and pull requests to main.
