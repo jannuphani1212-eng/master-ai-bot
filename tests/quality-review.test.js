@@ -57,6 +57,6 @@ test("does not award section points for headings mentioned only in prose", () =>
   const report = "This report includes an executive summary, audience and assumptions, research and evidence, recommended strategy, concrete deliverables, measurement and KPIs, risks and quality checks, and next three actions in one generic paragraph.";
   const result = reviewSpecialistReport(report);
   assert.equal(result.passedSections.length, 0);
-  assert.equal(result.score, 20);
+  assert.equal(result.score, 10);
   assert.equal(result.status, "needs_review");
 });
