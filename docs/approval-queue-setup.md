@@ -1,6 +1,6 @@
 # Secure approval storage setup
 
-The application currently prepares proposals only. This database schema is a preparation step; it does not activate an approval API or execute external actions.
+The backend now includes owner-authenticated approval API routes. The API records proposals and decisions only; it does not execute external actions. The database schema and private server configuration below must still be completed before the API becomes available.
 
 ## 1. Create a dedicated Supabase project
 
@@ -17,17 +17,16 @@ The schema:
 - makes the proposed action details immutable after creation;
 - keeps decision records for audit and intentionally has no delete policy.
 
-## 3. Configuration required before backend integration
+## 3. Configure the backend on Render
 
-The backend integration must validate a Supabase user access token with Supabase Auth and compare the returned user ID with a server-side owner ID allowlist. Only then may it use a server-side service-role key to read or write approval records.
+The backend validates the supplied Supabase user access token with Supabase Auth and compares the returned user ID with SUPABASE_OWNER_USER_ID. It then accesses the table with the public anon key and that same user access token, so Supabase Row Level Security remains active. A service-role key is not needed and must not be added for this feature.
 
 Expected Render environment settings for that future integration:
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY` (server only; never expose to the browser)
 - `SUPABASE_OWNER_USER_ID`
 
-Do not add these values to GitHub. Set them only in Render's private environment settings after the backend integration is reviewed.
+Do not add these values to GitHub or send them in chat. Set them only in Render's private environment settings. Never expose any private key.
 
 ## 4. Security boundary
 
@@ -43,3 +42,13 @@ An approval record means only that the owner approved a proposal. It must not it
 - [ ] A request can transition from pending to approved or rejected exactly once.
 - [ ] Another user cannot read or decide the owner's records.
 - [ ] No external action is run by approving a record.
+
+## 6. API contract
+
+All routes require Authorization: Bearer <Supabase access token>.
+
+- GET /api/approvals lists up to 100 newest owner proposals.
+- POST /api/approvals accepts { "title": "...", "actionType": "publish", "payload": {} }.
+- PATCH /api/approvals/:id/decision accepts { "status": "approved" } or { "status": "rejected", "decisionNote": "..." }.
+
+A decision is conditional on the record still being pending. The database trigger records the decision time and authenticated user. No publishing, spending, sending, deletion, account change, or deployment is triggered.
