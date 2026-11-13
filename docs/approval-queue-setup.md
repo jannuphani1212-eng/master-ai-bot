@@ -1,6 +1,6 @@
 # Secure approval storage setup
 
-The backend now includes owner-authenticated approval API routes. The API records proposals and decisions only; it does not execute external actions. The database schema and private server configuration below must still be completed before the API becomes available.
+The backend and dashboard now include owner-authenticated approval routes and an owner sign-in/approval-queue screen. The API records proposals and decisions only; it does not execute external actions. The database schema and private server configuration below must still be completed before the API becomes available.
 
 ## 1. Create a dedicated Supabase project
 
@@ -45,7 +45,9 @@ An approval record means only that the owner approved a proposal. It must not it
 
 ## 6. API contract
 
-All routes require Authorization: Bearer <Supabase access token>.
+The dashboard signs in through Supabase Auth using the public anon key and then calls the protected approval routes. The browser receives only SUPABASE_URL and SUPABASE_ANON_KEY from GET /api/approvals/config; the owner UUID and any service-role key are never sent to the browser. The access token is held in page memory and cleared when the page is refreshed or the owner signs out.
+
+All approval data routes require Authorization: Bearer <Supabase access token>.
 
 - GET /api/approvals lists up to 100 newest owner proposals.
 - POST /api/approvals accepts { "title": "...", "actionType": "publish", "payload": {} }.
