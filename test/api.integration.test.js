@@ -119,3 +119,14 @@ test("task endpoint rejects an unknown specialist with HTTP 400", async () => {
   assert.equal(data.success, false);
   assert.equal(data.error, "Invalid agent selected.");
 });
+
+
+test("approval config endpoint does not expose private owner settings when unconfigured", async () => {
+  const response = await fetch(`${baseUrl}/api/approvals/config`);
+  const data = await response.json();
+
+  assert.equal(response.status, 503);
+  assert.equal(data.success, false);
+  assert.equal(data.supabaseUrl, undefined);
+  assert.equal(data.anonKey, undefined);
+});
