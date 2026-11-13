@@ -199,3 +199,8 @@ footer {
     padding: 17px;
   }
 }
+
+.quality-passed {
+  color: var(--accent);
+  font-weight: 700;
+}
