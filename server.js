@@ -6,6 +6,7 @@ import { runProviderFallback } from "./lib/provider-fallback.js";
 import { extractCompletionText } from "./lib/completion-text.js";
 import { getMasterInstructions, getSpecialistInstructions } from "./lib/specialist-prompts.js";
 import { reviewSpecialistReport } from "./lib/quality-review.js";
+import { createSupabaseApprovalHandlers } from "./lib/supabase-approvals.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -776,6 +777,16 @@ async function runCentralBrain(task) {
 // HEALTH API
 // =====================================
 
+// =====================================
+// OWNER-ONLY SUPABASE APPROVAL STORAGE
+// =====================================
+
+const approvalHandlers = createSupabaseApprovalHandlers();
+
+app.get("/api/approvals", approvalHandlers.list);
+app.post("/api/approvals", approvalHandlers.create);
+app.patch("/api/approvals/:id/decision", approvalHandlers.decide);
+
 app.get("/api/health", (req, res) => {
 
   res.json({
@@ -832,6 +843,11 @@ app.get("/api/status", (req, res) => {
     },
     providerOrder: ["Gemini", "Groq", "OpenRouter"],
     approvalPolicy: "Proposal only: external actions require explicit user approval.",
+    supabaseApprovalStorage: {
+      configured: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY && process.env.SUPABASE_OWNER_USER_ID),
+      authentication: "Supabase user access token + owner allowlist",
+      executionEnabled: false
+    },
     agents
   });
 

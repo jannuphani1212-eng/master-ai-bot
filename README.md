@@ -31,6 +31,10 @@ A person must review and explicitly approve any external action. API keys must n
 
 The task and brain endpoints have a basic per-IP request limit to reduce accidental overuse. This is an in-memory limit and is not a substitute for authentication or a production abuse-prevention service.
 
+## Supabase approval storage
+
+The owner-only approval API uses the Supabase Auth user access token and the public anon key with Row Level Security. Configure SUPABASE_URL, SUPABASE_ANON_KEY, and SUPABASE_OWNER_USER_ID only in the server environment. Do not use a service-role key for this API and never expose private credentials to the browser. Run docs/supabase-approval-schema.sql in the Supabase SQL Editor first, then create the owner account and configure the server variables. Approval decisions are recorded only; they do not execute external actions. See docs/approval-queue-setup.md.
+
 ## Run locally
 
 Requirements: Node.js 20 or newer.
@@ -49,6 +53,9 @@ Set the provider keys in a local .env file or your hosting provider's environmen
 - GET /api/status — configured providers, cooldowns, models, and agent list. It does not return API keys.
 - POST /api/task — run a selected agent or the Master Brain.
 - POST /api/brain — run the Master Brain.
+- GET /api/approvals — list the owner's approval proposals (requires a Supabase access token).
+- POST /api/approvals — save a proposal (requires a Supabase access token).
+- PATCH /api/approvals/:id/decision — approve or reject a pending proposal (requires a Supabase access token).
 
 Example request:
 
