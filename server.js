@@ -5,6 +5,7 @@ import { fallbackAgentSelection, requestsAllSpecialists } from "./lib/routing.js
 import { runProviderFallback } from "./lib/provider-fallback.js";
 import { extractCompletionText } from "./lib/completion-text.js";
 import { getMasterInstructions, getSpecialistInstructions } from "./lib/specialist-prompts.js";
+import { reviewSpecialistReport } from "./lib/quality-review.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -641,6 +642,7 @@ async function runCentralBrain(task) {
         name: agent.name,
         success: true,
         provider: response.provider,
+        qualityReview: reviewSpecialistReport(response.result),
         result: response.result
       });
 
@@ -982,6 +984,7 @@ app.post("/api/task", async (req, res) => {
       success: true,
       agent: agentId,
       provider: response.provider,
+      qualityReview: reviewSpecialistReport(response.result),
       requiresHumanApproval: true,
       executionMode: "proposal_only",
       approvalNotice: "This is a draft. Review it before publishing, spending, sending, deleting, or deploying anything.",
