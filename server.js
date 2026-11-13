@@ -675,15 +675,15 @@ async function runCentralBrain(task) {
 
   const specialistSummary = successfulResults
     .map(item =>
-      `SPECIALIST: ${item.name}\\n` +
-      `VERIFIED PROVIDER: ${item.provider || "Not available"}\\n` +
-      `STRUCTURAL QUALITY REVIEW: ${item.qualityReview?.score ?? "Not scored"}/100 (${item.qualityReview?.status || "not available"})\\n` +
+      `SPECIALIST: ${item.name}\n` +
+      `VERIFIED PROVIDER: ${item.provider || "Not available"}\n` +
+      `STRUCTURAL QUALITY REVIEW: ${item.qualityReview?.score ?? "Not scored"}/100 (${item.qualityReview?.status || "not available"})\n` +
       (item.qualityReview?.warnings?.length
-        ? `QUALITY WARNINGS: ${item.qualityReview.warnings.join("; ")}\\n`
+        ? `QUALITY WARNINGS: ${item.qualityReview.warnings.join("; ")}\n`
         : "") +
       compactReport(item.result, 1800)
     )
-    .join("\\n\\n--------------------\\n\\n");
+    .join("\n\n--------------------\n\n");
 
   const synthesisInstructions =
     "You are the Master AI Bot. Combine the specialist " +
@@ -747,7 +747,7 @@ async function runCentralBrain(task) {
     failedResults.length
       ? "**Overall status:** Partial completion. Do not treat this task as fully completed."
       : "**Overall status:** All requested specialists completed successfully."
-  ].join("\\n");
+  ].join("\n");
 
   finalResult = finalResult + "\n\n" + executionAudit;
 
