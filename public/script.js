@@ -204,3 +204,203 @@ taskForm.addEventListener("submit", async (event) => {
 
 refreshButton.addEventListener("click", loadSystemStatus);
 loadSystemStatus();
+
+
+// OWNER APPROVAL CENTER
+// The access token stays in memory only and is cleared when the page is refreshed.
+let approvalAccessToken = "";
+let approvalConfig = null;
+
+const approvalLoginForm = document.getElementById("approvalLoginForm");
+const approvalEmail = document.getElementById("approvalEmail");
+const approvalPassword = document.getElementById("approvalPassword");
+const approvalLoginButton = document.getElementById("approvalLoginButton");
+const approvalMessage = document.getElementById("approvalMessage");
+const approvalWorkspace = document.getElementById("approvalWorkspace");
+const approvalCreateForm = document.getElementById("approvalCreateForm");
+const approvalTitle = document.getElementById("approvalTitle");
+const approvalActionType = document.getElementById("approvalActionType");
+const approvalPayload = document.getElementById("approvalPayload");
+const approvalList = document.getElementById("approvalList");
+const approvalLogoutButton = document.getElementById("approvalLogoutButton");
+const approvalRefreshButton = document.getElementById("approvalRefreshButton");
+
+function setApprovalMessage(message, isError = false) {
+  approvalMessage.textContent = message;
+  approvalMessage.className = isError ? "warning-text" : "muted";
+}
+
+async function getApprovalConfig() {
+  if (approvalConfig) return approvalConfig;
+  const response = await fetch("/api/approvals/config", { cache: "no-store" });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Approval configuration is unavailable.");
+  approvalConfig = data;
+  return approvalConfig;
+}
+
+async function approvalApi(path, options = {}) {
+  const response = await fetch(path, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: "Bearer " + approvalAccessToken,
+      ...(options.headers || {})
+    }
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Approval request failed.");
+  return data;
+}
+
+async function loadApprovalQueue() {
+  if (!approvalAccessToken) return;
+  approvalList.textContent = "Loading approval queue...";
+  try {
+    const data = await approvalApi("/api/approvals");
+    renderApprovalQueue(Array.isArray(data.approvals) ? data.approvals : []);
+    setApprovalMessage("Signed in. Your owner-only approval queue is ready.");
+  } catch (error) {
+    approvalList.textContent = error.message;
+    if (/session|sign-in|authorised/i.test(error.message)) {
+      approvalAccessToken = "";
+      approvalWorkspace.hidden = true;
+      approvalLoginForm.hidden = false;
+    }
+    setApprovalMessage(error.message, true);
+  }
+}
+
+function renderApprovalQueue(items) {
+  approvalList.replaceChildren();
+  if (!items.length) {
+    addText(approvalList, "p", "No approval proposals yet.");
+    return;
+  }
+
+  items.forEach((item) => {
+    const card = document.createElement("article");
+    card.className = "approval-card";
+    addText(card, "h4", item.title || "Untitled proposal");
+    addText(card, "p", "Category: " + (item.action_type || "other") + " · Status: " + (item.status || "unknown"));
+    addText(card, "p", "Created: " + (item.created_at ? new Date(item.created_at).toLocaleString() : "Not available"));
+    const details = document.createElement("pre");
+    details.textContent = JSON.stringify(item.payload || {}, null, 2);
+    card.appendChild(details);
+    if (item.decision_note) addText(card, "p", "Decision note: " + item.decision_note);
+
+    if (item.status === "pending") {
+      const actions = document.createElement("div");
+      actions.className = "approval-actions";
+      const approve = document.createElement("button");
+      approve.type = "button";
+      approve.textContent = "Approve proposal";
+      approve.addEventListener("click", () => decideApproval(item.id, "approved"));
+      const reject = document.createElement("button");
+      reject.type = "button";
+      reject.className = "secondary";
+      reject.textContent = "Reject proposal";
+      reject.addEventListener("click", () => decideApproval(item.id, "rejected"));
+      actions.append(approve, reject);
+      card.appendChild(actions);
+    }
+    approvalList.appendChild(card);
+  });
+}
+
+async function decideApproval(id, status) {
+  const label = status === "approved" ? "approve" : "reject";
+  if (!window.confirm("Are you sure you want to " + label + " this proposal? This records your decision only; it does not execute the action.")) return;
+  try {
+    await approvalApi("/api/approvals/" + encodeURIComponent(id) + "/decision", {
+      method: "PATCH",
+      body: JSON.stringify({ status })
+    });
+    setApprovalMessage("Decision recorded. No external action was executed.");
+    await loadApprovalQueue();
+  } catch (error) {
+    setApprovalMessage(error.message, true);
+  }
+}
+
+approvalLoginForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  approvalLoginButton.disabled = true;
+  approvalLoginButton.textContent = "Signing in...";
+  setApprovalMessage("Verifying your Supabase owner account...");
+  try {
+    const config = await getApprovalConfig();
+    const response = await fetch(config.supabaseUrl + "/auth/v1/token?grant_type=password", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: config.anonKey
+      },
+      body: JSON.stringify({
+        email: approvalEmail.value.trim(),
+        password: approvalPassword.value
+      })
+    });
+    const session = await response.json();
+    if (!response.ok || !session.access_token) {
+      throw new Error(session.msg || session.message || session.error_description || "Sign-in failed. Check the owner email and password.");
+    }
+    approvalAccessToken = session.access_token;
+    approvalPassword.value = "";
+    approvalLoginForm.hidden = true;
+    approvalWorkspace.hidden = false;
+    setApprovalMessage("Signed in. Loading your private approval queue...");
+    await loadApprovalQueue();
+  } catch (error) {
+    approvalAccessToken = "";
+    setApprovalMessage(error.message, true);
+  } finally {
+    approvalLoginButton.disabled = false;
+    approvalLoginButton.textContent = "Sign in securely";
+  }
+});
+
+approvalCreateForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  let payload;
+  try {
+    payload = JSON.parse(approvalPayload.value || "{}");
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      throw new Error("Details must be a JSON object.");
+    }
+  } catch (error) {
+    setApprovalMessage("Invalid JSON details: " + error.message, true);
+    return;
+  }
+
+  const button = document.getElementById("approvalCreateButton");
+  button.disabled = true;
+  try {
+    await approvalApi("/api/approvals", {
+      method: "POST",
+      body: JSON.stringify({
+        title: approvalTitle.value.trim(),
+        actionType: approvalActionType.value,
+        payload
+      })
+    });
+    approvalTitle.value = "";
+    approvalPayload.value = "{}";
+    setApprovalMessage("Proposal saved. It is waiting for your review.");
+    await loadApprovalQueue();
+  } catch (error) {
+    setApprovalMessage(error.message, true);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+approvalLogoutButton.addEventListener("click", () => {
+  approvalAccessToken = "";
+  approvalWorkspace.hidden = true;
+  approvalLoginForm.hidden = false;
+  approvalList.textContent = "Sign in to view the owner queue.";
+  setApprovalMessage("Signed out. Your session token has been cleared from this page.");
+});
+
+approvalRefreshButton.addEventListener("click", loadApprovalQueue);
