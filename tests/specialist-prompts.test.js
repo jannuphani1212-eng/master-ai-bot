@@ -21,7 +21,7 @@ test("all five specialist agents have distinct professional instructions", () =>
   for (const prompt of prompts) {
     assert.match(prompt, /PROFESSIONAL OPERATING STANDARD/);
     assert.match(prompt, /REQUIRED REPORT FORMAT/);
-    assert.match(prompt, /Never guarantee income, rankings, views/);
+    assert.match(prompt, /Do not guarantee income, rankings, views/);
   }
 });
 
