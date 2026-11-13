@@ -60,3 +60,24 @@ test("does not award section points for headings mentioned only in prose", () =>
   assert.equal(result.score, 10);
   assert.equal(result.status, "needs_review");
 });
+
+
+test("recognizes the numbered report headings required by specialist prompts", () => {
+  const report = [
+    "1. Executive summary",
+    "2. Audience, goal and assumptions",
+    "3. Research and evidence",
+    "4. Recommended strategy",
+    "5. Concrete deliverables",
+    "6. Measurement plan",
+    "7. Risks, policy checks and quality-control steps",
+    "8. Next three actions",
+    "Assumption: current metrics have not been supplied.",
+    "Next action: verify the official platform requirements."
+  ].join("\n");
+
+  const result = reviewSpecialistReport(report);
+  assert.equal(result.score, 100);
+  assert.equal(result.status, "passed");
+  assert.equal(result.missingSections.length, 0);
+});
