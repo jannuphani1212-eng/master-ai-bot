@@ -204,3 +204,56 @@ footer {
   color: var(--accent);
   font-weight: 700;
 }
+
+
+/* Owner approval center */
+input {
+  width: 100%;
+  padding: 13px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #101827;
+  color: var(--text);
+  font: inherit;
+}
+.approval-form {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0 22px;
+}
+.approval-form label {
+  margin: 8px 0 0;
+}
+.approval-toolbar,
+.approval-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 12px 0;
+}
+.approval-toolbar strong {
+  margin-right: auto;
+}
+.approval-list {
+  display: grid;
+  gap: 12px;
+}
+.approval-card {
+  padding: 15px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #101827;
+  overflow-wrap: anywhere;
+}
+.approval-card h4 {
+  margin: 0 0 6px;
+}
+.approval-card pre {
+  padding: 10px;
+  border-radius: 8px;
+  background: #0b1220;
+}
+[hidden] {
+  display: none !important;
+}

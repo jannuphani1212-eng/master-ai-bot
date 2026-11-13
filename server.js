@@ -781,6 +781,22 @@ async function runCentralBrain(task) {
 // OWNER-ONLY SUPABASE APPROVAL STORAGE
 // =====================================
 
+// The Supabase anon key is intentionally public. Row Level Security and the
+// verified owner access token protect approval records; never expose service keys.
+app.get("/api/approvals/config", (req, res) => {
+  const supabaseUrl = String(process.env.SUPABASE_URL || "").trim().replace(/\/+$/, "");
+  const anonKey = String(process.env.SUPABASE_ANON_KEY || "").trim();
+
+  if (!supabaseUrl || !anonKey) {
+    return res.status(503).json({
+      success: false,
+      error: "Approval sign-in is not configured yet. Add the Supabase URL and anon key in Render."
+    });
+  }
+
+  return res.json({ success: true, supabaseUrl, anonKey });
+});
+
 const approvalHandlers = createSupabaseApprovalHandlers();
 
 app.get("/api/approvals", approvalHandlers.list);
