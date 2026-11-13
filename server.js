@@ -675,11 +675,15 @@ async function runCentralBrain(task) {
 
   const specialistSummary = successfulResults
     .map(item =>
-      `SPECIALIST: ${item.name}\n` +
-      `VERIFIED PROVIDER: ${item.provider || "Not available"}\n` +
+      `SPECIALIST: ${item.name}\\n` +
+      `VERIFIED PROVIDER: ${item.provider || "Not available"}\\n` +
+      `STRUCTURAL QUALITY REVIEW: ${item.qualityReview?.score ?? "Not scored"}/100 (${item.qualityReview?.status || "not available"})\\n` +
+      (item.qualityReview?.warnings?.length
+        ? `QUALITY WARNINGS: ${item.qualityReview.warnings.join("; ")}\\n`
+        : "") +
       compactReport(item.result, 1800)
     )
-    .join("\n\n--------------------\n\n");
+    .join("\\n\\n--------------------\\n\\n");
 
   const synthesisInstructions =
     "You are the Master AI Bot. Combine the specialist " +
@@ -732,17 +736,18 @@ async function runCentralBrain(task) {
   const executionAudit = [
     "",
     "## Verified specialist execution audit",
-    "| Specialist | Result | Actual provider |",
-    "|---|---|---|",
+    "| Specialist | Result | Actual provider | Structural quality |",
+    "|---|---|---|---|",
     ...specialistResults.map(item =>
-      `| ${item.name} | ${item.success ? "Success" : "Failed"} | ${item.provider || "No successful provider"} |`
+      `| ${item.name} | ${item.success ? "Success" : "Failed"} | ${item.provider || "No successful provider"} | ${item.qualityReview ? item.qualityReview.score + "/100 (" + item.qualityReview.status + ")" : "Not scored"} |`
     ),
     "",
-    `**Verified totals:** ${successfulResults.length}/${specialistAgents.length} specialists succeeded; ${failedResults.length} failed.`,
+    `**Verified totals:** ${successfulResults.length}/${specialistResults.length} requested specialists succeeded; ${failedResults.length} failed.`,
+    `**Average structural quality:** ${successfulResults.length ? Math.round(successfulResults.reduce((sum, item) => sum + (item.qualityReview?.score || 0), 0) / successfulResults.length) + "/100" : "Not available"} (structure-only; factual accuracy is not independently verified).`,
     failedResults.length
       ? "**Overall status:** Partial completion. Do not treat this task as fully completed."
       : "**Overall status:** All requested specialists completed successfully."
-  ].join("\n");
+  ].join("\\n");
 
   finalResult = finalResult + "\n\n" + executionAudit;
 
