@@ -318,3 +318,152 @@ input {
 @media (max-width: 520px) {
   .youtube-channel { flex-direction: column; }
 }
+
+
+/* PREMIUM COMMAND-CENTER LAYER — additive overrides; preserves existing UI behavior */
+:root {
+  color-scheme: dark;
+  --background: #07111f;
+  --panel: rgba(15, 29, 49, .88);
+  --panel-light: #172d49;
+  --text: #f3f6fc;
+  --muted: #9aabc2;
+  --accent: #d6ad5c;
+  --border: rgba(130, 159, 195, .22);
+  --gold-soft: #f0d49a;
+  --blue-glow: rgba(54, 128, 207, .18);
+}
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(ellipse at 12% 0%, rgba(31, 89, 145, .22), transparent 38rem),
+    radial-gradient(ellipse at 92% 8%, rgba(191, 145, 65, .10), transparent 32rem),
+    #07111f;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.topbar {
+  position: relative;
+  padding: 19px clamp(18px, 5vw, 64px);
+  background: rgba(5, 13, 25, .88);
+  border-bottom: 1px solid rgba(214, 173, 92, .22);
+  backdrop-filter: blur(18px);
+}
+.topbar h1 {
+  letter-spacing: .035em;
+  color: #f7e8c7;
+  font-size: clamp(20px, 3vw, 27px);
+}
+.topbar p { letter-spacing: .04em; }
+.status {
+  border: 1px solid rgba(214, 173, 92, .32);
+  background: rgba(214, 173, 92, .09);
+  color: var(--gold-soft);
+}
+.container {
+  width: min(100% - 28px, 1180px);
+  margin: 26px auto 48px;
+}
+.welcome {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(24px, 5vw, 42px);
+  border: 1px solid rgba(214, 173, 92, .28);
+  border-radius: 22px;
+  background:
+    linear-gradient(118deg, rgba(21, 49, 79, .98), rgba(11, 25, 43, .96) 58%, rgba(33, 42, 58, .92));
+  box-shadow: 0 22px 60px rgba(0, 0, 0, .24), inset 0 1px rgba(255,255,255,.05);
+}
+.welcome::after {
+  content: "";
+  position: absolute;
+  width: 240px;
+  height: 240px;
+  right: -70px;
+  top: -100px;
+  border: 1px solid rgba(214, 173, 92, .22);
+  border-radius: 50%;
+  box-shadow: 0 0 0 24px rgba(214,173,92,.025), 0 0 0 52px rgba(214,173,92,.02);
+  pointer-events: none;
+}
+.welcome h2 {
+  max-width: 720px;
+  margin-bottom: 10px;
+  color: #fff4dd;
+  font-size: clamp(25px, 4vw, 36px);
+  line-height: 1.18;
+  letter-spacing: -.025em;
+}
+.welcome p { max-width: 720px; font-size: 15px; }
+.panel {
+  padding: clamp(18px, 3vw, 26px);
+  border: 1px solid rgba(130, 159, 195, .20);
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(18, 34, 55, .94), rgba(10, 22, 38, .94));
+  box-shadow: 0 14px 38px rgba(0,0,0,.16), inset 0 1px rgba(255,255,255,.035);
+  backdrop-filter: blur(12px);
+}
+.panel h2 {
+  color: #f5dfb4;
+  letter-spacing: -.012em;
+}
+.panel h3 { color: #e8eef8; }
+label { color: #d9e3f1; }
+textarea, select, input {
+  border-color: rgba(135, 164, 201, .28);
+  background: rgba(5, 15, 28, .86);
+}
+textarea:focus, select:focus, input:focus {
+  outline: 2px solid rgba(214, 173, 92, .55);
+  outline-offset: 1px;
+}
+button {
+  background: linear-gradient(135deg, #e5c47f, #c99b48);
+  color: #1b1a17;
+  box-shadow: 0 5px 16px rgba(201, 155, 72, .16);
+  transition: transform .16s ease, filter .16s ease, box-shadow .16s ease;
+}
+button:hover:not(:disabled) {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 22px rgba(201, 155, 72, .23);
+}
+button.secondary {
+  border-color: rgba(132, 162, 199, .25);
+  background: #172b44;
+  color: #e7edf7;
+  box-shadow: none;
+}
+.agent-card, .specialist-result, .approval-card, .youtube-video-card {
+  border-color: rgba(132, 162, 199, .20);
+  border-radius: 13px;
+  background: linear-gradient(145deg, rgba(12, 27, 46, .98), rgba(8, 19, 34, .98));
+}
+.agent-card {
+  position: relative;
+  min-height: 116px;
+  padding: 17px;
+  box-shadow: inset 0 1px rgba(255,255,255,.035);
+}
+.agent-card h3 { color: #f0d49a; }
+.result {
+  border-color: rgba(214, 173, 92, .25);
+  background: rgba(5, 15, 28, .78);
+}
+.approval-notice {
+  border-left-color: var(--accent);
+  background: rgba(214, 173, 92, .08);
+}
+.youtube-metric {
+  border-color: rgba(214, 173, 92, .18);
+  background: linear-gradient(145deg, #142b45, #0b1a2c);
+}
+.youtube-metric strong { color: #e7c47e; }
+.youtube-video-card a { color: #83c7ff; }
+footer { color: #8092aa; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+    animation-duration: .01ms !important;
+  }
+}
