@@ -262,6 +262,29 @@ test("Instagram Reel approval request requires affiliate disclosure and media ri
   }
 });
 
+test("Instagram Reel approval rejects localhost and reserved media hosts", async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async () => { throw new Error("Storage must not be called"); };
+  try {
+    const handlers = createInstagramIntegrationHandlers({ env });
+    const res = mockRes();
+    await handlers.createPublishRequest({
+      ownerUser: { id: ownerId },
+      body: {
+        igUserId: "178400001",
+        videoUrl: "https://localhost/reel.mp4",
+        caption: "Affiliate disclosure #affiliate",
+        affiliateDisclosureConfirmed: true,
+        mediaRightsConfirmed: true
+      }
+    }, res);
+    assert.equal(res.statusCode, 400);
+    assert.match(res.body.error, /public HTTPS URL/);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
 test("Instagram Reel preparation requires exact owner approval and creates one container", async () => {
   const originalFetch = global.fetch;
   const calls = [];
