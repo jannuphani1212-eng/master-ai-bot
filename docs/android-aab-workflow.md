@@ -1,28 +1,29 @@
-# Cloud Android App Bundle (AAB) workflow
+# Master AI Bot Android companion app and cloud AAB build
 
-The Master AI Bot repository currently contains a web application, not an Android/Gradle project. The manual workflow is ready to build an Android project once its source is added.
+The repository now contains a minimal Android companion app under `android-app/`. It opens the existing Master AI Bot HTTPS dashboard in a hardened WebView; it does not create a second backend or duplicate credentials.
 
-## Prepare the Android project
+## Build a debug App Bundle
 
-1. Add the complete Android project under a repository folder such as `android/`.
-2. Include `gradlew` and `gradle/wrapper/gradle-wrapper.properties`.
-3. Push the Android source to the branch to build.
+1. Open GitHub → Actions → **Android cloud AAB build** → Run workflow.
+2. Keep project path as `android-app`.
+3. Select `debug`.
+4. Wait for the workflow to finish, then download the `master-ai-android-debug` artifact. It contains the AAB and SHA-256 checksum.
 
-## Run a cloud build
+The workflow installs Java 17, Android SDK and Gradle 8.13. The project uses Android Gradle Plugin 8.7.3, compile SDK 35 and minimum Android API 24.
 
-1. Open GitHub → Actions → Android AAB cloud build → Run workflow.
-2. Keep project folder as `android`, or enter the folder containing the Gradle wrapper.
-3. Select `bundleDebug` for a test bundle.
-4. Select `bundleRelease` only after the Android project has a secure release-signing configuration.
-5. Download the AAB and SHA-256 checksum from the workflow artifact.
+## Release signing
 
-## Signing and publishing
+A release build requires the owner's persistent keystore and the four GitHub Actions secrets documented in `docs/android-cloud-build.md`. Never commit keystores, signing passwords or private keys. A successful debug build is not a Play Store-ready release.
 
-- Never commit keystores, signing passwords, Play Console service-account JSON or private keys.
-- The workflow does not create signing credentials or upload/publish to Google Play.
-- Release signing must be configured in the Android project using GitHub Actions secrets and a project-specific signing configuration.
-- Play Console upload remains a separate owner-approved action.
+## App behavior and limitations
 
-## Current limitation
+- Loads only the Master AI Bot Render HTTPS host inside the app.
+- Opens other HTTP(S) destinations in the device browser.
+- Disables file/content access and cleartext HTTP; blocks mixed content.
+- Uses the existing web dashboard and its owner authentication.
+- This is a companion WebView app, not a native rewrite. OAuth providers that block embedded WebViews may require completing sign-in in the external browser; test each provider on a real Android device.
+- No Play Console upload or publishing is performed.
 
-No Android app source or Gradle wrapper exists in this repository yet. The workflow therefore fails early with a clear message until the actual Android project is added. It does not claim to produce an AAB without source code.
+## Current verification
+
+The source project is now present. A cloud AAB build must pass before claiming the Android artifact is verified.
