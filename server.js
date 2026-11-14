@@ -893,6 +893,11 @@ app.use("/api/instagram", requireOwner);
 app.use("/api/instagram", limitApiRequests);
 app.get("/api/instagram/connect-url", instagramHandlers.connectUrl);
 app.get("/api/instagram/status", instagramHandlers.status);
+app.post("/api/instagram/publish-requests", instagramHandlers.createPublishRequest);
+app.get("/api/instagram/publish-requests", instagramHandlers.listPublishRequests);
+app.post("/api/instagram/publish-requests/:id/prepare", instagramHandlers.prepareApprovedReel);
+app.get("/api/instagram/publish-requests/:id/status", instagramHandlers.publishStatus);
+app.post("/api/instagram/publish-requests/:id/publish", instagramHandlers.publishApprovedReel);
 
 // =====================================
 // GOOGLE SEARCH CONSOLE — READ ONLY
