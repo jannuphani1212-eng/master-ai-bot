@@ -9,7 +9,7 @@
 - Current Render configuration: automatic deploy on commits is enabled.
 - Health endpoint: `GET /api/health`
 - Status endpoint: `GET /api/status`
-- Render's current `healthCheckPath` is empty. Before merging, set the service Health Check Path to `/api/health` in Render Dashboard → Settings, then save the change.
+- Render's Health Check Path is already configured as `/api/health` (verified 14 Nov 2026). Re-check it before a future production rollout.
 
 **Important:** Merging PR #20 into `main` will trigger the connected Render service's automatic deployment. Do not merge until the owner has reviewed the PR and the release gates below are satisfied.
 
