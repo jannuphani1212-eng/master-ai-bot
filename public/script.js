@@ -703,6 +703,8 @@ const instagramReelForm = document.getElementById("instagramReelForm");
 const instagramReelVideoUrl = document.getElementById("instagramReelVideoUrl");
 const instagramReelCaption = document.getElementById("instagramReelCaption");
 const instagramShareToFeed = document.getElementById("instagramShareToFeed");
+const instagramAffiliateDisclosureConfirmed = document.getElementById("instagramAffiliateDisclosureConfirmed");
+const instagramMediaRightsConfirmed = document.getElementById("instagramMediaRightsConfirmed");
 const instagramRequestApprovalButton = document.getElementById("instagramRequestApprovalButton");
 const instagramPublishStatus = document.getElementById("instagramPublishStatus");
 const instagramPublishRefreshButton = document.getElementById("instagramPublishRefreshButton");
@@ -894,7 +896,9 @@ instagramReelForm.addEventListener("submit", async event => {
         igUserId: instagramPublishAccount.value,
         videoUrl: instagramReelVideoUrl.value.trim(),
         caption: instagramReelCaption.value.trim(),
-        shareToFeed: instagramShareToFeed.checked
+        shareToFeed: instagramShareToFeed.checked,
+        affiliateDisclosureConfirmed: instagramAffiliateDisclosureConfirmed.checked,
+        mediaRightsConfirmed: instagramMediaRightsConfirmed.checked
       })
     });
     instagramReelForm.reset();
