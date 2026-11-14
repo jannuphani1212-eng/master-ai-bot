@@ -31,7 +31,7 @@ A person must review and explicitly approve any external action. API keys must n
 
 The task and brain endpoints have a basic per-IP request limit to reduce accidental overuse. This is an in-memory limit and is not a substitute for authentication or a production abuse-prevention service.
 
-## Supabase approval storage
+## Global Rhymes 4U YouTube connection\n\nThe YouTube Bot can connect to the dedicated channel through Google server-side OAuth. The first integration is read-only: channel profile, recent uploads, public channel statistics, and YouTube Analytics for the last 28 days. OAuth refresh tokens are encrypted on the server and stored in the existing Supabase project. Follow [the YouTube channel setup guide](docs/youtube-channel-setup.md) and run [the token-storage schema](docs/youtube-connection-schema.sql). Uploading and publishing are intentionally not enabled in this first release.\n\n## Supabase approval storage
 
 The owner-only approval API uses the Supabase Auth user access token and the public anon key with Row Level Security. Configure SUPABASE_URL, SUPABASE_ANON_KEY, and SUPABASE_OWNER_USER_ID only in the server environment. Do not use a service-role key for this API and never expose private credentials to the browser. Run docs/supabase-approval-schema.sql in the Supabase SQL Editor first, then create the owner account and configure the server variables. Approval decisions are recorded only; they do not execute external actions. See docs/approval-queue-setup.md.
 
@@ -56,7 +56,7 @@ Set the provider keys in a local .env file or your hosting provider's environmen
 - GET /api/approvals/config — returns only the public Supabase URL and anon key needed for owner sign-in; it never returns the owner UUID or service-role key.
 - GET /api/approvals — list the owner's approval proposals (requires a Supabase access token).
 - POST /api/approvals — save a proposal (requires a Supabase access token).
-- PATCH /api/approvals/:id/decision — approve or reject a pending proposal (requires a Supabase access token).
+- PATCH /api/approvals/:id/decision — approve or reject a pending proposal (requires a Supabase access token).\n- GET /api/youtube/oauth/callback — Google OAuth callback (validates signed, short-lived state).\n- GET /api/youtube/connect-url — create a Google authorization URL (owner token required).\n- GET /api/youtube/status — check whether the owner channel is connected (owner token required).\n- GET /api/youtube/channel — retrieve connected channel profile and statistics (owner token required).\n- GET /api/youtube/videos — retrieve up to 20 recent uploads (owner token required).\n- GET /api/youtube/analytics — retrieve channel analytics for the last 28 days (owner token required).
 
 Example request:
 
