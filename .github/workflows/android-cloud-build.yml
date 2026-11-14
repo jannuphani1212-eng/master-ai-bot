@@ -92,7 +92,7 @@ jobs:
       - name: Build debug Android App Bundle
         if: inputs.variant != 'release'
         env:
-          PROJECT_PATH: ${{ inputs.project_path }}
+          PROJECT_PATH: ${{ inputs.project_path || 'android-app' }}
         run: |
           set -euo pipefail
           cd "$PROJECT_PATH"
@@ -106,7 +106,7 @@ jobs:
       - name: Build signed release Android App Bundle
         if: inputs.variant == 'release'
         env:
-          PROJECT_PATH: ${{ inputs.project_path }}
+          PROJECT_PATH: ${{ inputs.project_path || 'android-app' }}
           ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/master-ai-release.keystore
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
@@ -124,7 +124,7 @@ jobs:
       - name: Locate and verify AAB
         id: locate_aab
         env:
-          PROJECT_PATH: ${{ inputs.project_path }}
+          PROJECT_PATH: ${{ inputs.project_path || 'android-app' }}
           BUILD_VARIANT: ${{ inputs.variant || 'debug' }}
         run: |
           set -euo pipefail
