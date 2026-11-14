@@ -965,6 +965,7 @@ app.get("/api/approvals/config", (req, res) => {
 
 const approvalHandlers = createSupabaseApprovalHandlers();
 
+app.use("/api/approvals", limitApiRequests);
 app.get("/api/approvals", approvalHandlers.list);
 app.post("/api/approvals", approvalHandlers.create);
 app.patch("/api/approvals/:id/decision", approvalHandlers.decide);
