@@ -25,9 +25,20 @@ The Affiliate Video Studio creates and saves bilingual English + Telugu campaign
 - Click events store campaign ID, owner ID, source platform and timestamp. They do not store IP addresses or user-agent strings.
 - Clicks are not sales. No revenue or commission is inferred from views or clicks.
 
+## Commission report import
+
+The dashboard accepts an owner-pasted CSV normalized to this header format:
+
+```csv
+order_id,report_date,commission_amount,currency,status
+ORDER-001,2026-11-14,12.50,INR,paid
+ORDER-002,2026-11-13,5.00,INR,pending
+```
+
+The program name and report reference are entered separately. Supported statuses are `pending`, `approved`, `paid` and `void`. Each imported row is saved as `needs_owner_review`. The owner must confirm each row against the original official report before it contributes to verified totals. Re-importing the same program/order ID updates the row and returns it to review. Clicks and views are never counted as commissions.
+
 ## Not implemented yet
 
 - Live catalog/product research from Amazon or other affiliate program APIs.
-- Affiliate-program order and commission imports, returns/cancellations, payout reconciliation or net-profit reporting.
-- Instagram account OAuth and automatic publishing.
-- Automatic publishing to YouTube.
+- Direct affiliate-program order/commission APIs, automatic CSV file parsing from arbitrary vendor formats, returns/cancellations, payout reconciliation or net-profit reporting.
+- Instagram Reels publishing and YouTube video publishing.
