@@ -257,3 +257,64 @@ input {
 [hidden] {
   display: none !important;
 }
+
+/* Global Rhymes 4U YouTube channel panel */
+.youtube-channel {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #101827;
+}
+.youtube-channel > img {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.youtube-channel h3 { margin: 0 0 8px; }
+.youtube-channel p { white-space: pre-wrap; overflow-wrap: anywhere; }
+.youtube-metrics,
+.youtube-analytics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+.youtube-metric {
+  display: grid;
+  gap: 4px;
+  padding: 13px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: linear-gradient(145deg, #142b45, #101827);
+}
+.youtube-metric strong { font-size: 20px; color: var(--accent); }
+.youtube-video-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+}
+.youtube-video-card {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #101827;
+  overflow-wrap: anywhere;
+}
+.youtube-video-card img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 8px;
+}
+.youtube-video-card h4 { margin: 10px 0 4px; }
+.youtube-video-card p { margin: 4px 0; }
+.youtube-video-card a { color: #58b7ff; }
+@media (max-width: 520px) {
+  .youtube-channel { flex-direction: column; }
+}
