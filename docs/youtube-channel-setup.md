@@ -81,3 +81,7 @@ The dashboard should then show the authorized channel, recent videos and last-28
 - OAuth callback state is signed and expires after 10 minutes.
 - The first release requests read-only channel and analytics scopes. Publishing is deliberately not enabled. A later publishing feature must request the upload scope separately and use a fresh explicit owner approval before each upload.
 - API quota limits and Google OAuth verification/testing restrictions apply. A connected account does not guarantee every analytics report is available immediately.
+
+## OAuth testing-mode limitation
+
+If the Google OAuth consent screen is an External app left in **Testing** status, Google issues refresh tokens that expire after 7 days for these YouTube scopes. You may need to reconnect weekly during testing. For ongoing use, review Google's production-readiness and verification requirements and publish/verify the OAuth app as applicable. Personal-use exceptions may apply, but Testing status still has the 7-day refresh-token limit for non-basic scopes. See [Google's refresh-token expiration rules](https://developers.google.com/identity/protocols/oauth2#expiration) and [OAuth app verification guidance](https://developers.google.com/identity/protocols/oauth2/production-readiness/overview).
