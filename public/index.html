@@ -91,13 +91,17 @@
 </section>
 
 <section class="panel" id="youtubePanel">
-  <h2>Global Rhymes 4U — YouTube Channel</h2>
-  <p class="muted">Connect the dedicated Global Rhymes 4U Google account. Channel data is read-only in this first integration; the bot cannot publish or change videos.</p>
+  <h2>YouTube Channel Connections</h2>
+  <p class="muted">Connect each YouTube channel you own or are authorized to manage, including Global Rhymes 4U and your separate affiliate channel. Channel data is read-only; publishing and editing remain disabled.</p>
   <div class="approval-toolbar">
-    <button type="button" id="youtubeConnectButton">Connect YouTube channel</button>
+    <button type="button" id="youtubeConnectButton">Connect another YouTube account</button>
     <button type="button" id="youtubeRefreshButton" class="secondary">Refresh channel data</button>
   </div>
-  <p id="youtubeStatus" class="muted" aria-live="polite">Sign in as the owner to check the YouTube connection.</p>
+  <div class="approval-toolbar">
+    <label for="youtubeChannelSelect">Active YouTube channel</label>
+    <select id="youtubeChannelSelect" hidden aria-label="Choose the YouTube channel to view"></select>
+  </div>
+  <p id="youtubeStatus" class="muted" aria-live="polite">Sign in as the owner to check connected YouTube channels.</p>
   <div id="youtubeChannel" class="youtube-channel" hidden></div>
   <h3 id="youtubeVideosHeading" hidden>Recent videos</h3>
   <div id="youtubeVideos" class="youtube-video-grid"></div>
