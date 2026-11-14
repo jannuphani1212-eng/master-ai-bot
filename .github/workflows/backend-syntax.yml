@@ -38,3 +38,5 @@ jobs:
         run: npm test
       - name: Validate package.json
         run: node -e "JSON.parse(require('fs').readFileSync('package.json', 'utf8')); console.log('package.json is valid JSON')"
+      - name: Validate Android cloud workflow YAML
+        run: ruby -e 'require "yaml"; YAML.parse_file(".github/workflows/android-cloud-build.yml")'
