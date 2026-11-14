@@ -154,6 +154,42 @@
   <div id="instagramAccounts" class="approval-list">No Instagram account loaded.</div>
 </section>
 
+<section class="panel" id="searchConsolePanel">
+  <h2>SEO · Google Search Console</h2>
+  <p class="muted">Connect a Google account with Search Console access. This integration is read-only: it retrieves verified properties and real search clicks, impressions, CTR and average position. It does not change your website or Search Console settings.</p>
+  <div class="approval-toolbar">
+    <button type="button" id="searchConsoleConnectButton">Connect Google Search Console</button>
+    <button type="button" id="searchConsoleRefreshButton" class="secondary">Refresh website properties</button>
+  </div>
+  <p id="searchConsoleStatus" class="muted" aria-live="polite">Sign in as the owner to connect Google Search Console.</p>
+  <form id="searchConsoleQueryForm" class="approval-form">
+    <label for="searchConsoleSite">Verified Search Console property</label>
+    <select id="searchConsoleSite" required>
+      <option value="">Connect Google Search Console first</option>
+    </select>
+    <label for="searchConsoleStartDate">Start date</label>
+    <input id="searchConsoleStartDate" type="date" required>
+    <label for="searchConsoleEndDate">End date</label>
+    <input id="searchConsoleEndDate" type="date" required>
+    <label for="searchConsoleDimension">Group report by</label>
+    <select id="searchConsoleDimension">
+      <option value="query">Search query</option>
+      <option value="page">Page</option>
+      <option value="country">Country</option>
+      <option value="device">Device</option>
+      <option value="date">Date</option>
+    </select>
+    <label for="searchConsoleRowLimit">Maximum rows</label>
+    <select id="searchConsoleRowLimit">
+      <option value="100">100</option>
+      <option value="500">500</option>
+      <option value="1000">1,000</option>
+    </select>
+    <button type="submit" id="searchConsoleQueryButton">Run SEO performance report</button>
+  </form>
+  <div id="searchConsoleReport" class="approval-list">Connect Search Console and choose a property to view its search performance.</div>
+</section>
+
 <section class="panel" id="youtubePanel">
   <h2>YouTube Channel Connections</h2>
   <p class="muted">Connect each YouTube channel you own or are authorized to manage, including Global Rhymes 4U and your separate affiliate channel. Channel data is read-only; publishing and editing remain disabled.</p>
