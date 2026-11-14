@@ -28,6 +28,10 @@ jobs:
         run: node --check lib/youtube-integration.js
       - name: Validate provider helper syntax
         run: node --check lib/provider-order.js
+      - name: Validate affiliate campaign syntax
+        run: node --check lib/affiliate-campaigns.js
+      - name: Validate Instagram integration syntax
+        run: node --check lib/instagram-integration.js
       - name: Run unit and integration tests
         run: npm test
       - name: Validate package.json
