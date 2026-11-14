@@ -390,7 +390,7 @@ async function generateAI(task, instructions, maxTokens = 900) {
       console.error(provider.name + " failed:", error.message);
       if (/429|rate.?limit|quota/i.test(error.message)) {
         setCooldown(provider.id, getRetrySeconds(error.message));
-      } else if (/5\\d\\d|timeout|fetch failed|UNAVAILABLE|ECONNRESET/i.test(error.message)) {
+      } else if (/5\d\d|timeout|fetch failed|UNAVAILABLE|ECONNRESET/i.test(error.message)) {
         setCooldown(provider.id, 30);
       }
     }
@@ -870,7 +870,7 @@ app.get("/api/status", (req, res) => {
   }
 
   const providers = {
-groq: {
+    groq: {
       configured: Boolean(process.env.GROQ_API_KEY),
       coolingDown: isCoolingDown("groq"),
       cooldownRemainingSeconds: remaining("groq")
@@ -956,7 +956,8 @@ app.post("/api/brain", async (req, res) => {
 
   if (
     !process.env.GROQ_API_KEY &&
-    !process.env.OPENROUTER_API_KEY
+    !process.env.OPENROUTER_API_KEY &&
+    !process.env.MISTRAL_API_KEY
   ) {
 
     return res.status(503).json({
