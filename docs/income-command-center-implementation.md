@@ -56,10 +56,10 @@ This repository is the existing Master AI Bot only: one coordinating Master agen
 
 ## 6. Affiliate tracking and commissions
 
-- Store affiliate programs, approved tracking links, campaign/content IDs and disclosure text.
-- Track click events through a first-party redirect endpoint only where lawful and allowed by program terms.
-- Import commissions/orders only from supported official reports/APIs or owner-uploaded statements.
-- Separate clicks, conversions, pending commission, approved commission, paid commission, expenses and net profit.
+- Implemented: owner-scoped campaign drafts, owner-approved HTTPS tracking links, source-specific first-party redirects and exact database click counts.
+- Implemented: normalized official commission CSV import, unique order de-duplication, owner review/verification and currency-separated summaries. Only owner-confirmed entries contribute to verified pending/approved/paid totals.
+- The CSV importer expects the documented normalized columns; it does not yet parse arbitrary vendor export formats or call affiliate program APIs directly.
+- Still needed: live product/catalog research, direct order/commission API connectors, returns/cancellations, expenses, payout reconciliation and net-profit reporting.
 - Never infer sales from views or clicks; no fake revenue figures.
 
 ## 7. App Development cloud AAB
