@@ -186,7 +186,7 @@ taskForm.addEventListener("submit", async (event) => {
         "Content-Type": "application/json",
         Authorization: "Bearer " + approvalAccessToken
       },
-      body: JSON.stringify({ task, agentId })
+      body: JSON.stringify({ task, agentId, youtubeChannelId: activeYoutubeChannelId || undefined })
     });
 
     const data = await response.json();
@@ -359,6 +359,13 @@ approvalLoginForm.addEventListener("submit", async (event) => {
     approvalWorkspace.hidden = false;
     setApprovalMessage("Signed in. Loading your private approval queue...");
     await loadApprovalQueue();
+    await loadAffiliateCampaigns();
+    await loadCommissionData();
+    await loadInstagramStatus();
+    await loadInstagramPublishRequests();
+    await loadSearchConsoleSites();
+    await loadBlogDrafts();
+    await loadYoutubeStatus();
   } catch (error) {
     approvalAccessToken = "";
     setApprovalMessage(error.message, true);
@@ -409,15 +416,693 @@ approvalLogoutButton.addEventListener("click", () => {
   approvalLoginForm.hidden = false;
   approvalList.textContent = "Sign in to view the owner queue.";
   resetYoutubePanel("Sign in as the owner to check the YouTube connection.");
+  resetAffiliatePanel("Sign in as the owner to view affiliate campaigns.");
+  resetCommissionPanel("Sign in as the owner to import commission reports.");
+  resetInstagramPanel("Sign in as the owner to connect an Instagram professional account.");
+  resetInstagramPublishPanel("Sign in as the owner to manage Reel publishing requests.");
+  resetSearchConsolePanel("Sign in as the owner to connect Google Search Console.");
   setApprovalMessage("Signed out. Your session token has been cleared from this page.");
 });
 
 approvalRefreshButton.addEventListener("click", loadApprovalQueue);
 
 
+// AFFILIATE VIDEO STUDIO
+const affiliateForm = document.getElementById("affiliateForm");
+const affiliateProductName = document.getElementById("affiliateProductName");
+const affiliateCategory = document.getElementById("affiliateCategory");
+const affiliateMerchant = document.getElementById("affiliateMerchant");
+const affiliateProductUrl = document.getElementById("affiliateProductUrl");
+const affiliateTrackingUrl = document.getElementById("affiliateTrackingUrl");
+const affiliateCommissionRate = document.getElementById("affiliateCommissionRate");
+const affiliateProductFacts = document.getElementById("affiliateProductFacts");
+const affiliateGenerateButton = document.getElementById("affiliateGenerateButton");
+const affiliateStatus = document.getElementById("affiliateStatus");
+const affiliateResult = document.getElementById("affiliateResult");
+const affiliateCampaignList = document.getElementById("affiliateCampaignList");
+
+function resetAffiliatePanel(message) {
+  affiliateStatus.textContent = message;
+  affiliateResult.textContent = "Your generated campaign package will appear here.";
+  affiliateCampaignList.textContent = "Sign in to load saved campaigns.";
+}
+
+async function affiliateApi(path, options = {}) {
+  if (!approvalAccessToken) throw new Error("Sign in with the owner account first.");
+  const response = await fetch(path, {
+    ...options,
+    cache: "no-store",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: "Bearer " + approvalAccessToken,
+      ...(options.headers || {})
+    }
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || "Affiliate request failed.");
+  return data;
+}
+
+function addAffiliateCampaignCard(campaign) {
+  const card = document.createElement("article");
+  card.className = "approval-card";
+  addText(card, "h4", campaign.product_name + " · " + campaign.category);
+  addText(card, "p", "Status: " + campaign.status + " · Research: " + campaign.research_status, "muted");
+  addText(card, "p", "Commission: " +
+    (campaign.commission_rate === null ? "Not provided" : campaign.commission_rate + "%") +
+    " · " + campaign.commission_status, "muted");
+
+  const preview = document.createElement("pre");
+  preview.textContent = JSON.stringify(campaign.content_json || {}, null, 2);
+  card.appendChild(preview);
+
+  const actions = document.createElement("div");
+  actions.className = "approval-actions";
+  const showClicks = document.createElement("button");
+  showClicks.type = "button";
+  showClicks.className = "secondary";
+  showClicks.textContent = "Refresh click count";
+  showClicks.addEventListener("click", async () => {
+    showClicks.disabled = true;
+    try {
+      const result = await affiliateApi("/api/affiliate/campaigns/" + encodeURIComponent(campaign.id) + "/clicks");
+      addText(card, "p", "Recorded clicks: " + Number(result.totalClicks || 0).toLocaleString(), "muted");
+    } catch (error) {
+      addText(card, "p", error.message, "warning-text");
+    } finally {
+      showClicks.disabled = false;
+    }
+  });
+  actions.appendChild(showClicks);
+
+  if (campaign.status === "draft") {
+    if (campaign.affiliate_url) {
+      const approve = document.createElement("button");
+      approve.type = "button";
+      approve.textContent = "Approve link tracking";
+      approve.addEventListener("click", async () => {
+        if (!window.confirm("Approve this saved campaign for affiliate click tracking? This will not publish content or spend money.")) return;
+        approve.disabled = true;
+        try {
+          await affiliateApi("/api/affiliate/campaigns/" + encodeURIComponent(campaign.id) + "/approve", { method: "POST", body: "{}" });
+          await loadAffiliateCampaigns();
+          affiliateStatus.textContent = "Campaign approved for link tracking only. No content was published.";
+        } catch (error) {
+          affiliateStatus.textContent = error.message;
+          approve.disabled = false;
+        }
+      });
+      actions.appendChild(approve);
+    } else {
+      addText(card, "p", "Add an approved affiliate link before enabling click tracking.", "warning-text");
+    }
+  } else if (campaign.affiliate_url && ["approved", "published"].includes(campaign.status)) {
+    for (const source of ["youtube_shorts", "instagram_reels"]) {
+      const link = document.createElement("a");
+      link.href = "/r/" + encodeURIComponent(campaign.id) + "?src=" + source;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = source === "youtube_shorts" ? "Tracked YouTube Shorts link" : "Tracked Instagram Reels link";
+      actions.appendChild(link);
+    }
+  }
+  card.appendChild(actions);
+  affiliateCampaignList.appendChild(card);
+}
+
+async function loadAffiliateCampaigns() {
+  if (!approvalAccessToken) {
+    resetAffiliatePanel("Sign in as the owner to create and view affiliate campaigns.");
+    return;
+  }
+  affiliateStatus.textContent = "Loading your saved affiliate campaigns...";
+  try {
+    const data = await affiliateApi("/api/affiliate/campaigns");
+    affiliateCampaignList.replaceChildren();
+    const campaigns = Array.isArray(data.campaigns) ? data.campaigns : [];
+    if (!campaigns.length) {
+      affiliateCampaignList.textContent = "No campaigns saved yet. Add a product above to generate your first bilingual video package.";
+    } else {
+      campaigns.forEach(addAffiliateCampaignCard);
+    }
+    affiliateStatus.textContent = campaigns.length + " saved affiliate campaign(s). Drafts remain unpublished until you review them.";
+  } catch (error) {
+    affiliateStatus.textContent = error.message;
+  }
+}
+
+affiliateForm.addEventListener("submit", async event => {
+  event.preventDefault();
+  affiliateGenerateButton.disabled = true;
+  affiliateGenerateButton.textContent = "Generating drafts...";
+  affiliateStatus.textContent = "Creating English and Telugu Shorts/Reels packages...";
+  affiliateResult.textContent = "Please wait while the AI prepares your draft.";
+  try {
+    const payload = {
+      productName: affiliateProductName.value.trim(),
+      category: affiliateCategory.value,
+      merchant: affiliateMerchant.value.trim(),
+      productUrl: affiliateProductUrl.value.trim(),
+      affiliateUrl: affiliateTrackingUrl.value.trim(),
+      commissionRate: affiliateCommissionRate.value.trim(),
+      productFacts: affiliateProductFacts.value.trim()
+    };
+    const data = await affiliateApi("/api/affiliate/campaigns", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+    affiliateResult.textContent = JSON.stringify(data.campaign?.content_json || {}, null, 2);
+    affiliateStatus.textContent = "Campaign saved as a draft. Product claims, prices and commission still need official verification.";
+    await loadAffiliateCampaigns();
+  } catch (error) {
+    affiliateStatus.textContent = error.message;
+    affiliateResult.textContent = "The campaign was not saved.";
+  } finally {
+    affiliateGenerateButton.disabled = false;
+    affiliateGenerateButton.textContent = "Generate Telugu + English video drafts";
+  }
+});
+
+
+// AFFILIATE COMMISSION REPORTS
+const commissionImportForm = document.getElementById("commissionImportForm");
+const commissionProgram = document.getElementById("commissionProgram");
+const commissionSourceReference = document.getElementById("commissionSourceReference");
+const commissionCsv = document.getElementById("commissionCsv");
+const commissionImportButton = document.getElementById("commissionImportButton");
+const commissionStatus = document.getElementById("commissionStatus");
+const commissionSummary = document.getElementById("commissionSummary");
+const commissionEntries = document.getElementById("commissionEntries");
+
+function resetCommissionPanel(message) {
+  commissionStatus.textContent = message;
+  commissionSummary.textContent = "No verified commission totals loaded.";
+  commissionEntries.textContent = "Sign in to load imported commission entries.";
+}
+
+async function loadCommissionData() {
+  if (!approvalAccessToken) {
+    resetCommissionPanel("Sign in as the owner to import commission reports.");
+    return;
+  }
+  commissionStatus.textContent = "Loading commission entries...";
+  try {
+    const data = await affiliateApi("/api/affiliate/commissions");
+    commissionSummary.replaceChildren();
+    const summaries = Array.isArray(data.summary) ? data.summary : [];
+    if (!summaries.length) {
+      commissionSummary.textContent = "No owner-verified commission totals yet.";
+    } else {
+      summaries.forEach(item => {
+        const card = document.createElement("article");
+        card.className = "approval-card";
+        addText(card, "h4", "Verified commission totals · " + item.currency);
+        addText(card, "p", "Pending: " + Number(item.pending).toFixed(2) +
+          " · Approved: " + Number(item.approved).toFixed(2) +
+          " · Paid: " + Number(item.paid).toFixed(2), "muted");
+        addText(card, "p", "Verified total: " + Number(item.verifiedTotal).toFixed(2) + " " + item.currency);
+        commissionSummary.appendChild(card);
+      });
+    }
+
+    commissionEntries.replaceChildren();
+    const entries = Array.isArray(data.commissions) ? data.commissions : [];
+    if (!entries.length) {
+      commissionEntries.textContent = "No commission rows imported yet.";
+    } else {
+      entries.forEach(entry => {
+        const card = document.createElement("article");
+        card.className = "approval-card";
+        addText(card, "h4", entry.program + " · " + entry.external_order_id);
+        addText(card, "p", Number(entry.commission_amount).toFixed(2) + " " + entry.currency +
+          " · " + entry.status + " · " + entry.report_date, "muted");
+        addText(card, "p", "Source: " + entry.source_reference + " · " + entry.verification_status, "muted");
+        if (entry.verification_status !== "owner_verified") {
+          const verify = document.createElement("button");
+          verify.type = "button";
+          verify.textContent = "Confirm against official report";
+          verify.addEventListener("click", async () => {
+            if (!window.confirm("Have you checked this exact order and commission amount against the official affiliate report?")) return;
+            verify.disabled = true;
+            try {
+              await affiliateApi("/api/affiliate/commissions/" + encodeURIComponent(entry.id) + "/verify", {
+                method: "POST",
+                body: "{}"
+              });
+              await loadCommissionData();
+              commissionStatus.textContent = "Commission entry confirmed by the owner. Only confirmed rows contribute to totals.";
+            } catch (error) {
+              commissionStatus.textContent = error.message;
+              verify.disabled = false;
+            }
+          });
+          card.appendChild(verify);
+        }
+        commissionEntries.appendChild(card);
+      });
+    }
+    commissionStatus.textContent = entries.length + " commission row(s) loaded; " +
+      Number(data.needsReview || 0) + " still need owner review.";
+  } catch (error) {
+    commissionStatus.textContent = error.message;
+  }
+}
+
+commissionImportForm.addEventListener("submit", async event => {
+  event.preventDefault();
+  commissionImportButton.disabled = true;
+  commissionImportButton.textContent = "Importing...";
+  commissionStatus.textContent = "Validating and importing the official report...";
+  try {
+    const result = await affiliateApi("/api/affiliate/commissions/import", {
+      method: "POST",
+      body: JSON.stringify({
+        program: commissionProgram.value.trim(),
+        sourceReference: commissionSourceReference.value.trim(),
+        csvText: commissionCsv.value
+      })
+    });
+    commissionStatus.textContent = result.importedCount + " row(s) imported. Review each row before confirming it.";
+    commissionCsv.value = "";
+    await loadCommissionData();
+  } catch (error) {
+    commissionStatus.textContent = error.message;
+  } finally {
+    commissionImportButton.disabled = false;
+    commissionImportButton.textContent = "Import official report";
+  }
+});
+
+
+// INSTAGRAM PROFESSIONAL ACCOUNT CONNECTION
+const instagramConnectButton = document.getElementById("instagramConnectButton");
+const instagramRefreshButton = document.getElementById("instagramRefreshButton");
+const instagramStatus = document.getElementById("instagramStatus");
+const instagramAccounts = document.getElementById("instagramAccounts");
+const instagramPublishAccount = document.getElementById("instagramPublishAccount");
+const instagramReelForm = document.getElementById("instagramReelForm");
+const instagramReelVideoUrl = document.getElementById("instagramReelVideoUrl");
+const instagramReelCaption = document.getElementById("instagramReelCaption");
+const instagramShareToFeed = document.getElementById("instagramShareToFeed");
+const instagramAffiliateDisclosureConfirmed = document.getElementById("instagramAffiliateDisclosureConfirmed");
+const instagramMediaRightsConfirmed = document.getElementById("instagramMediaRightsConfirmed");
+const instagramRequestApprovalButton = document.getElementById("instagramRequestApprovalButton");
+const instagramPublishStatus = document.getElementById("instagramPublishStatus");
+const instagramPublishRefreshButton = document.getElementById("instagramPublishRefreshButton");
+const instagramPublishRequests = document.getElementById("instagramPublishRequests");
+
+function resetInstagramPanel(message) {
+  instagramStatus.textContent = message;
+  instagramAccounts.textContent = "No Instagram account loaded.";
+  instagramPublishAccount.replaceChildren();
+  const option = document.createElement("option");
+  option.value = "";
+  option.textContent = "Connect an Instagram professional account first";
+  instagramPublishAccount.appendChild(option);
+}
+
+async function instagramApi(path, options = {}) {
+  if (!approvalAccessToken) throw new Error("Sign in with the owner account first.");
+  const response = await fetch(path, {
+    ...options,
+    cache: "no-store",
+    headers: {
+      ...(options.headers || {}),
+      Authorization: "Bearer " + approvalAccessToken,
+      ...(options.body ? { "Content-Type": "application/json" } : {})
+    }
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || "Instagram request failed.");
+  return data;
+}
+
+async function loadInstagramStatus() {
+  if (!approvalAccessToken) {
+    resetInstagramPanel("Sign in as the owner to connect an Instagram professional account.");
+    return;
+  }
+  instagramStatus.textContent = "Checking Instagram account connections...";
+  try {
+    const data = await instagramApi("/api/instagram/status");
+    instagramAccounts.replaceChildren();
+    const accounts = Array.isArray(data.accounts) ? data.accounts : [];
+    instagramPublishAccount.replaceChildren();
+    if (!accounts.length) {
+      const emptyOption = document.createElement("option");
+      emptyOption.value = "";
+      emptyOption.textContent = "Connect an Instagram professional account first";
+      instagramPublishAccount.appendChild(emptyOption);
+      instagramAccounts.textContent = "No Instagram account connected yet. Connect the separate affiliate Business or Creator account.";
+      instagramStatus.textContent = "Instagram is not connected.";
+      return;
+    }
+    accounts.filter(account => !account.reconnectRequired &&
+      ["BUSINESS", "CREATOR", "MEDIA_CREATOR"].includes(String(account.accountType || "").toUpperCase())
+    ).forEach(account => {
+      const option = document.createElement("option");
+      option.value = account.id;
+      option.textContent = (account.username ? "@" + account.username : account.id) + " · " + account.accountType;
+      instagramPublishAccount.appendChild(option);
+    });
+    if (!instagramPublishAccount.options.length) {
+      const option = document.createElement("option");
+      option.value = "";
+      option.textContent = "No active professional account";
+      instagramPublishAccount.appendChild(option);
+    }
+    accounts.forEach(account => {
+      const card = document.createElement("article");
+      card.className = "approval-card";
+      addText(card, "h4", account.username ? "@" + account.username : "Instagram account");
+      addText(card, "p", "Account type: " + (account.accountType || "Unknown"), "muted");
+      addText(card, "p", account.reconnectRequired
+        ? "Reconnect required to refresh this account's access."
+        : "Token expiry: " + new Date(account.expiresAt).toLocaleString(), "muted");
+      instagramAccounts.appendChild(card);
+    });
+    instagramStatus.textContent = accounts.length + " Instagram account connection(s) found. Reels publishing remains disabled until the publishing workflow is separately approved and tested.";
+  } catch (error) {
+    instagramStatus.textContent = error.message;
+  }
+}
+
+instagramConnectButton.addEventListener("click", async () => {
+  instagramConnectButton.disabled = true;
+  instagramStatus.textContent = "Preparing Instagram Business Login...";
+  try {
+    const data = await instagramApi("/api/instagram/connect-url");
+    window.location.assign(data.authorizationUrl);
+  } catch (error) {
+    instagramStatus.textContent = error.message;
+    instagramConnectButton.disabled = false;
+  }
+});
+instagramRefreshButton.addEventListener("click", loadInstagramStatus);
+
+function resetInstagramPublishPanel(message) {
+  instagramPublishStatus.textContent = message;
+  instagramPublishRequests.textContent = "No publishing requests loaded.";
+}
+
+async function loadInstagramPublishRequests() {
+  if (!approvalAccessToken) {
+    resetInstagramPublishPanel("Sign in as the owner to manage Reel publishing requests.");
+    return;
+  }
+  instagramPublishStatus.textContent = "Loading Reel approval requests...";
+  try {
+    const data = await instagramApi("/api/instagram/publish-requests");
+    instagramPublishRequests.replaceChildren();
+    const requests = Array.isArray(data.requests) ? data.requests : [];
+    if (!requests.length) {
+      instagramPublishRequests.textContent = "No Instagram Reel publishing requests yet.";
+    }
+    requests.forEach(request => {
+      const card = document.createElement("article");
+      card.className = "approval-card";
+      addText(card, "h4", request.title || "Instagram Reel publishing request");
+      addText(card, "p", "Approval: " + request.status, "muted");
+      const job = request.publishJob;
+      if (request.status !== "approved") {
+        addText(card, "p", "This exact video URL and caption must be approved in the Owner Approval Center before preparation.", "muted");
+      } else if (!job) {
+        const prepare = document.createElement("button");
+        prepare.type = "button";
+        prepare.textContent = "Prepare approved Reel";
+        prepare.addEventListener("click", async () => {
+          prepare.disabled = true;
+          try {
+            await instagramApi("/api/instagram/publish-requests/" + encodeURIComponent(request.id) + "/prepare", { method: "POST", body: "{}" });
+            await loadInstagramPublishRequests();
+          } catch (error) {
+            instagramPublishStatus.textContent = error.message;
+            prepare.disabled = false;
+          }
+        });
+        card.appendChild(prepare);
+      } else {
+        addText(card, "p", "Publishing status: " + job.status, "muted");
+        if (job.status === "processing") {
+          const check = document.createElement("button");
+          check.type = "button";
+          check.textContent = "Check Instagram processing";
+          check.addEventListener("click", async () => {
+            check.disabled = true;
+            try {
+              await instagramApi("/api/instagram/publish-requests/" + encodeURIComponent(request.id) + "/status");
+              await loadInstagramPublishRequests();
+            } catch (error) {
+              instagramPublishStatus.textContent = error.message;
+              check.disabled = false;
+            }
+          });
+          card.appendChild(check);
+        } else if (job.status === "ready") {
+          const publish = document.createElement("button");
+          publish.type = "button";
+          publish.textContent = "Publish approved Reel now";
+          publish.addEventListener("click", async () => {
+            if (!window.confirm("Publish this exact owner-approved video and caption publicly to Instagram now?")) return;
+            publish.disabled = true;
+            try {
+              await instagramApi("/api/instagram/publish-requests/" + encodeURIComponent(request.id) + "/publish", { method: "POST", body: "{}" });
+              await loadInstagramPublishRequests();
+              instagramPublishStatus.textContent = "Instagram accepted the Reel publishing request.";
+            } catch (error) {
+              instagramPublishStatus.textContent = error.message;
+              publish.disabled = false;
+            }
+          });
+          card.appendChild(publish);
+        } else if (job.status === "published") {
+          addText(card, "p", "Published media ID: " + job.media_id, "muted");
+          if (job.published_at) addText(card, "p", "Published at: " + new Date(job.published_at).toLocaleString(), "muted");
+        } else if (job.status === "publish_unknown") {
+          addText(card, "p", "The final API result could not be confirmed. Check Instagram manually before taking any further action.", "warning-text");
+        } else if (job.error_message) {
+          addText(card, "p", job.error_message, "warning-text");
+        }
+      }
+      instagramPublishRequests.appendChild(card);
+    });
+    instagramPublishStatus.textContent = requests.length + " Instagram Reel request(s) loaded. Publishing requires approval and a separate publish click.";
+  } catch (error) {
+    instagramPublishStatus.textContent = error.message;
+  }
+}
+
+instagramReelForm.addEventListener("submit", async event => {
+  event.preventDefault();
+  instagramRequestApprovalButton.disabled = true;
+  instagramRequestApprovalButton.textContent = "Creating approval request...";
+  try {
+    const result = await instagramApi("/api/instagram/publish-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        igUserId: instagramPublishAccount.value,
+        videoUrl: instagramReelVideoUrl.value.trim(),
+        caption: instagramReelCaption.value.trim(),
+        shareToFeed: instagramShareToFeed.checked,
+        affiliateDisclosureConfirmed: instagramAffiliateDisclosureConfirmed.checked,
+        mediaRightsConfirmed: instagramMediaRightsConfirmed.checked
+      })
+    });
+    instagramReelForm.reset();
+    instagramPublishStatus.textContent = "Approval request created. No video has been published.";
+    await loadInstagramPublishRequests();
+  } catch (error) {
+    instagramPublishStatus.textContent = error.message;
+  } finally {
+    instagramRequestApprovalButton.disabled = false;
+    instagramRequestApprovalButton.textContent = "Request owner approval";
+  }
+});
+instagramPublishRefreshButton.addEventListener("click", loadInstagramPublishRequests);
+
+const instagramResult = new URLSearchParams(window.location.search).get("instagram");
+if (instagramResult === "connected") {
+  instagramStatus.textContent = "Instagram authorization succeeded. Sign in as the owner to load the connected account.";
+} else if (instagramResult === "professional-required") {
+  instagramStatus.textContent = "This Instagram account is personal. Switch it to a Business or Creator professional account, then connect again.";
+} else if (instagramResult === "error") {
+  instagramStatus.textContent = "Instagram could not complete authorization. Check the Meta app settings, redirect URI and permissions.";
+}
+
+
+// GOOGLE SEARCH CONSOLE — READ-ONLY SEO REPORTS
+const searchConsoleConnectButton = document.getElementById("searchConsoleConnectButton");
+const searchConsoleRefreshButton = document.getElementById("searchConsoleRefreshButton");
+const searchConsoleStatus = document.getElementById("searchConsoleStatus");
+const searchConsoleSiteSelect = document.getElementById("searchConsoleSite");
+const searchConsoleQueryForm = document.getElementById("searchConsoleQueryForm");
+const searchConsoleStartDate = document.getElementById("searchConsoleStartDate");
+const searchConsoleEndDate = document.getElementById("searchConsoleEndDate");
+const searchConsoleDimension = document.getElementById("searchConsoleDimension");
+const searchConsoleRowLimit = document.getElementById("searchConsoleRowLimit");
+const searchConsoleQueryButton = document.getElementById("searchConsoleQueryButton");
+const searchConsoleReport = document.getElementById("searchConsoleReport");
+
+function resetSearchConsolePanel(message) {
+  searchConsoleStatus.textContent = message;
+  searchConsoleSiteSelect.replaceChildren();
+  const option = document.createElement("option");
+  option.value = "";
+  option.textContent = "Connect Google Search Console first";
+  searchConsoleSiteSelect.appendChild(option);
+  searchConsoleReport.textContent = "Connect Search Console and choose a property to view its search performance.";
+}
+
+async function searchConsoleApi(path, options = {}) {
+  if (!approvalAccessToken) throw new Error("Sign in with the owner account first.");
+  const response = await fetch(path, {
+    ...options,
+    cache: "no-store",
+    headers: {
+      ...(options.headers || {}),
+      Authorization: "Bearer " + approvalAccessToken,
+      ...(options.body ? { "Content-Type": "application/json" } : {})
+    }
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || "Search Console request failed.");
+  return data;
+}
+
+async function loadSearchConsoleSites() {
+  if (!approvalAccessToken) {
+    resetSearchConsolePanel("Sign in as the owner to connect Google Search Console.");
+    return;
+  }
+  searchConsoleStatus.textContent = "Loading Search Console accounts and properties...";
+  try {
+    const data = await searchConsoleApi("/api/seo/search-console/sites");
+    searchConsoleSiteSelect.replaceChildren();
+    let optionCount = 0;
+    (data.accounts || []).forEach(account => {
+      (account.sites || []).forEach(site => {
+        if (!site.siteUrl || site.permissionLevel === "siteUnverifiedUser") return;
+        const option = document.createElement("option");
+        option.value = String(optionCount++);
+        option.dataset.siteUrl = site.siteUrl;
+        option.dataset.googleEmail = account.googleEmail;
+        option.textContent = site.siteUrl + " · " + account.googleEmail;
+        searchConsoleSiteSelect.appendChild(option);
+      });
+    });
+    if (!optionCount) {
+      const option = document.createElement("option");
+      option.value = "";
+      option.textContent = "No accessible Search Console properties found";
+      searchConsoleSiteSelect.appendChild(option);
+      const needsReconnect = (data.accounts || []).some(account => account.reconnectRequired);
+      searchConsoleStatus.textContent = needsReconnect
+        ? "A Google connection needs reconnecting. Reconnect the account and refresh."
+        : "Google account connected, but no readable Search Console properties were returned.";
+      return;
+    }
+    searchConsoleStatus.textContent = optionCount + " accessible Search Console property/properties found. Reports are read-only and use finalized data.";
+  } catch (error) {
+    searchConsoleStatus.textContent = error.message;
+  }
+}
+
+searchConsoleConnectButton.addEventListener("click", async () => {
+  searchConsoleConnectButton.disabled = true;
+  searchConsoleStatus.textContent = "Preparing Google Search Console authorization...";
+  try {
+    const data = await searchConsoleApi("/api/seo/search-console/connect-url");
+    window.location.assign(data.authorizationUrl);
+  } catch (error) {
+    searchConsoleStatus.textContent = error.message;
+    searchConsoleConnectButton.disabled = false;
+  }
+});
+searchConsoleRefreshButton.addEventListener("click", loadSearchConsoleSites);
+
+searchConsoleQueryForm.addEventListener("submit", async event => {
+  event.preventDefault();
+  const selected = searchConsoleSiteSelect.selectedOptions[0];
+  if (!selected?.dataset.siteUrl || !selected.dataset.googleEmail) {
+    searchConsoleStatus.textContent = "Choose an accessible Search Console property first.";
+    return;
+  }
+  searchConsoleQueryButton.disabled = true;
+  searchConsoleQueryButton.textContent = "Loading report...";
+  searchConsoleReport.textContent = "Querying finalized Search Console data...";
+  try {
+    const data = await searchConsoleApi("/api/seo/search-console/query", {
+      method: "POST",
+      body: JSON.stringify({
+        siteUrl: selected.dataset.siteUrl,
+        googleEmail: selected.dataset.googleEmail,
+        startDate: searchConsoleStartDate.value,
+        endDate: searchConsoleEndDate.value,
+        dimension: searchConsoleDimension.value,
+        rowLimit: Number(searchConsoleRowLimit.value)
+      })
+    });
+    searchConsoleReport.replaceChildren();
+    addText(searchConsoleReport, "p", data.siteUrl + " · " + data.startDate + " to " + data.endDate, "muted");
+    addText(searchConsoleReport, "p", "Google Search Console rows are limited to the top results and may not include every query or page.", "muted");
+    const rows = Array.isArray(data.rows) ? data.rows : [];
+    if (!rows.length) {
+      addText(searchConsoleReport, "p", "No Search Console rows were returned for this date range and dimension.", "muted");
+    } else {
+      const table = document.createElement("table");
+      const head = document.createElement("thead");
+      const headerRow = document.createElement("tr");
+      [data.dimension, "Clicks", "Impressions", "CTR", "Average position"].forEach(label => {
+        const th = document.createElement("th");
+        th.textContent = label;
+        headerRow.appendChild(th);
+      });
+      head.appendChild(headerRow);
+      table.appendChild(head);
+      const body = document.createElement("tbody");
+      rows.forEach(row => {
+        const tr = document.createElement("tr");
+        const values = [
+          Array.isArray(row.keys) ? row.keys.join(" · ") : "",
+          Number(row.clicks || 0).toLocaleString(),
+          Number(row.impressions || 0).toLocaleString(),
+          (Number(row.ctr || 0) * 100).toFixed(2) + "%",
+          Number(row.position || 0).toFixed(2)
+        ];
+        values.forEach(value => {
+          const td = document.createElement("td");
+          td.textContent = value;
+          tr.appendChild(td);
+        });
+        body.appendChild(tr);
+      });
+      table.appendChild(body);
+      searchConsoleReport.appendChild(table);
+    }
+    searchConsoleStatus.textContent = rows.length + " Search Console row(s) returned. These are actual Google Search Console values, not forecasts.";
+  } catch (error) {
+    searchConsoleStatus.textContent = error.message;
+    searchConsoleReport.textContent = "The report could not be loaded.";
+  } finally {
+    searchConsoleQueryButton.disabled = false;
+    searchConsoleQueryButton.textContent = "Run SEO performance report";
+  }
+});
+
+const searchConsoleResult = new URLSearchParams(window.location.search).get("searchConsole");
+if (searchConsoleResult === "connected") {
+  searchConsoleStatus.textContent = "Google authorization succeeded. Sign in as the owner to load your Search Console properties.";
+} else if (searchConsoleResult === "reauthorize") {
+  searchConsoleStatus.textContent = "Google did not return a refresh token. Reconnect and approve offline access.";
+} else if (searchConsoleResult === "error") {
+  searchConsoleStatus.textContent = "Search Console authorization failed. Check the Google API project, OAuth redirect URI and Search Console API access.";
+}
+
 // GLOBAL RHYMES 4U YOUTUBE CONNECTION
 const youtubeConnectButton = document.getElementById("youtubeConnectButton");
 const youtubeRefreshButton = document.getElementById("youtubeRefreshButton");
+const youtubeChannelSelect = document.getElementById("youtubeChannelSelect");
+let activeYoutubeChannelId = "";
 const youtubeStatus = document.getElementById("youtubeStatus");
 const youtubeChannel = document.getElementById("youtubeChannel");
 const youtubeVideos = document.getElementById("youtubeVideos");
@@ -427,6 +1112,9 @@ const youtubeAnalyticsHeading = document.getElementById("youtubeAnalyticsHeading
 
 function resetYoutubePanel(message) {
   youtubeStatus.textContent = message;
+  activeYoutubeChannelId = "";
+  youtubeChannelSelect.replaceChildren();
+  youtubeChannelSelect.hidden = true;
   youtubeChannel.replaceChildren();
   youtubeChannel.hidden = true;
   youtubeVideos.replaceChildren();
@@ -456,17 +1144,31 @@ function addYoutubeMetric(parent, label, value) {
 
 async function loadYoutubeStatus() {
   if (!approvalAccessToken) {
-    resetYoutubePanel("Sign in as the owner to check the YouTube connection.");
+    resetYoutubePanel("Sign in as the owner to check connected YouTube channels.");
     return;
   }
-  youtubeStatus.textContent = "Checking the Global Rhymes 4U connection...";
+  const previousChannelId = activeYoutubeChannelId;
+  youtubeStatus.textContent = "Checking connected YouTube channels...";
   try {
     const data = await youtubeApi("/api/youtube/status");
-    if (!data.connected) {
-      resetYoutubePanel("YouTube is not connected yet. Use Connect YouTube channel to authorize your dedicated Global Rhymes 4U Google account.");
+    const channels = Array.isArray(data.channels) ? data.channels : [];
+    if (!channels.length) {
+      resetYoutubePanel("No YouTube channels are connected yet. Use Connect another YouTube account and authorize the channel owner account.");
       return;
     }
-    youtubeStatus.textContent = "Connected securely: " + (data.channel?.title || "YouTube channel") + ". Loading channel information...";
+    youtubeChannelSelect.replaceChildren();
+    channels.forEach(channel => {
+      const option = document.createElement("option");
+      option.value = channel.id;
+      option.textContent = channel.title || channel.id;
+      youtubeChannelSelect.appendChild(option);
+    });
+    activeYoutubeChannelId = channels.some(channel => channel.id === previousChannelId)
+      ? previousChannelId
+      : channels[0].id;
+    youtubeChannelSelect.value = activeYoutubeChannelId;
+    youtubeChannelSelect.hidden = false;
+    youtubeStatus.textContent = channels.length + " YouTube channel connection(s) found. Loading the selected channel...";
     await loadYoutubeData();
   } catch (error) {
     youtubeStatus.textContent = error.message;
@@ -476,10 +1178,13 @@ async function loadYoutubeStatus() {
 async function loadYoutubeData() {
   youtubeStatus.textContent = "Loading channel, recent videos and analytics...";
   try {
+    const channelQuery = activeYoutubeChannelId
+      ? "?channelId=" + encodeURIComponent(activeYoutubeChannelId)
+      : "";
     const [channelResult, videoResult, analyticsResult] = await Promise.allSettled([
-      youtubeApi("/api/youtube/channel"),
-      youtubeApi("/api/youtube/videos"),
-      youtubeApi("/api/youtube/analytics")
+      youtubeApi("/api/youtube/channel" + channelQuery),
+      youtubeApi("/api/youtube/videos" + channelQuery),
+      youtubeApi("/api/youtube/analytics" + channelQuery)
     ]);
     if (channelResult.status !== "fulfilled") throw channelResult.reason;
     const channel = channelResult.value.channel;
@@ -550,7 +1255,7 @@ async function loadYoutubeData() {
     } else {
       addText(youtubeAnalytics, "p", "YouTube Analytics is unavailable: " + analyticsResult.reason.message);
     }
-    youtubeStatus.textContent = "Global Rhymes 4U is connected. Channel data is live" +
+    youtubeStatus.textContent = channel.title + " is connected. Channel data is live" +
       (analyticsData ? "; analytics cover " + analyticsData.startDate + " to " + analyticsData.endDate + "." : ". Some analytics are unavailable.");
   } catch (error) {
     youtubeStatus.textContent = "Channel connection is active, but some data could not be loaded: " + error.message;
@@ -570,12 +1275,336 @@ youtubeConnectButton.addEventListener("click", async () => {
 });
 
 youtubeRefreshButton.addEventListener("click", loadYoutubeStatus);
+youtubeChannelSelect.addEventListener("change", () => {
+  activeYoutubeChannelId = youtubeChannelSelect.value;
+  loadYoutubeData();
+});
 
 const youtubeResult = new URLSearchParams(window.location.search).get("youtube");
 if (youtubeResult === "connected") {
   youtubeStatus.textContent = "Google authorization succeeded. Sign in as the owner to load your channel.";
-} else if (youtubeResult === "channel-mismatch") {
-  youtubeStatus.textContent = "The selected Google account did not return a channel named Global Rhymes 4U. Sign in with the dedicated channel account and try again.";
+} else if (youtubeResult === "no-channel") {
+  youtubeStatus.textContent = "Google authorization succeeded, but no YouTube channel was returned. Confirm that this Google account owns or manages a YouTube channel and try again.";
 } else if (youtubeResult === "error") {
   youtubeStatus.textContent = "Google could not complete the connection. Check the Google Cloud OAuth setup and try again.";
+}
+
+
+// BLOGGING BOT · OWNER-ONLY DRAFT STUDIO
+const blogDraftForm = document.getElementById("blogDraftForm");
+const blogDraftStatus = document.getElementById("blogDraftStatus");
+const blogDraftEditor = document.getElementById("blogDraftEditor");
+const blogDraftList = document.getElementById("blogDraftList");
+const blogGenerateButton = document.getElementById("blogGenerateButton");
+const blogCmsStatus = document.getElementById("blogCmsStatus");
+const bloggerSiteSelect = document.getElementById("bloggerSiteSelect");
+const wordpressSiteSelect = document.getElementById("wordpressSiteSelect");
+let blogCmsConnections = [];
+
+async function loadBlogDrafts() {
+  if (!approvalAccessToken) return;
+  blogDraftList.textContent = "Loading your private blog drafts...";
+  try {
+    const data = await approvalApi("/api/blog/drafts");
+    renderBlogDraftList(Array.isArray(data.drafts) ? data.drafts : []);
+    await loadBlogCmsConnections();
+    blogDraftStatus.textContent = "Your owner-only blog draft workspace is connected.";
+  } catch (error) {
+    blogDraftList.textContent = error.message;
+    blogDraftStatus.textContent = "Blog drafts could not be loaded. Check the database setup.";
+  }
+}
+
+function renderBlogDraftList(drafts) {
+  blogDraftList.replaceChildren();
+  if (!drafts.length) {
+    addText(blogDraftList, "p", "No saved blog drafts yet. Create your first draft above.");
+    return;
+  }
+  drafts.forEach(draft => {
+    const card = document.createElement("article");
+    card.className = "approval-card";
+    const content = draft.content_json || {};
+    addText(card, "h4", content.title || draft.topic || "Untitled blog draft");
+    addText(card, "p", "Topic: " + (draft.topic || "Not available") + " · Language: " + (draft.language || "English") + " · Status: " + (draft.status || "draft"));
+    addText(card, "p", "SEO title: " + (content.metaTitle || "Not generated") + " · Keyword: " + (draft.target_keyword || content.targetKeyword || "Not set"), "muted");
+    addText(card, "p", "Saved: " + (draft.created_at ? new Date(draft.created_at).toLocaleString() : "Not available"), "muted");
+    const actions = document.createElement("div");
+    actions.className = "approval-actions";
+    const edit = document.createElement("button");
+    edit.type = "button";
+    edit.className = "secondary";
+    edit.textContent = draft.status === "draft" ? "Open / edit draft" : "View approved draft";
+    edit.addEventListener("click", () => showBlogDraftEditor(draft));
+    actions.appendChild(edit);
+    if (draft.status === "draft") {
+      const approve = document.createElement("button");
+      approve.type = "button";
+      approve.textContent = "Approve draft";
+      approve.addEventListener("click", () => decideBlogDraft(draft.id, "approved"));
+      const reject = document.createElement("button");
+      reject.type = "button";
+      reject.className = "secondary";
+      reject.textContent = "Reject draft";
+      reject.addEventListener("click", () => decideBlogDraft(draft.id, "rejected"));
+      actions.append(approve, reject);
+    }
+    card.appendChild(actions);
+    const selectedCms = blogCmsConnections.filter(connection => connection.selected);
+    if (selectedCms.length && draft.status !== "rejected") {
+      const cmsActions = document.createElement("div");
+      cmsActions.className = "approval-actions";
+      selectedCms.forEach(connection => {
+        const sync = document.createElement("button");
+        sync.type = "button";
+        sync.className = "secondary";
+        sync.textContent = "Save to " + (connection.provider === "blogger" ? "Blogger" : "WordPress.com") + " draft";
+        sync.addEventListener("click", () => saveBlogDraftToCms(draft.id, connection.provider));
+        cmsActions.appendChild(sync);
+      });
+      card.appendChild(cmsActions);
+    }
+    if (draft.decision_note) addText(card, "p", "Decision note: " + draft.decision_note);
+    blogDraftList.appendChild(card);
+  });
+}
+
+function showBlogDraftEditor(draft) {
+  const content = { ...(draft.content_json || {}) };
+  blogDraftEditor.replaceChildren();
+  addText(blogDraftEditor, "h3", content.title || draft.topic || "Blog draft");
+  addText(blogDraftEditor, "p", "Status: " + (draft.status || "draft") + " · AI provider: " + (draft.generation_provider || "Not reported"), "muted");
+
+  const fields = [
+    ["title", "Article title", 1, 180],
+    ["metaTitle", "SEO meta title", 1, 180],
+    ["metaDescription", "Meta description", 3, 320],
+    ["articleMarkdown", "Full article draft (Markdown)", 14, 30000]
+  ];
+  const controls = {};
+  fields.forEach(([key, label, rows, maxLength]) => {
+    const wrapper = document.createElement("div");
+    const fieldLabel = document.createElement("label");
+    fieldLabel.textContent = label;
+    const input = rows === 1 ? document.createElement("input") : document.createElement("textarea");
+    if (rows > 1) input.rows = rows;
+    input.maxLength = maxLength;
+    input.value = String(content[key] || "");
+    input.disabled = draft.status !== "draft";
+    fieldLabel.appendChild(input);
+    wrapper.appendChild(fieldLabel);
+    blogDraftEditor.appendChild(wrapper);
+    controls[key] = input;
+  });
+
+  const detail = document.createElement("details");
+  const summary = document.createElement("summary");
+  summary.textContent = "View outline, keywords and fact-check notes";
+  detail.appendChild(summary);
+  const extra = document.createElement("pre");
+  extra.textContent = JSON.stringify({
+    slug: content.slug || "",
+    alternateTitles: content.alternateTitles || [],
+    secondaryKeywords: content.secondaryKeywords || [],
+    outline: content.outline || [],
+    FAQ: content.faq || [],
+    factChecksNeeded: content.factChecksNeeded || [],
+    qualityChecklist: content.qualityChecklist || []
+  }, null, 2);
+  detail.appendChild(extra);
+  blogDraftEditor.appendChild(detail);
+
+  if (draft.status === "draft") {
+    const save = document.createElement("button");
+    save.type = "button";
+    save.textContent = "Save edits";
+    save.addEventListener("click", async () => {
+      save.disabled = true;
+      try {
+        content.title = controls.title.value.trim();
+        content.metaTitle = controls.metaTitle.value.trim();
+        content.metaDescription = controls.metaDescription.value.trim();
+        content.articleMarkdown = controls.articleMarkdown.value;
+        await approvalApi("/api/blog/drafts/" + encodeURIComponent(draft.id), {
+          method: "PATCH",
+          body: JSON.stringify({ content })
+        });
+        blogDraftStatus.textContent = "Draft edits saved.";
+        await loadBlogDrafts();
+      } catch (error) {
+        blogDraftStatus.textContent = error.message;
+      } finally {
+        save.disabled = false;
+      }
+    });
+    blogDraftEditor.appendChild(save);
+  }
+
+  const selectedCms = blogCmsConnections.filter(connection => connection.selected);
+  if (selectedCms.length && draft.status !== "rejected") {
+    const cmsActions = document.createElement("div");
+    cmsActions.className = "approval-actions";
+    selectedCms.forEach(connection => {
+      const sync = document.createElement("button");
+      sync.type = "button";
+      sync.className = "secondary";
+      sync.textContent = "Save to " + (connection.provider === "blogger" ? "Blogger" : "WordPress.com") + " draft";
+      sync.addEventListener("click", () => saveBlogDraftToCms(draft.id, connection.provider));
+      cmsActions.appendChild(sync);
+    });
+    blogDraftEditor.appendChild(cmsActions);
+  }
+}
+
+async function decideBlogDraft(id, decision) {
+  const label = decision === "approved" ? "approve" : "reject";
+  if (!window.confirm("Are you sure you want to " + label + " this blog draft? This records your review only. It will NOT publish the article.")) return;
+  try {
+    const data = await approvalApi("/api/blog/drafts/" + encodeURIComponent(id) + "/decision", {
+      method: "POST",
+      body: JSON.stringify({ decision })
+    });
+    blogDraftStatus.textContent = data.message || "Your review decision was saved. Nothing was published.";
+    await loadBlogDrafts();
+  } catch (error) {
+    blogDraftStatus.textContent = error.message;
+  }
+}
+
+if (blogDraftForm) {
+  blogDraftForm.addEventListener("submit", async event => {
+    event.preventDefault();
+    if (!approvalAccessToken) {
+      blogDraftStatus.textContent = "Sign in as the owner first.";
+      return;
+    }
+    blogGenerateButton.disabled = true;
+    blogGenerateButton.textContent = "Generating draft...";
+    blogDraftStatus.textContent = "The Blogging specialist is preparing your article and SEO fields...";
+    blogDraftEditor.textContent = "Generating and saving your blog draft. Please wait.";
+    try {
+      const data = await approvalApi("/api/blog/drafts", {
+        method: "POST",
+        body: JSON.stringify({
+          topic: document.getElementById("blogTopic").value,
+          language: document.getElementById("blogLanguage").value,
+          audience: document.getElementById("blogAudience").value,
+          targetKeyword: document.getElementById("blogKeyword").value,
+          notes: document.getElementById("blogNotes").value
+        })
+      });
+      if (!data.draft) throw new Error("The blog draft was not returned by the server.");
+      blogDraftStatus.textContent = "Blog draft generated and saved. Review it before approving.";
+      showBlogDraftEditor(data.draft);
+      await loadBlogDrafts();
+    } catch (error) {
+      blogDraftStatus.textContent = error.message;
+      blogDraftEditor.textContent = "The draft was not saved. Check AI provider and database configuration, then try again.";
+    } finally {
+      blogGenerateButton.disabled = false;
+      blogGenerateButton.textContent = "Generate and save blog draft";
+    }
+  });
+}
+
+
+// BLOGGER + WORDPRESS.COM CMS CONNECTIONS
+async function loadBlogCmsConnections() {
+  if (!approvalAccessToken || !blogCmsStatus) return;
+  try {
+    const data = await approvalApi("/api/blog/cms/connections");
+    blogCmsConnections = Array.isArray(data.connections) ? data.connections : [];
+    for (const [provider, select] of [["blogger", bloggerSiteSelect], ["wordpress", wordpressSiteSelect]]) {
+      if (!select) continue;
+      const previous = select.value;
+      select.replaceChildren();
+      const sites = blogCmsConnections.filter(item => item.provider === provider);
+      if (!sites.length) {
+        const option = document.createElement("option");
+        option.value = "";
+        option.textContent = provider === "blogger" ? "No Blogger blog connected" : "No WordPress.com site connected";
+        select.appendChild(option);
+      } else {
+        sites.forEach(site => {
+          const option = document.createElement("option");
+          option.value = site.site_id;
+          option.textContent = site.site_name + (site.selected ? " · selected" : "");
+          select.appendChild(option);
+        });
+        const selected = sites.find(site => site.selected);
+        select.value = selected?.site_id || previous || sites[0].site_id;
+      }
+    }
+    const counts = ["blogger", "wordpress"].map(provider => {
+      const site = blogCmsConnections.find(item => item.provider === provider && item.selected);
+      return provider + ": " + (site ? site.site_name : "not connected");
+    });
+    blogCmsStatus.textContent = counts.join(" · ");
+  } catch (error) {
+    blogCmsStatus.textContent = "CMS connections could not be loaded: " + error.message;
+  }
+}
+
+async function startBlogCmsConnection(provider) {
+  if (!approvalAccessToken) {
+    blogCmsStatus.textContent = "Sign in as the owner first.";
+    return;
+  }
+  try {
+    blogCmsStatus.textContent = "Preparing secure " + provider + " connection...";
+    const data = await approvalApi("/api/blog/cms/" + provider + "/connect-url");
+    if (!data.authorizationUrl) throw new Error("The connection URL was not returned.");
+    window.location.assign(data.authorizationUrl);
+  } catch (error) {
+    blogCmsStatus.textContent = error.message;
+  }
+}
+
+async function selectBlogCmsSite(provider, siteId) {
+  if (!siteId) {
+    blogCmsStatus.textContent = "Connect a " + provider + " destination first.";
+    return;
+  }
+  try {
+    await approvalApi("/api/blog/cms/" + provider + "/select", {
+      method: "POST",
+      body: JSON.stringify({ siteId })
+    });
+    blogCmsStatus.textContent = "Destination selected. Articles will be saved as drafts only.";
+    await loadBlogCmsConnections();
+    await loadBlogDrafts();
+  } catch (error) {
+    blogCmsStatus.textContent = error.message;
+  }
+}
+
+async function saveBlogDraftToCms(draftId, provider) {
+  try {
+    blogCmsStatus.textContent = "Saving a private " + provider + " draft...";
+    const data = await approvalApi("/api/blog/cms/drafts/" + encodeURIComponent(draftId) + "/save", {
+      method: "POST",
+      body: JSON.stringify({ providers: [provider] })
+    });
+    const result = (data.results || []).find(item => item.provider === provider);
+    blogCmsStatus.textContent = result?.alreadySaved
+      ? "This article already has a " + provider + " draft. No duplicate was created."
+      : result?.success
+        ? "Saved to " + provider + " as a draft. Nothing was published."
+        : result?.error || data.message || "The CMS draft could not be saved.";
+  } catch (error) {
+    blogCmsStatus.textContent = error.message;
+  }
+}
+
+document.getElementById("bloggerConnectButton")?.addEventListener("click", () => startBlogCmsConnection("blogger"));
+document.getElementById("wordpressConnectButton")?.addEventListener("click", () => startBlogCmsConnection("wordpress"));
+document.getElementById("blogCmsRefreshButton")?.addEventListener("click", loadBlogCmsConnections);
+document.getElementById("bloggerSiteSelectButton")?.addEventListener("click", () => selectBlogCmsSite("blogger", bloggerSiteSelect?.value));
+document.getElementById("wordpressSiteSelectButton")?.addEventListener("click", () => selectBlogCmsSite("wordpress", wordpressSiteSelect?.value));
+
+const blogCmsResult = new URLSearchParams(window.location.search).get("blogcms");
+if (blogCmsResult === "blogger-connected" || blogCmsResult === "wordpress-connected") {
+  if (blogCmsStatus) blogCmsStatus.textContent = "Connection completed. Sign in as the owner to load your connected blogs.";
+} else if (blogCmsResult === "error") {
+  if (blogCmsStatus) blogCmsStatus.textContent = "The CMS connection failed. Check the OAuth app settings and try again.";
 }

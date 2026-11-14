@@ -85,3 +85,12 @@ The dashboard should then show the authorized channel, recent videos and last-28
 ## OAuth testing-mode limitation
 
 If the Google OAuth consent screen is an External app left in **Testing** status, Google issues refresh tokens that expire after 7 days for these YouTube scopes. You may need to reconnect weekly during testing. For ongoing use, review Google's production-readiness and verification requirements and publish/verify the OAuth app as applicable. Personal-use exceptions may apply, but Testing status still has the 7-day refresh-token limit for non-basic scopes. See [Google's refresh-token expiration rules](https://developers.google.com/identity/protocols/oauth2#expiration) and [OAuth app verification guidance](https://developers.google.com/identity/protocols/oauth2/production-readiness/overview).
+
+
+## Multiple YouTube channels
+
+The dashboard now supports multiple owner-authorized channels. Use **Connect another YouTube account** for each Google account/channel you want to add. Google may return more than one owned channel for an authorized account; the backend stores each returned channel separately and encrypts the refresh token before storage. The active channel selector scopes the dashboard's read-only channel, video and analytics requests, and the YouTube specialist task context.
+
+The SQL in `docs/youtube-multi-channel-schema.sql` has been applied to the **Master AI Bot Supabase project**. It created a new owner-scoped table and did not delete the legacy single-channel table. The feature branch contains the backend and dashboard changes; they become active only after PR #20 is reviewed, merged and deployed. Keep `SUPABASE_SERVICE_ROLE_KEY` and `YOUTUBE_TOKEN_ENCRYPTION_KEY` only in Render environment variables. Do not paste them into GitHub or ChatGPT.
+
+The OAuth scope remains read-only. The YouTube API may return zero channels if the Google account selected during consent does not own a YouTube channel. Each separately connected Google account must be authorized by its channel owner. This is a read-only connection feature; upload, edit, delete and scheduling remain disabled.

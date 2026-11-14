@@ -24,7 +24,19 @@ jobs:
         run: node --check server.js
       - name: Validate dashboard JavaScript syntax
         run: node --check public/script.js
+      - name: Validate YouTube integration syntax
+        run: node --check lib/youtube-integration.js
+      - name: Validate provider helper syntax
+        run: node --check lib/provider-order.js
+      - name: Validate affiliate campaign syntax
+        run: node --check lib/affiliate-campaigns.js
+      - name: Validate Instagram integration syntax
+        run: node --check lib/instagram-integration.js
+      - name: Validate Search Console integration syntax
+        run: node --check lib/search-console-integration.js
       - name: Run unit and integration tests
         run: npm test
       - name: Validate package.json
         run: node -e "JSON.parse(require('fs').readFileSync('package.json', 'utf8')); console.log('package.json is valid JSON')"
+      - name: Validate Android cloud workflow YAML
+        run: ruby -e 'require "yaml"; YAML.parse_file(".github/workflows/android-cloud-build.yml")'

@@ -90,14 +90,182 @@
   </div>
 </section>
 
-<section class="panel" id="youtubePanel">
-  <h2>Global Rhymes 4U — YouTube Channel</h2>
-  <p class="muted">Connect the dedicated Global Rhymes 4U Google account. Channel data is read-only in this first integration; the bot cannot publish or change videos.</p>
+<section class="panel" id="affiliatePanel">
+  <h2>Affiliate Video Studio</h2>
+  <p class="muted">Create separate Telugu and English YouTube Shorts and Instagram Reels drafts across popular Indian product categories. Product facts, prices and commission terms are never treated as verified unless you provide official evidence.</p>
+  <form id="affiliateForm" class="approval-form">
+    <label for="affiliateProductName">Product name</label>
+    <input id="affiliateProductName" maxlength="180" required placeholder="Example: Stainless steel wrist watch">
+    <label for="affiliateCategory">Product category</label>
+    <select id="affiliateCategory" required>
+      <option value="Fashion">Fashion</option>
+      <option value="Watches">Watches</option>
+      <option value="Electronics">Electronics</option>
+      <option value="Mobile accessories">Mobile accessories</option>
+      <option value="Home and kitchen">Home and kitchen</option>
+      <option value="Beauty and personal care">Beauty and personal care</option>
+      <option value="Fitness">Fitness</option>
+      <option value="Books">Books</option>
+      <option value="Appliances">Appliances</option>
+      <option value="Travel accessories">Travel accessories</option>
+      <option value="Family and lifestyle">Family and lifestyle</option>
+      <option value="Other">Other</option>
+    </select>
+    <label for="affiliateMerchant">Merchant (optional)</label>
+    <input id="affiliateMerchant" maxlength="120" placeholder="Example: Amazon India">
+    <label for="affiliateProductUrl">Product page URL (optional)</label>
+    <input id="affiliateProductUrl" type="url" placeholder="https://...">
+    <label for="affiliateTrackingUrl">Your approved affiliate link (optional)</label>
+    <input id="affiliateTrackingUrl" type="url" placeholder="Add after your affiliate program approves you">
+    <label for="affiliateCommissionRate">Commission rate % (optional; unverified until checked)</label>
+    <input id="affiliateCommissionRate" type="number" min="0" max="100" step="0.01" placeholder="Leave blank if unknown">
+    <label for="affiliateProductFacts">Verified product facts and notes</label>
+    <textarea id="affiliateProductFacts" rows="4" maxlength="4000" placeholder="Paste only product facts you have checked. Do not include private account information."></textarea>
+    <button type="submit" id="affiliateGenerateButton">Generate Telugu + English video drafts</button>
+  </form>
+  <p id="affiliateStatus" class="muted" aria-live="polite">Sign in as the owner to create and view affiliate campaigns.</p>
+  <div id="affiliateResult" class="result" aria-live="polite">Your generated campaign package will appear here.</div>
+  <h3>Saved affiliate campaigns</h3>
+  <div id="affiliateCampaignList" class="approval-list">Sign in to load saved campaigns.</div>
+  <h3>Official commission report import</h3>
+  <p class="muted">Paste a CSV exported from your affiliate program. Imported rows stay unverified until you review them against the official statement. Only owner-confirmed entries appear in verified commission totals.</p>
+  <form id="commissionImportForm" class="approval-form">
+    <label for="commissionProgram">Affiliate program</label>
+    <input id="commissionProgram" maxlength="100" required placeholder="Example: Amazon Associates">
+    <label for="commissionSourceReference">Official report name or period</label>
+    <input id="commissionSourceReference" maxlength="180" required placeholder="Example: November 2026 report">
+    <label for="commissionCsv">CSV data</label>
+    <textarea id="commissionCsv" rows="5" required placeholder="order_id,report_date,commission_amount,currency,status&#10;ORDER-001,2026-11-14,12.50,INR,paid"></textarea>
+    <button type="submit" id="commissionImportButton">Import official report</button>
+  </form>
+  <p id="commissionStatus" class="muted" aria-live="polite">Sign in to import commission reports.</p>
+  <div id="commissionSummary" class="approval-list">No verified commission totals loaded.</div>
+  <div id="commissionEntries" class="approval-list">Sign in to load imported commission entries.</div>
+</section>
+
+<section class="panel" id="blogDraftPanel">
+  <h2>Blogging Bot · Blog Draft Studio</h2>
+  <p class="muted">Generate SEO-friendly article drafts, outlines, titles and meta descriptions. Drafts are private to the owner. Approval records your decision only; nothing is published automatically.</p>
+  <form id="blogDraftForm" class="approval-form">
+    <label for="blogTopic">Blog topic</label>
+    <input id="blogTopic" maxlength="180" required placeholder="Example: Best budget smartwatches in India">
+    <label for="blogLanguage">Language</label>
+    <select id="blogLanguage">
+      <option value="English">English</option>
+      <option value="Telugu">Telugu</option>
+      <option value="Bilingual">English + Telugu</option>
+    </select>
+    <label for="blogAudience">Target audience (optional)</label>
+    <input id="blogAudience" maxlength="180" placeholder="Example: Indian students and first-time buyers">
+    <label for="blogKeyword">Primary SEO keyword (optional)</label>
+    <input id="blogKeyword" maxlength="120" placeholder="Example: best budget smartwatch India">
+    <label for="blogNotes">Extra notes (optional)</label>
+    <textarea id="blogNotes" rows="4" maxlength="3000" placeholder="Add facts, product details, website tone or points to cover."></textarea>
+    <button type="submit" id="blogGenerateButton">Generate and save blog draft</button>
+  </form>
+  <p id="blogDraftStatus" class="muted" aria-live="polite">Sign in as the owner to create and manage blog drafts.</p>
+  <div class="approval-form" id="blogCmsPanel">
+    <h3>Connect your publishing platforms</h3>
+    <p class="muted">Connect Blogger and WordPress.com, choose a destination, then save approved articles as CMS drafts. This does not publish them.</p>
+    <div class="approval-actions">
+      <button type="button" id="bloggerConnectButton">Connect Blogger</button>
+      <button type="button" id="wordpressConnectButton" class="secondary">Connect WordPress.com</button>
+      <button type="button" id="blogCmsRefreshButton" class="secondary">Refresh connections</button>
+    </div>
+    <p id="blogCmsStatus" class="muted" aria-live="polite">Sign in as the owner to connect a blog.</p>
+    <label for="bloggerSiteSelect">Blogger destination</label>
+    <select id="bloggerSiteSelect"><option value="">No Blogger blog connected</option></select>
+    <button type="button" id="bloggerSiteSelectButton" class="secondary">Use selected Blogger blog</button>
+    <label for="wordpressSiteSelect">WordPress.com destination</label>
+    <select id="wordpressSiteSelect"><option value="">No WordPress.com site connected</option></select>
+    <button type="button" id="wordpressSiteSelectButton" class="secondary">Use selected WordPress.com site</button>
+    <p class="muted">Your CMS copies are always created with draft status. Publishing remains a separate manual action on the CMS website.</p>
+  </div>
+  <div id="blogDraftEditor" class="result" aria-live="polite">Your generated draft will appear here.</div>
+  <h3>Saved blog drafts</h3>
+  <div id="blogDraftList" class="approval-list">Sign in to load saved blog drafts.</div>
+</section>
+
+<section class="panel" id="instagramPanel">
+  <h2>Instagram Professional Account</h2>
+  <p class="muted">Connect your separate affiliate Instagram Business or Creator account. This connection is for account access and future approved publishing; it does not automatically publish Reels.</p>
   <div class="approval-toolbar">
-    <button type="button" id="youtubeConnectButton">Connect YouTube channel</button>
+    <button type="button" id="instagramConnectButton">Connect Instagram account</button>
+    <button type="button" id="instagramRefreshButton" class="secondary">Refresh connection</button>
+  </div>
+  <p id="instagramStatus" class="muted" aria-live="polite">Sign in as the owner to connect an Instagram professional account.</p>
+  <div id="instagramAccounts" class="approval-list">No Instagram account loaded.</div>
+  <h3>Request approval to publish a Reel</h3>
+  <p class="muted">Use a publicly accessible HTTPS video URL. The bot first creates an approval request containing the exact account, video URL and caption. It will not prepare or publish until that request is approved.</p>
+  <form id="instagramReelForm" class="approval-form">
+    <label for="instagramPublishAccount">Instagram account</label>
+    <select id="instagramPublishAccount" required>
+      <option value="">Connect an Instagram professional account first</option>
+    </select>
+    <label for="instagramReelVideoUrl">Public video URL (HTTPS)</label>
+    <input id="instagramReelVideoUrl" type="url" required placeholder="https://.../your-reel-video.mp4">
+    <label for="instagramReelCaption">Exact Reel caption</label>
+    <textarea id="instagramReelCaption" rows="4" maxlength="2200" required placeholder="Write the caption and affiliate disclosure here."></textarea>
+    <label><input id="instagramShareToFeed" type="checkbox" checked> Also share to Instagram feed</label>
+    <label><input id="instagramAffiliateDisclosureConfirmed" type="checkbox" required> I confirm the caption contains a clear affiliate disclosure.</label>
+    <label><input id="instagramMediaRightsConfirmed" type="checkbox" required> I confirm this video URL is publicly accessible and I have rights to publish its video and audio.</label>
+    <button type="submit" id="instagramRequestApprovalButton">Request owner approval</button>
+  </form>
+  <p id="instagramPublishStatus" class="muted" aria-live="polite">No Reel publishing request created.</p>
+  <div class="approval-toolbar">
+    <button type="button" id="instagramPublishRefreshButton" class="secondary">Refresh publishing requests</button>
+  </div>
+  <div id="instagramPublishRequests" class="approval-list">No publishing requests loaded.</div>
+</section>
+
+<section class="panel" id="searchConsolePanel">
+  <h2>SEO · Google Search Console</h2>
+  <p class="muted">Connect a Google account with Search Console access. This integration is read-only: it retrieves verified properties and real search clicks, impressions, CTR and average position. It does not change your website or Search Console settings.</p>
+  <div class="approval-toolbar">
+    <button type="button" id="searchConsoleConnectButton">Connect Google Search Console</button>
+    <button type="button" id="searchConsoleRefreshButton" class="secondary">Refresh website properties</button>
+  </div>
+  <p id="searchConsoleStatus" class="muted" aria-live="polite">Sign in as the owner to connect Google Search Console.</p>
+  <form id="searchConsoleQueryForm" class="approval-form">
+    <label for="searchConsoleSite">Verified Search Console property</label>
+    <select id="searchConsoleSite" required>
+      <option value="">Connect Google Search Console first</option>
+    </select>
+    <label for="searchConsoleStartDate">Start date</label>
+    <input id="searchConsoleStartDate" type="date" required>
+    <label for="searchConsoleEndDate">End date</label>
+    <input id="searchConsoleEndDate" type="date" required>
+    <label for="searchConsoleDimension">Group report by</label>
+    <select id="searchConsoleDimension">
+      <option value="query">Search query</option>
+      <option value="page">Page</option>
+      <option value="country">Country</option>
+      <option value="device">Device</option>
+      <option value="date">Date</option>
+    </select>
+    <label for="searchConsoleRowLimit">Maximum rows</label>
+    <select id="searchConsoleRowLimit">
+      <option value="100">100</option>
+      <option value="500">500</option>
+      <option value="1000">1,000</option>
+    </select>
+    <button type="submit" id="searchConsoleQueryButton">Run SEO performance report</button>
+  </form>
+  <div id="searchConsoleReport" class="approval-list">Connect Search Console and choose a property to view its search performance.</div>
+</section>
+
+<section class="panel" id="youtubePanel">
+  <h2>YouTube Channel Connections</h2>
+  <p class="muted">Connect each YouTube channel you own or are authorized to manage, including Global Rhymes 4U and your separate affiliate channel. Channel data is read-only; publishing and editing remain disabled.</p>
+  <div class="approval-toolbar">
+    <button type="button" id="youtubeConnectButton">Connect another YouTube account</button>
     <button type="button" id="youtubeRefreshButton" class="secondary">Refresh channel data</button>
   </div>
-  <p id="youtubeStatus" class="muted" aria-live="polite">Sign in as the owner to check the YouTube connection.</p>
+  <div class="approval-toolbar">
+    <label for="youtubeChannelSelect">Active YouTube channel</label>
+    <select id="youtubeChannelSelect" hidden aria-label="Choose the YouTube channel to view"></select>
+  </div>
+  <p id="youtubeStatus" class="muted" aria-live="polite">Sign in as the owner to check connected YouTube channels.</p>
   <div id="youtubeChannel" class="youtube-channel" hidden></div>
   <h3 id="youtubeVideosHeading" hidden>Recent videos</h3>
   <div id="youtubeVideos" class="youtube-video-grid"></div>

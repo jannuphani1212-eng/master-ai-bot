@@ -3,12 +3,19 @@ import "dotenv/config";
 import { GoogleGenAI } from "@google/genai";
 import { fallbackAgentSelection, requestsAllSpecialists } from "./lib/routing.js";
 import { runProviderFallback } from "./lib/provider-fallback.js";
+import { resolveProviderOrder } from "./lib/provider-order.js";
+import { getOpenRouterMaxTokens } from "./lib/openrouter-request.js";
 import { extractCompletionText } from "./lib/completion-text.js";
 import { getMasterInstructions, getSpecialistInstructions } from "./lib/specialist-prompts.js";
 import { reviewSpecialistReport } from "./lib/quality-review.js";
 import { createSupabaseApprovalHandlers } from "./lib/supabase-approvals.js";
 import { createOwnerAuthMiddleware } from "./lib/owner-auth.js";
 import { createYoutubeIntegrationHandlers, getYoutubeAgentContext } from "./lib/youtube-integration.js";
+import { createAffiliateCampaignHandlers } from "./lib/affiliate-campaigns.js";
+import { createInstagramIntegrationHandlers } from "./lib/instagram-integration.js";
+import { createSearchConsoleHandlers } from "./lib/search-console-integration.js";
+import { createBlogDraftHandlers } from "./lib/blog-drafts.js";
+import { createBlogCmsHandlers } from "./lib/blog-cms-integration.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -175,7 +182,8 @@ async function callGemini(task, instructions, maxTokens = 900) {
     config: {
       systemInstruction: instructions,
       maxOutputTokens: maxTokens,
-      temperature: 0.4
+      temperature: 0.4,
+      httpOptions: { timeout: 45000 }
     }
   });
 
@@ -314,7 +322,7 @@ async function callOpenRouter(
             }
           ],
           temperature: 0.4,
-          max_tokens: maxTokens
+          max_tokens: getOpenRouterMaxTokens(maxTokens)
         }),
         signal: controller.signal
       }
@@ -356,26 +364,31 @@ async function callOpenRouter(
 // =====================================
 
 async function generateAI(task, instructions, maxTokens = 900) {
-  const providers = [
-    {
-      id: "gemini",
-      name: "Gemini",
-      key: "GEMINI_API_KEY",
-      call: callGemini
-    },
-    {
+  const providerCatalog = {
+    groq: {
       id: "groq",
       name: "Groq",
       key: "GROQ_API_KEY",
       call: callGroq
     },
-    {
+    openrouter: {
       id: "openrouter",
       name: "OpenRouter",
       key: "OPENROUTER_API_KEY",
       call: callOpenRouter
+    },
+    gemini: {
+      id: "gemini",
+      name: "Gemini",
+      key: "GEMINI_API_KEY",
+      call: callGemini
     }
-  ].map((provider) => ({
+  };
+  const providerOrder = resolveProviderOrder(
+    process.env.AI_PROVIDER_ORDER,
+    Object.keys(providerCatalog)
+  );
+  const providers = providerOrder.map(id => providerCatalog[id]).map(provider => ({
     ...provider,
     available: Boolean(process.env[provider.key]),
     call: () => provider.call(task, instructions, maxTokens)
@@ -576,7 +589,7 @@ function compactReport(text, maxLength = 1800) {
 // CENTRAL AI BRAIN: EXECUTION
 // =====================================
 
-async function runCentralBrain(task, ownerUserId) {
+async function runCentralBrain(task, ownerUserId, youtubeChannelId) {
 
   let plan;
 
@@ -626,7 +639,7 @@ async function runCentralBrain(task, ownerUserId) {
       let specialistTask = item.task;
       if (item.agentId === "youtube" && ownerUserId) {
         try {
-          const channelContext = await getYoutubeAgentContext({ ownerId: ownerUserId });
+          const channelContext = await getYoutubeAgentContext({ ownerId: ownerUserId, channelId: youtubeChannelId });
           if (channelContext) {
             specialistTask = item.task + "\n\n" + channelContext;
           }
@@ -853,6 +866,81 @@ app.get("/api/youtube/videos", youtubeHandlers.videos);
 app.get("/api/youtube/analytics", youtubeHandlers.analytics);
 
 // =====================================
+// OWNER-ONLY AFFILIATE CAMPAIGN STUDIO
+// =====================================
+
+const affiliateHandlers = createAffiliateCampaignHandlers({ generateAI });
+
+// Public redirect endpoint only redirects to an owner-approved HTTPS URL
+// stored in the database; it never accepts an arbitrary destination URL.
+app.get("/r/:campaignId", limitApiRequests, affiliateHandlers.trackClick);
+
+app.use("/api/affiliate", requireOwner);
+app.use("/api/affiliate", limitApiRequests);
+app.get("/api/affiliate/campaigns", affiliateHandlers.list);
+app.post("/api/affiliate/campaigns", affiliateHandlers.generate);
+app.post("/api/affiliate/campaigns/:id/approve", affiliateHandlers.approve);
+app.get("/api/affiliate/campaigns/:id/clicks", affiliateHandlers.clicks);
+app.get("/api/affiliate/commissions", affiliateHandlers.listCommissions);
+app.post("/api/affiliate/commissions/import", affiliateHandlers.importCommissions);
+app.post("/api/affiliate/commissions/:id/verify", affiliateHandlers.verifyCommission);
+
+// =====================================
+// INSTAGRAM PROFESSIONAL ACCOUNT LINK
+// =====================================
+
+const instagramHandlers = createInstagramIntegrationHandlers();
+
+// OAuth callback is public but state-signed and rate-limited.
+app.get("/api/instagram/oauth/callback", limitApiRequests, instagramHandlers.callback);
+app.use("/api/instagram", requireOwner);
+app.use("/api/instagram", limitApiRequests);
+app.get("/api/instagram/connect-url", instagramHandlers.connectUrl);
+app.get("/api/instagram/status", instagramHandlers.status);
+app.post("/api/instagram/publish-requests", instagramHandlers.createPublishRequest);
+app.get("/api/instagram/publish-requests", instagramHandlers.listPublishRequests);
+app.post("/api/instagram/publish-requests/:id/prepare", instagramHandlers.prepareApprovedReel);
+app.get("/api/instagram/publish-requests/:id/status", instagramHandlers.publishStatus);
+app.post("/api/instagram/publish-requests/:id/publish", instagramHandlers.publishApprovedReel);
+
+// =====================================
+// GOOGLE SEARCH CONSOLE — READ ONLY
+// =====================================
+
+const searchConsoleHandlers = createSearchConsoleHandlers();
+app.get("/api/seo/search-console/oauth/callback", limitApiRequests, searchConsoleHandlers.callback);
+app.use("/api/seo/search-console", requireOwner);
+app.use("/api/seo/search-console", limitApiRequests);
+app.get("/api/seo/search-console/connect-url", searchConsoleHandlers.connectUrl);
+app.get("/api/seo/search-console/sites", searchConsoleHandlers.sites);
+app.post("/api/seo/search-console/query", searchConsoleHandlers.query);
+
+// =====================================
+// OWNER-ONLY BLOG DRAFT STUDIO
+// =====================================
+
+const blogDraftHandlers = createBlogDraftHandlers({ generateAI });
+app.use("/api/blog/drafts", requireOwner);
+app.use("/api/blog/drafts", limitApiRequests);
+app.get("/api/blog/drafts", blogDraftHandlers.list);
+app.post("/api/blog/drafts", blogDraftHandlers.generate);
+app.patch("/api/blog/drafts/:id", blogDraftHandlers.update);
+app.post("/api/blog/drafts/:id/decision", blogDraftHandlers.decide);
+
+// =====================================
+// BLOGGER + WORDPRESS.COM DRAFT CONNECTORS
+// =====================================
+
+const blogCmsHandlers = createBlogCmsHandlers();
+app.get("/api/blog/cms/:provider/callback", limitApiRequests, blogCmsHandlers.callback);
+app.use("/api/blog/cms", requireOwner);
+app.use("/api/blog/cms", limitApiRequests);
+app.get("/api/blog/cms/:provider/connect-url", blogCmsHandlers.connectUrl);
+app.get("/api/blog/cms/connections", blogCmsHandlers.connections);
+app.post("/api/blog/cms/:provider/select", blogCmsHandlers.selectSite);
+app.post("/api/blog/cms/drafts/:id/save", blogCmsHandlers.saveDraft);
+
+// =====================================
 // HEALTH API
 // =====================================
 
@@ -879,6 +967,7 @@ app.get("/api/approvals/config", (req, res) => {
 
 const approvalHandlers = createSupabaseApprovalHandlers();
 
+app.use("/api/approvals", limitApiRequests);
 app.get("/api/approvals", approvalHandlers.list);
 app.post("/api/approvals", approvalHandlers.create);
 app.patch("/api/approvals/:id/decision", approvalHandlers.decide);
@@ -937,7 +1026,7 @@ app.get("/api/status", (req, res) => {
       groq: process.env.GROQ_MODEL || "openai/gpt-oss-20b",
       openrouter: process.env.OPENROUTER_MODEL || "openrouter/free"
     },
-    providerOrder: ["Gemini", "Groq", "OpenRouter"],
+    providerOrder: resolveProviderOrder(process.env.AI_PROVIDER_ORDER, ["groq", "openrouter", "gemini"]).map(id => ({ groq: "Groq", openrouter: "OpenRouter", gemini: "Gemini" })[id]),
     approvalPolicy: "Proposal only: external actions require explicit user approval.",
     supabaseApprovalStorage: {
       configured: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY && process.env.SUPABASE_OWNER_USER_ID),
@@ -1044,6 +1133,11 @@ app.post("/api/task", async (req, res) => {
     typeof req.body?.agentId === "string"
       ? req.body.agentId
       : "master";
+  const youtubeChannelId =
+    typeof req.body?.youtubeChannelId === "string" &&
+    req.body.youtubeChannelId.length <= 128
+      ? req.body.youtubeChannelId
+      : undefined;
 
   if (!task) {
 
@@ -1087,14 +1181,14 @@ app.post("/api/task", async (req, res) => {
   try {
 
     if (agentId === "master") {
-      const result = await runCentralBrain(task, req.ownerUser?.id);
+      const result = await runCentralBrain(task, req.ownerUser?.id, youtubeChannelId);
       return res.json(result);
     }
 
     let specialistTask = task;
     if (agentId === "youtube") {
       try {
-        const channelContext = await getYoutubeAgentContext({ ownerId: req.ownerUser?.id });
+        const channelContext = await getYoutubeAgentContext({ ownerId: req.ownerUser?.id, channelId: youtubeChannelId });
         if (channelContext) specialistTask = task + "\n\n" + channelContext;
       } catch (contextError) {
         console.log("YouTube channel context unavailable; continuing with the user request only:", contextError.message);

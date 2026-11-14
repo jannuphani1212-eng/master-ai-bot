@@ -30,7 +30,24 @@ test("specialist prompts contain domain-specific quality requirements", () => {
   assert.match(getSpecialistInstructions("youtube"), /retention/);
   assert.match(getSpecialistInstructions("blogging"), /editorial calendar/);
   assert.match(getSpecialistInstructions("app-development"), /acceptance criteria/);
+  assert.match(getSpecialistInstructions("app-development"), /Android cloud AAB workflow/);
+  assert.match(getSpecialistInstructions("app-development"), /persistent signing keystore/);
   assert.match(getSpecialistInstructions("seo"), /crawlability/);
+});
+
+test("affiliate specialist supports the separate Telugu and English short-form strategy", () => {
+  const prompt = getSpecialistInstructions("affiliate");
+  assert.match(prompt, /Telugu \+ English/);
+  assert.match(prompt, /YouTube Shorts and Instagram Reels/);
+  assert.match(prompt, /above 5%/);
+  assert.match(prompt, /Never invent product URLs, prices, discounts, ratings, review counts, stock, commission rates/);
+  assert.match(prompt, /distinct from Global Rhymes 4U/);
+});
+
+test("SEO specialist uses only actual Search Console evidence", () => {
+  const prompt = getSpecialistInstructions("seo");
+  assert.match(prompt, /exact property and date range/);
+  assert.match(prompt, /do not extrapolate missing rows/);
 });
 
 test("unknown specialist IDs are rejected", () => {
