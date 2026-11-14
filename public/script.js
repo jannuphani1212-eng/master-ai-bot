@@ -186,7 +186,7 @@ taskForm.addEventListener("submit", async (event) => {
         "Content-Type": "application/json",
         Authorization: "Bearer " + approvalAccessToken
       },
-      body: JSON.stringify({ task, agentId })
+      body: JSON.stringify({ task, agentId, youtubeChannelId: activeYoutubeChannelId || undefined })
     });
 
     const data = await response.json();
@@ -418,6 +418,8 @@ approvalRefreshButton.addEventListener("click", loadApprovalQueue);
 // GLOBAL RHYMES 4U YOUTUBE CONNECTION
 const youtubeConnectButton = document.getElementById("youtubeConnectButton");
 const youtubeRefreshButton = document.getElementById("youtubeRefreshButton");
+const youtubeChannelSelect = document.getElementById("youtubeChannelSelect");
+let activeYoutubeChannelId = "";
 const youtubeStatus = document.getElementById("youtubeStatus");
 const youtubeChannel = document.getElementById("youtubeChannel");
 const youtubeVideos = document.getElementById("youtubeVideos");
@@ -427,6 +429,9 @@ const youtubeAnalyticsHeading = document.getElementById("youtubeAnalyticsHeading
 
 function resetYoutubePanel(message) {
   youtubeStatus.textContent = message;
+  activeYoutubeChannelId = "";
+  youtubeChannelSelect.replaceChildren();
+  youtubeChannelSelect.hidden = true;
   youtubeChannel.replaceChildren();
   youtubeChannel.hidden = true;
   youtubeVideos.replaceChildren();
@@ -456,17 +461,31 @@ function addYoutubeMetric(parent, label, value) {
 
 async function loadYoutubeStatus() {
   if (!approvalAccessToken) {
-    resetYoutubePanel("Sign in as the owner to check the YouTube connection.");
+    resetYoutubePanel("Sign in as the owner to check connected YouTube channels.");
     return;
   }
-  youtubeStatus.textContent = "Checking the Global Rhymes 4U connection...";
+  const previousChannelId = activeYoutubeChannelId;
+  youtubeStatus.textContent = "Checking connected YouTube channels...";
   try {
     const data = await youtubeApi("/api/youtube/status");
-    if (!data.connected) {
-      resetYoutubePanel("YouTube is not connected yet. Use Connect YouTube channel to authorize your dedicated Global Rhymes 4U Google account.");
+    const channels = Array.isArray(data.channels) ? data.channels : [];
+    if (!channels.length) {
+      resetYoutubePanel("No YouTube channels are connected yet. Use Connect another YouTube account and authorize the channel owner account.");
       return;
     }
-    youtubeStatus.textContent = "Connected securely: " + (data.channel?.title || "YouTube channel") + ". Loading channel information...";
+    youtubeChannelSelect.replaceChildren();
+    channels.forEach(channel => {
+      const option = document.createElement("option");
+      option.value = channel.id;
+      option.textContent = channel.title || channel.id;
+      youtubeChannelSelect.appendChild(option);
+    });
+    activeYoutubeChannelId = channels.some(channel => channel.id === previousChannelId)
+      ? previousChannelId
+      : channels[0].id;
+    youtubeChannelSelect.value = activeYoutubeChannelId;
+    youtubeChannelSelect.hidden = false;
+    youtubeStatus.textContent = channels.length + " YouTube channel connection(s) found. Loading the selected channel...";
     await loadYoutubeData();
   } catch (error) {
     youtubeStatus.textContent = error.message;
@@ -476,10 +495,13 @@ async function loadYoutubeStatus() {
 async function loadYoutubeData() {
   youtubeStatus.textContent = "Loading channel, recent videos and analytics...";
   try {
+    const channelQuery = activeYoutubeChannelId
+      ? "?channelId=" + encodeURIComponent(activeYoutubeChannelId)
+      : "";
     const [channelResult, videoResult, analyticsResult] = await Promise.allSettled([
-      youtubeApi("/api/youtube/channel"),
-      youtubeApi("/api/youtube/videos"),
-      youtubeApi("/api/youtube/analytics")
+      youtubeApi("/api/youtube/channel" + channelQuery),
+      youtubeApi("/api/youtube/videos" + channelQuery),
+      youtubeApi("/api/youtube/analytics" + channelQuery)
     ]);
     if (channelResult.status !== "fulfilled") throw channelResult.reason;
     const channel = channelResult.value.channel;
@@ -550,7 +572,7 @@ async function loadYoutubeData() {
     } else {
       addText(youtubeAnalytics, "p", "YouTube Analytics is unavailable: " + analyticsResult.reason.message);
     }
-    youtubeStatus.textContent = "Global Rhymes 4U is connected. Channel data is live" +
+    youtubeStatus.textContent = channel.title + " is connected. Channel data is live" +
       (analyticsData ? "; analytics cover " + analyticsData.startDate + " to " + analyticsData.endDate + "." : ". Some analytics are unavailable.");
   } catch (error) {
     youtubeStatus.textContent = "Channel connection is active, but some data could not be loaded: " + error.message;
@@ -570,12 +592,16 @@ youtubeConnectButton.addEventListener("click", async () => {
 });
 
 youtubeRefreshButton.addEventListener("click", loadYoutubeStatus);
+youtubeChannelSelect.addEventListener("change", () => {
+  activeYoutubeChannelId = youtubeChannelSelect.value;
+  loadYoutubeData();
+});
 
 const youtubeResult = new URLSearchParams(window.location.search).get("youtube");
 if (youtubeResult === "connected") {
   youtubeStatus.textContent = "Google authorization succeeded. Sign in as the owner to load your channel.";
-} else if (youtubeResult === "channel-mismatch") {
-  youtubeStatus.textContent = "The selected Google account did not return a channel named Global Rhymes 4U. Sign in with the dedicated channel account and try again.";
+} else if (youtubeResult === "no-channel") {
+  youtubeStatus.textContent = "Google authorization succeeded, but no YouTube channel was returned. Confirm that this Google account owns or manages a YouTube channel and try again.";
 } else if (youtubeResult === "error") {
   youtubeStatus.textContent = "Google could not complete the connection. Check the Google Cloud OAuth setup and try again.";
 }
