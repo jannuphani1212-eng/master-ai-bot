@@ -13,6 +13,7 @@ import { createYoutubeIntegrationHandlers, getYoutubeAgentContext } from "./lib/
 import { createAffiliateCampaignHandlers } from "./lib/affiliate-campaigns.js";
 import { createInstagramIntegrationHandlers } from "./lib/instagram-integration.js";
 import { createSearchConsoleHandlers } from "./lib/search-console-integration.js";
+import { createBlogDraftHandlers } from "./lib/blog-drafts.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -910,6 +911,18 @@ app.use("/api/seo/search-console", limitApiRequests);
 app.get("/api/seo/search-console/connect-url", searchConsoleHandlers.connectUrl);
 app.get("/api/seo/search-console/sites", searchConsoleHandlers.sites);
 app.post("/api/seo/search-console/query", searchConsoleHandlers.query);
+
+// =====================================
+// OWNER-ONLY BLOG DRAFT STUDIO
+// =====================================
+
+const blogDraftHandlers = createBlogDraftHandlers({ generateAI });
+app.use("/api/blog/drafts", requireOwner);
+app.use("/api/blog/drafts", limitApiRequests);
+app.get("/api/blog/drafts", blogDraftHandlers.list);
+app.post("/api/blog/drafts", blogDraftHandlers.generate);
+app.patch("/api/blog/drafts/:id", blogDraftHandlers.update);
+app.post("/api/blog/drafts/:id/decision", blogDraftHandlers.decide);
 
 // =====================================
 // HEALTH API
