@@ -10,6 +10,7 @@ import { reviewSpecialistReport } from "./lib/quality-review.js";
 import { createSupabaseApprovalHandlers } from "./lib/supabase-approvals.js";
 import { createOwnerAuthMiddleware } from "./lib/owner-auth.js";
 import { createYoutubeIntegrationHandlers, getYoutubeAgentContext } from "./lib/youtube-integration.js";
+import { createAffiliateCampaignHandlers } from "./lib/affiliate-campaigns.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -857,6 +858,23 @@ app.get("/api/youtube/status", youtubeHandlers.status);
 app.get("/api/youtube/channel", youtubeHandlers.channel);
 app.get("/api/youtube/videos", youtubeHandlers.videos);
 app.get("/api/youtube/analytics", youtubeHandlers.analytics);
+
+// =====================================
+// OWNER-ONLY AFFILIATE CAMPAIGN STUDIO
+// =====================================
+
+const affiliateHandlers = createAffiliateCampaignHandlers({ generateAI });
+
+// Public redirect endpoint only redirects to an owner-approved HTTPS URL
+// stored in the database; it never accepts an arbitrary destination URL.
+app.get("/r/:campaignId", limitApiRequests, affiliateHandlers.trackClick);
+
+app.use("/api/affiliate", requireOwner);
+app.use("/api/affiliate", limitApiRequests);
+app.get("/api/affiliate/campaigns", affiliateHandlers.list);
+app.post("/api/affiliate/campaigns", affiliateHandlers.generate);
+app.post("/api/affiliate/campaigns/:id/approve", affiliateHandlers.approve);
+app.get("/api/affiliate/campaigns/:id/clicks", affiliateHandlers.clicks);
 
 // =====================================
 // HEALTH API
