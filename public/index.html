@@ -127,6 +127,20 @@
   <div id="affiliateResult" class="result" aria-live="polite">Your generated campaign package will appear here.</div>
   <h3>Saved affiliate campaigns</h3>
   <div id="affiliateCampaignList" class="approval-list">Sign in to load saved campaigns.</div>
+  <h3>Official commission report import</h3>
+  <p class="muted">Paste a CSV exported from your affiliate program. Imported rows stay unverified until you review them against the official statement. Only owner-confirmed entries appear in verified commission totals.</p>
+  <form id="commissionImportForm" class="approval-form">
+    <label for="commissionProgram">Affiliate program</label>
+    <input id="commissionProgram" maxlength="100" required placeholder="Example: Amazon Associates">
+    <label for="commissionSourceReference">Official report name or period</label>
+    <input id="commissionSourceReference" maxlength="180" required placeholder="Example: November 2026 report">
+    <label for="commissionCsv">CSV data</label>
+    <textarea id="commissionCsv" rows="5" required placeholder="order_id,report_date,commission_amount,currency,status&#10;ORDER-001,2026-11-14,12.50,INR,paid"></textarea>
+    <button type="submit" id="commissionImportButton">Import official report</button>
+  </form>
+  <p id="commissionStatus" class="muted" aria-live="polite">Sign in to import commission reports.</p>
+  <div id="commissionSummary" class="approval-list">No verified commission totals loaded.</div>
+  <div id="commissionEntries" class="approval-list">Sign in to load imported commission entries.</div>
 </section>
 
 <section class="panel" id="instagramPanel">
