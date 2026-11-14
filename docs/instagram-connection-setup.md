@@ -2,7 +2,7 @@
 
 ## Account requirements
 
-Use a separate Instagram **Business or Creator** account for the affiliate brand. Personal accounts are not accepted by this connection flow. Meta's Instagram API with Instagram Login is intended for professional accounts and does not require a Facebook Page. See the [Meta Instagram API changelog](https://developers.facebook.com/docs/instagram/platform/instagram-api/changelog/) and [Instagram Media API reference](https://developers.facebook.com/docs/instagram-platform/reference/instagram-media/v21.0/).
+Use a separate Instagram **Business or Creator** account for the affiliate brand. Only Business and Creator professional account types are accepted by this connection flow; personal and unknown account types are rejected. Meta's Instagram API with Instagram Login is intended for professional accounts and does not require a Facebook Page. See the [Meta Instagram API changelog](https://developers.facebook.com/docs/instagram/platform/instagram-api/changelog/) and [Instagram Media API reference](https://developers.facebook.com/docs/instagram-platform/reference/instagram-media/v21.0/).
 
 ## Meta app configuration
 
