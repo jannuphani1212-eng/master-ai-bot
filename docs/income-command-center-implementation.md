@@ -76,7 +76,7 @@ This repository is the existing Master AI Bot only: one coordinating Master agen
 
 - SEO implemented on the feature branch: read-only Google Search Console OAuth, encrypted refresh-token storage, connected property listing and query/page/country/device/date performance reports. Only properties returned for the connected Google account can be queried.
 - The Search Console connection table is applied with RLS enabled and backend service-role-only access. Google OAuth credentials and property permissions still require owner setup and live testing.
-- Blogging content drafting remains available through the Blogging specialist, but a CMS connection (WordPress, Blogger or another platform), saved editorial workflow and owner-approved publishing are not implemented yet.
+- Blogging implemented: the existing owner-scoped Blog Draft Studio saves article drafts, supports owner edits and approve/reject decisions, and never publishes automatically. A CMS connection (WordPress, Blogger or another platform) and owner-approved publishing are not implemented yet.
 - Avoid guaranteed ranking or traffic claims; Search Console returns top rows and may not include every query/page.
 
 ## 9. Release and security gates
@@ -95,7 +95,8 @@ The feature branch now contains:
 - Multi-channel YouTube connection storage, encrypted refresh-token persistence, a channel selector and channel-scoped read-only data requests. The new Supabase table is applied; real Google OAuth testing still requires the owner's accounts and Meta/Google credentials.
 - An Affiliate Video Studio that saves English + Telugu Shorts/Reels drafts, marks product research and commission claims unverified, supports owner-approved HTTPS click tracking, and imports normalized official commission CSV rows for owner review. Only owner-confirmed entries contribute to verified commission summaries.
 - Instagram Business/Creator account OAuth, encrypted long-lived token storage, refresh, exact-content approval and guarded Reel publishing flow. Live Meta account/API verification is still required.
-- Google Search Console read-only OAuth, encrypted refresh-token storage, property listing and real search-performance queries. CMS publishing is not implemented.
+- Google Search Console read-only OAuth, encrypted refresh-token storage, property listing and real search-performance queries.
+- Owner-scoped blog draft generation, editing and approve/reject workflow; CMS publishing is not implemented.
 - A manual Android cloud AAB workflow with debug/release modes, owner-keystore secret checks, signature verification and artifact upload. A complete Android app project is not yet present in the repository.
 
 Still incomplete:
