@@ -164,6 +164,23 @@
     <button type="submit" id="blogGenerateButton">Generate and save blog draft</button>
   </form>
   <p id="blogDraftStatus" class="muted" aria-live="polite">Sign in as the owner to create and manage blog drafts.</p>
+  <div class="approval-form" id="blogCmsPanel">
+    <h3>Connect your publishing platforms</h3>
+    <p class="muted">Connect Blogger and WordPress.com, choose a destination, then save approved articles as CMS drafts. This does not publish them.</p>
+    <div class="approval-actions">
+      <button type="button" id="bloggerConnectButton">Connect Blogger</button>
+      <button type="button" id="wordpressConnectButton" class="secondary">Connect WordPress.com</button>
+      <button type="button" id="blogCmsRefreshButton" class="secondary">Refresh connections</button>
+    </div>
+    <p id="blogCmsStatus" class="muted" aria-live="polite">Sign in as the owner to connect a blog.</p>
+    <label for="bloggerSiteSelect">Blogger destination</label>
+    <select id="bloggerSiteSelect"><option value="">No Blogger blog connected</option></select>
+    <button type="button" id="bloggerSiteSelectButton" class="secondary">Use selected Blogger blog</button>
+    <label for="wordpressSiteSelect">WordPress.com destination</label>
+    <select id="wordpressSiteSelect"><option value="">No WordPress.com site connected</option></select>
+    <button type="button" id="wordpressSiteSelectButton" class="secondary">Use selected WordPress.com site</button>
+    <p class="muted">Your CMS copies are always created with draft status. Publishing remains a separate manual action on the CMS website.</p>
+  </div>
   <div id="blogDraftEditor" class="result" aria-live="polite">Your generated draft will appear here.</div>
   <h3>Saved blog drafts</h3>
   <div id="blogDraftList" class="approval-list">Sign in to load saved blog drafts.</div>
