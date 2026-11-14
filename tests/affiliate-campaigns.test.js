@@ -1,0 +1,169 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { createAffiliateCampaignHandlers } from "../lib/affiliate-campaigns.js";
+
+const ownerId = "11111111-2222-4333-8444-555555555555";
+const env = {
+  SUPABASE_URL: "https://supabase.example.test",
+  SUPABASE_SERVICE_ROLE_KEY: "test-service-role-key"
+};
+
+function response(status, body) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    async text() { return body === null ? "" : JSON.stringify(body); }
+  };
+}
+
+function mockRes() {
+  return {
+    statusCode: 200,
+    body: null,
+    redirected: null,
+    status(code) { this.statusCode = code; return this; },
+    json(value) { this.body = value; return value; },
+    send(value) { this.body = value; return value; },
+    redirect(code, url) { this.statusCode = code; this.redirected = url; return url; }
+  };
+}
+
+const content = {
+  researchStatus: "needs_live_verification",
+  productSummary: "A sample product summary",
+  claimsToVerify: ["Current price"],
+  english: { youtubeShorts: { script: "English short" }, instagramReels: { script: "English reel" } },
+  telugu: { youtubeShorts: { script: "Telugu short" }, instagramReels: { script: "Telugu reel" } },
+  qualityChecklist: ["Verify product claims"]
+};
+
+test("affiliate campaign generation saves a bilingual draft with unverified claims", async () => {
+  const originalFetch = global.fetch;
+  let savedBody;
+  let generatedTask = "";
+  global.fetch = async (url, options = {}) => {
+    assert.match(String(url), /affiliate_campaigns$/);
+    assert.equal(options.method, "POST");
+    savedBody = JSON.parse(options.body);
+    return response(201, [{ id: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", ...savedBody }]);
+  };
+  try {
+    const handlers = createAffiliateCampaignHandlers({
+      env,
+      generateAI: async (task) => {
+        generatedTask = task;
+        return { result: JSON.stringify(content), provider: "Groq" };
+      }
+    });
+    const res = mockRes();
+    await handlers.generate({
+      ownerUser: { id: ownerId },
+      body: {
+        productName: "Sample Watch",
+        category: "Watches",
+        merchant: "Example Store",
+        productUrl: "https://store.example.test/watch",
+        affiliateUrl: "https://affiliate.example.test/track",
+        productFacts: "Water resistant; stainless steel",
+        commissionRate: "7"
+      }
+    }, res);
+
+    assert.equal(res.statusCode, 201);
+    assert.equal(res.body.success, true);
+    assert.equal(savedBody.owner_user_id, ownerId);
+    assert.equal(savedBody.status, "draft");
+    assert.equal(savedBody.research_status, "needs_live_verification");
+    assert.equal(savedBody.commission_status, "owner_supplied_unverified");
+    assert.equal(savedBody.commission_rate, 7);
+    assert.equal(savedBody.generation_provider, "Groq");
+    assert.deepEqual(savedBody.content_json, content);
+    assert.match(generatedTask, /Telugu/);
+    assert.match(generatedTask, /Do not claim you opened or researched either URL/);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test("affiliate campaign generation rejects non-HTTPS links before calling AI", async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async () => { throw new Error("Database should not be called"); };
+  let called = false;
+  try {
+    const handlers = createAffiliateCampaignHandlers({
+      env,
+      generateAI: async () => { called = true; return { result: "{}", provider: "Groq" }; }
+    });
+    const res = mockRes();
+    await handlers.generate({
+      ownerUser: { id: ownerId },
+      body: { productName: "Sample", category: "Fashion", productUrl: "javascript:alert(1)" }
+    }, res);
+    assert.equal(res.statusCode, 400);
+    assert.equal(called, false);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test("public affiliate redirect records an approved click and uses the stored HTTPS URL", async () => {
+  const originalFetch = global.fetch;
+  const writes = [];
+  global.fetch = async (url, options = {}) => {
+    const target = String(url);
+    if (target.includes("/affiliate_campaigns?")) {
+      return response(200, [{
+        id: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+        owner_user_id: ownerId,
+        affiliate_url: "https://merchant.example.test/product?ref=abc",
+        status: "approved"
+      }]);
+    }
+    if (target.includes("/affiliate_click_events")) {
+      writes.push(JSON.parse(options.body));
+      return response(201, null);
+    }
+    throw new Error("Unexpected request " + target);
+  };
+  try {
+    const handlers = createAffiliateCampaignHandlers({
+      env,
+      generateAI: async () => ({ result: "{}", provider: "Groq" })
+    });
+    const res = mockRes();
+    await handlers.trackClick({
+      params: { campaignId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee" },
+      query: { src: "instagram_reels" }
+    }, res);
+    assert.equal(res.statusCode, 302);
+    assert.equal(res.redirected, "https://merchant.example.test/product?ref=abc");
+    assert.deepEqual(writes, [{
+      campaign_id: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+      owner_user_id: ownerId,
+      source: "instagram_reels"
+    }]);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test("campaign list query is restricted to the authenticated owner", async () => {
+  const originalFetch = global.fetch;
+  let requestedUrl = "";
+  global.fetch = async url => {
+    requestedUrl = String(url);
+    return response(200, []);
+  };
+  try {
+    const handlers = createAffiliateCampaignHandlers({
+      env,
+      generateAI: async () => ({ result: "{}", provider: "Groq" })
+    });
+    const res = mockRes();
+    await handlers.list({ ownerUser: { id: ownerId } }, res);
+    assert.match(requestedUrl, new RegExp("owner_user_id=eq\\." + ownerId));
+    assert.deepEqual(res.body.campaigns, []);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
