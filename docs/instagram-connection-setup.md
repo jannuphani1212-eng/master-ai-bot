@@ -35,6 +35,22 @@ Never paste the app secret or encryption key into chat or commit them to GitHub.
 - Encrypts the token with AES-256-GCM and stores it in the owner-scoped `instagram_connections` table.
 - Refreshes long-lived tokens when they approach expiry and shows a reconnect warning if refresh fails.
 
-## Publishing status
+## Owner-approved Reel publishing
 
-The current branch implements account connection and token lifecycle only. It does **not** publish Reels. Automatic publishing still requires a separately implemented media-upload/publish workflow, a publicly accessible approved video file, exact-content owner approval, and confirmation that the Meta app has the required publishing access. The Affiliate Video Studio currently generates scripts and captions, not finished video files.
+The feature branch now includes a guarded publishing workflow, subject to live Meta app access:
+
+1. Connect a Business or Creator account.
+2. Provide a publicly accessible HTTPS video URL and the exact caption.
+3. Confirm the caption contains a clear affiliate disclosure and that you have rights to publish the video and audio.
+4. Submit the exact account, video URL and caption to the Owner Approval Center.
+5. After the request is approved, select **Prepare approved Reel**. The backend creates an Instagram media container.
+6. Refresh processing status until Instagram reports the container as ready.
+7. Select **Publish approved Reel now** and confirm the public action. The backend checks the account's publishing quota and uses a conditional single-use job reservation to prevent concurrent duplicate publishing.
+
+The integration uses the Instagram Login publishing permission `instagram_business_content_publish` and the Instagram Reels container / `media_publish` flow. Meta currently limits API publishing to 50 posts in a rolling 24-hour period per professional account. The backend checks the publishing-limit edge before preparing and publishing.
+
+A public HTTPS URL is required because Instagram must fetch the video. The current Affiliate Video Studio generates scripts and captions, not finished video files; you must host a finished, compatible video file before requesting publication.
+
+If the final publish result cannot be confirmed after the API request, the job is marked `publish_unknown`. Check the Instagram account manually before retrying; the system deliberately avoids a blind retry that could create a duplicate post.
+
+This code has automated mocked tests but still requires live Meta app review/permission, real-account OAuth and an end-to-end publishing test after deployment. No Reel has been published by this branch.
