@@ -746,12 +746,16 @@ async function loadInstagramStatus() {
     const data = await instagramApi("/api/instagram/status");
     instagramAccounts.replaceChildren();
     const accounts = Array.isArray(data.accounts) ? data.accounts : [];
+    instagramPublishAccount.replaceChildren();
     if (!accounts.length) {
+      const emptyOption = document.createElement("option");
+      emptyOption.value = "";
+      emptyOption.textContent = "Connect an Instagram professional account first";
+      instagramPublishAccount.appendChild(emptyOption);
       instagramAccounts.textContent = "No Instagram account connected yet. Connect the separate affiliate Business or Creator account.";
       instagramStatus.textContent = "Instagram is not connected.";
       return;
     }
-    instagramPublishAccount.replaceChildren();
     accounts.filter(account => !account.reconnectRequired).forEach(account => {
       const option = document.createElement("option");
       option.value = account.id;
