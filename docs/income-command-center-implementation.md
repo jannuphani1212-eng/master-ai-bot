@@ -85,4 +85,17 @@ This repository is the existing Master AI Bot only: one coordinating Master agen
 
 ## Current implementation note
 
-The first visual styling pass is in `public/style.css`. The remaining sections are engineering requirements, not a claim that integrations have already been implemented or connected. Track each feature as incomplete until its code, tests, authorization and live verification are all complete.
+The feature branch now contains:
+- Premium navy/gold dashboard styling while preserving the existing owner approval and YouTube panels.
+- Configurable Groq → OpenRouter → Gemini provider order, deterministic order tests and automated CI checks. This does not prove every provider key works live or guarantee quota availability.
+- Multi-channel YouTube connection storage, encrypted refresh-token persistence, a channel selector and channel-scoped read-only data requests. The new Supabase table is applied, but Google OAuth still needs live testing with the owner's real accounts after merge/deploy.
+- An Affiliate Video Studio that creates saved English + Telugu Shorts/Reels drafts, keeps research/commission values unverified, and enables owner-approved HTTPS affiliate click tracking. This does not import affiliate orders or commission statements and does not publish content.
+
+Still incomplete:
+- Instagram OAuth/API connection and publishing.
+- Official affiliate product research sources, conversion imports and verified/paid commission reporting.
+- Cloud Android AAB builds and Play Console upload workflow.
+- Blogging CMS and SEO/Search Console integrations.
+- Live OAuth, account and end-to-end Render verification.
+
+The Supabase tables for YouTube and affiliate campaigns/click events have been created with RLS enabled and access limited to the backend service role. The feature branch is not merged or deployed. Do not treat any unconnected integration or unverified metric as complete.
