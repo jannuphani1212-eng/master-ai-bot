@@ -12,7 +12,7 @@ Use a separate Instagram **Business or Creator** account for the affiliate brand
    `https://master-ai-bot-iskj.onrender.com/api/instagram/oauth/callback`
 4. Configure the Instagram Business Login flow and the scopes:
    - `instagram_business_basic`
-   - `instagram_business_content_publishing`
+   - `instagram_business_content_publish`
 5. Add the account as an app role/tester while the app is in development mode. Complete Meta's required review and access checks before onboarding accounts outside the app roles.
 
 ## Render environment variables
