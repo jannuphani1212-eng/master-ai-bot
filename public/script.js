@@ -362,6 +362,7 @@ approvalLoginForm.addEventListener("submit", async (event) => {
     await loadAffiliateCampaigns();
     await loadCommissionData();
     await loadInstagramStatus();
+    await loadInstagramPublishRequests();
     await loadSearchConsoleSites();
     await loadYoutubeStatus();
   } catch (error) {
@@ -417,6 +418,7 @@ approvalLogoutButton.addEventListener("click", () => {
   resetAffiliatePanel("Sign in as the owner to view affiliate campaigns.");
   resetCommissionPanel("Sign in as the owner to import commission reports.");
   resetInstagramPanel("Sign in as the owner to connect an Instagram professional account.");
+  resetInstagramPublishPanel("Sign in as the owner to manage Reel publishing requests.");
   resetSearchConsolePanel("Sign in as the owner to connect Google Search Console.");
   setApprovalMessage("Signed out. Your session token has been cleared from this page.");
 });
@@ -696,17 +698,36 @@ const instagramConnectButton = document.getElementById("instagramConnectButton")
 const instagramRefreshButton = document.getElementById("instagramRefreshButton");
 const instagramStatus = document.getElementById("instagramStatus");
 const instagramAccounts = document.getElementById("instagramAccounts");
+const instagramPublishAccount = document.getElementById("instagramPublishAccount");
+const instagramReelForm = document.getElementById("instagramReelForm");
+const instagramReelVideoUrl = document.getElementById("instagramReelVideoUrl");
+const instagramReelCaption = document.getElementById("instagramReelCaption");
+const instagramShareToFeed = document.getElementById("instagramShareToFeed");
+const instagramRequestApprovalButton = document.getElementById("instagramRequestApprovalButton");
+const instagramPublishStatus = document.getElementById("instagramPublishStatus");
+const instagramPublishRefreshButton = document.getElementById("instagramPublishRefreshButton");
+const instagramPublishRequests = document.getElementById("instagramPublishRequests");
 
 function resetInstagramPanel(message) {
   instagramStatus.textContent = message;
   instagramAccounts.textContent = "No Instagram account loaded.";
+  instagramPublishAccount.replaceChildren();
+  const option = document.createElement("option");
+  option.value = "";
+  option.textContent = "Connect an Instagram professional account first";
+  instagramPublishAccount.appendChild(option);
 }
 
-async function instagramApi(path) {
+async function instagramApi(path, options = {}) {
   if (!approvalAccessToken) throw new Error("Sign in with the owner account first.");
   const response = await fetch(path, {
+    ...options,
     cache: "no-store",
-    headers: { Authorization: "Bearer " + approvalAccessToken }
+    headers: {
+      ...(options.headers || {}),
+      Authorization: "Bearer " + approvalAccessToken,
+      ...(options.body ? { "Content-Type": "application/json" } : {})
+    }
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error || "Instagram request failed.");
@@ -727,6 +748,19 @@ async function loadInstagramStatus() {
       instagramAccounts.textContent = "No Instagram account connected yet. Connect the separate affiliate Business or Creator account.";
       instagramStatus.textContent = "Instagram is not connected.";
       return;
+    }
+    instagramPublishAccount.replaceChildren();
+    accounts.filter(account => !account.reconnectRequired).forEach(account => {
+      const option = document.createElement("option");
+      option.value = account.id;
+      option.textContent = (account.username ? "@" + account.username : account.id) + " · " + account.accountType;
+      instagramPublishAccount.appendChild(option);
+    });
+    if (!instagramPublishAccount.options.length) {
+      const option = document.createElement("option");
+      option.value = "";
+      option.textContent = "No active professional account";
+      instagramPublishAccount.appendChild(option);
     }
     accounts.forEach(account => {
       const card = document.createElement("article");
@@ -757,7 +791,125 @@ instagramConnectButton.addEventListener("click", async () => {
 });
 instagramRefreshButton.addEventListener("click", loadInstagramStatus);
 
-const instagramResult = new URLSearchParams(window.location.search).get("instagram");
+function resetInstagramPublishPanel(message) {
+  instagramPublishStatus.textContent = message;
+  instagramPublishRequests.textContent = "No publishing requests loaded.";
+}
+
+async function loadInstagramPublishRequests() {
+  if (!approvalAccessToken) {
+    resetInstagramPublishPanel("Sign in as the owner to manage Reel publishing requests.");
+    return;
+  }
+  instagramPublishStatus.textContent = "Loading Reel approval requests...";
+  try {
+    const data = await instagramApi("/api/instagram/publish-requests");
+    instagramPublishRequests.replaceChildren();
+    const requests = Array.isArray(data.requests) ? data.requests : [];
+    if (!requests.length) {
+      instagramPublishRequests.textContent = "No Instagram Reel publishing requests yet.";
+    }
+    requests.forEach(request => {
+      const card = document.createElement("article");
+      card.className = "approval-card";
+      addText(card, "h4", request.title || "Instagram Reel publishing request");
+      addText(card, "p", "Approval: " + request.status, "muted");
+      const job = request.publishJob;
+      if (request.status !== "approved") {
+        addText(card, "p", "This exact video URL and caption must be approved in the Owner Approval Center before preparation.", "muted");
+      } else if (!job) {
+        const prepare = document.createElement("button");
+        prepare.type = "button";
+        prepare.textContent = "Prepare approved Reel";
+        prepare.addEventListener("click", async () => {
+          prepare.disabled = true;
+          try {
+            await instagramApi("/api/instagram/publish-requests/" + encodeURIComponent(request.id) + "/prepare", { method: "POST", body: "{}" });
+            await loadInstagramPublishRequests();
+          } catch (error) {
+            instagramPublishStatus.textContent = error.message;
+            prepare.disabled = false;
+          }
+        });
+        card.appendChild(prepare);
+      } else {
+        addText(card, "p", "Publishing status: " + job.status, "muted");
+        if (job.status === "processing") {
+          const check = document.createElement("button");
+          check.type = "button";
+          check.textContent = "Check Instagram processing";
+          check.addEventListener("click", async () => {
+            check.disabled = true;
+            try {
+              await instagramApi("/api/instagram/publish-requests/" + encodeURIComponent(request.id) + "/status");
+              await loadInstagramPublishRequests();
+            } catch (error) {
+              instagramPublishStatus.textContent = error.message;
+              check.disabled = false;
+            }
+          });
+          card.appendChild(check);
+        } else if (job.status === "ready") {
+          const publish = document.createElement("button");
+          publish.type = "button";
+          publish.textContent = "Publish approved Reel now";
+          publish.addEventListener("click", async () => {
+            if (!window.confirm("Publish this exact owner-approved video and caption publicly to Instagram now?")) return;
+            publish.disabled = true;
+            try {
+              await instagramApi("/api/instagram/publish-requests/" + encodeURIComponent(request.id) + "/publish", { method: "POST", body: "{}" });
+              await loadInstagramPublishRequests();
+              instagramPublishStatus.textContent = "Instagram accepted the Reel publishing request.";
+            } catch (error) {
+              instagramPublishStatus.textContent = error.message;
+              publish.disabled = false;
+            }
+          });
+          card.appendChild(publish);
+        } else if (job.status === "published") {
+          addText(card, "p", "Published media ID: " + job.media_id, "muted");
+          if (job.published_at) addText(card, "p", "Published at: " + new Date(job.published_at).toLocaleString(), "muted");
+        } else if (job.status === "publish_unknown") {
+          addText(card, "p", "The final API result could not be confirmed. Check Instagram manually before taking any further action.", "warning-text");
+        } else if (job.error_message) {
+          addText(card, "p", job.error_message, "warning-text");
+        }
+      }
+      instagramPublishRequests.appendChild(card);
+    });
+    instagramPublishStatus.textContent = requests.length + " Instagram Reel request(s) loaded. Publishing requires approval and a separate publish click.";
+  } catch (error) {
+    instagramPublishStatus.textContent = error.message;
+  }
+}
+
+instagramReelForm.addEventListener("submit", async event => {
+  event.preventDefault();
+  instagramRequestApprovalButton.disabled = true;
+  instagramRequestApprovalButton.textContent = "Creating approval request...";
+  try {
+    const result = await instagramApi("/api/instagram/publish-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        igUserId: instagramPublishAccount.value,
+        videoUrl: instagramReelVideoUrl.value.trim(),
+        caption: instagramReelCaption.value.trim(),
+        shareToFeed: instagramShareToFeed.checked
+      })
+    });
+    instagramReelForm.reset();
+    instagramPublishStatus.textContent = "Approval request created. No video has been published.";
+    await loadInstagramPublishRequests();
+  } catch (error) {
+    instagramPublishStatus.textContent = error.message;
+  } finally {
+    instagramRequestApprovalButton.disabled = false;
+    instagramRequestApprovalButton.textContent = "Request owner approval";
+  }
+});
+instagramPublishRefreshButton.addEventListener("click", loadInstagramPublishRequests);
+
+const instagramResult = new URLSearchParams(window.location.search).get("instagram");const instagramResult = new URLSearchParams(window.location.search).get("instagram");
 if (instagramResult === "connected") {
   instagramStatus.textContent = "Instagram authorization succeeded. Sign in as the owner to load the connected account.";
 } else if (instagramResult === "professional-required") {
