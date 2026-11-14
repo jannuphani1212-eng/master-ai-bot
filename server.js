@@ -11,6 +11,7 @@ import { createSupabaseApprovalHandlers } from "./lib/supabase-approvals.js";
 import { createOwnerAuthMiddleware } from "./lib/owner-auth.js";
 import { createYoutubeIntegrationHandlers, getYoutubeAgentContext } from "./lib/youtube-integration.js";
 import { createAffiliateCampaignHandlers } from "./lib/affiliate-campaigns.js";
+import { createInstagramIntegrationHandlers } from "./lib/instagram-integration.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -875,6 +876,19 @@ app.get("/api/affiliate/campaigns", affiliateHandlers.list);
 app.post("/api/affiliate/campaigns", affiliateHandlers.generate);
 app.post("/api/affiliate/campaigns/:id/approve", affiliateHandlers.approve);
 app.get("/api/affiliate/campaigns/:id/clicks", affiliateHandlers.clicks);
+
+// =====================================
+// INSTAGRAM PROFESSIONAL ACCOUNT LINK
+// =====================================
+
+const instagramHandlers = createInstagramIntegrationHandlers();
+
+// OAuth callback is public but state-signed and rate-limited.
+app.get("/api/instagram/oauth/callback", limitApiRequests, instagramHandlers.callback);
+app.use("/api/instagram", requireOwner);
+app.use("/api/instagram", limitApiRequests);
+app.get("/api/instagram/connect-url", instagramHandlers.connectUrl);
+app.get("/api/instagram/status", instagramHandlers.status);
 
 // =====================================
 // HEALTH API
