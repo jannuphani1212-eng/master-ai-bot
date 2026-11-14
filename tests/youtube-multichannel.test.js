@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createYoutubeIntegrationHandlers } from "../lib/youtube-integration.js";
+import { createYoutubeIntegrationHandlers, getYoutubeAgentContext } from "../lib/youtube-integration.js";
 
 const ownerId = "11111111-2222-4333-8444-555555555555";
 const env = {
@@ -73,6 +73,51 @@ test("OAuth callback stores every returned channel with an encrypted token", asy
       assert.equal(row.id, undefined);
     }
     assert.ok(writes.every(item => item.url.includes("on_conflict=owner_user_id,channel_id")));
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test("agent context stays channel-neutral for multiple unrelated YouTube channels", async () => {
+  const originalFetch = global.fetch;
+  try {
+    for (const channel of [
+      { id: "UC_RHYMES", title: "Global Rhymes 4U" },
+      { id: "UC_AFFILIATE", title: "Affiliate Telugu English" }
+    ]) {
+      global.fetch = async url => {
+        const target = String(url);
+        if (target.startsWith("https://supabase.example.test/rest/v1/youtube_channel_connections")) {
+          return response(200, [{
+            channel_id: channel.id,
+            channel_title: channel.title,
+            refresh_token_ciphertext: "AA.AA.AA"
+          }]);
+        }
+        if (target === "https://oauth2.googleapis.com/token") {
+          return response(200, { access_token: "access-token" });
+        }
+        if (target.startsWith("https://www.googleapis.com/youtube/v3/channels?")) {
+          return response(200, {
+            items: [{
+              id: channel.id,
+              snippet: { title: channel.title },
+              statistics: {},
+              contentDetails: {}
+            }]
+          });
+        }
+        if (target.startsWith("https://youtubeanalytics.googleapis.com/")) {
+          return response(403, { error: { message: "Analytics not enabled in test" } });
+        }
+        throw new Error("Unexpected mocked request: " + target);
+      };
+
+      const context = await getYoutubeAgentContext({ env, ownerId, channelId: channel.id });
+      assert.match(context, new RegExp("Channel: " + channel.title));
+      assert.match(context, /never assume this is Global Rhymes 4U or a children's channel/);
+      assert.doesNotMatch(context, /age-appropriate original English 3D children's rhymes for the Global Rhymes 4U audience/);
+    }
   } finally {
     global.fetch = originalFetch;
   }
