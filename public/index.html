@@ -90,6 +90,21 @@
   </div>
 </section>
 
+<section class="panel" id="youtubePanel">
+  <h2>Global Rhymes 4U — YouTube Channel</h2>
+  <p class="muted">Connect the dedicated Global Rhymes 4U Google account. Channel data is read-only in this first integration; the bot cannot publish or change videos.</p>
+  <div class="approval-toolbar">
+    <button type="button" id="youtubeConnectButton">Connect YouTube channel</button>
+    <button type="button" id="youtubeRefreshButton" class="secondary">Refresh channel data</button>
+  </div>
+  <p id="youtubeStatus" class="muted" aria-live="polite">Sign in as the owner to check the YouTube connection.</p>
+  <div id="youtubeChannel" class="youtube-channel" hidden></div>
+  <h3 id="youtubeVideosHeading" hidden>Recent videos</h3>
+  <div id="youtubeVideos" class="youtube-video-grid"></div>
+  <h3 id="youtubeAnalyticsHeading" hidden>Last 28 days analytics</h3>
+  <div id="youtubeAnalytics" class="youtube-analytics"></div>
+</section>
+
 <section class="panel">
   <h2>System Status</h2>
   <button type="button" id="refreshButton" class="secondary">Refresh Status</button>

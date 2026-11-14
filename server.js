@@ -7,6 +7,8 @@ import { extractCompletionText } from "./lib/completion-text.js";
 import { getMasterInstructions, getSpecialistInstructions } from "./lib/specialist-prompts.js";
 import { reviewSpecialistReport } from "./lib/quality-review.js";
 import { createSupabaseApprovalHandlers } from "./lib/supabase-approvals.js";
+import { createOwnerAuthMiddleware } from "./lib/owner-auth.js";
+import { createYoutubeIntegrationHandlers, getYoutubeAgentContext } from "./lib/youtube-integration.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -55,9 +57,10 @@ function limitApiRequests(req, res, next) {
   next();
 }
 
-app.use(["/api/task", "/api/brain"], limitApiRequests);
-
 app.use(express.json({ limit: "1mb" }));
+const requireOwner = createOwnerAuthMiddleware();
+app.use(["/api/task", "/api/brain"], requireOwner);
+app.use(["/api/task", "/api/brain"], limitApiRequests);
 app.use(express.static("public"));
 
 // =====================================
@@ -573,7 +576,7 @@ function compactReport(text, maxLength = 1800) {
 // CENTRAL AI BRAIN: EXECUTION
 // =====================================
 
-async function runCentralBrain(task) {
+async function runCentralBrain(task, ownerUserId) {
 
   let plan;
 
@@ -620,6 +623,18 @@ async function runCentralBrain(task) {
 
     try {
 
+      let specialistTask = item.task;
+      if (item.agentId === "youtube" && ownerUserId) {
+        try {
+          const channelContext = await getYoutubeAgentContext({ ownerId: ownerUserId });
+          if (channelContext) {
+            specialistTask = item.task + "\n\n" + channelContext;
+          }
+        } catch (contextError) {
+          console.log("YouTube channel context unavailable; continuing with the user request only:", contextError.message);
+        }
+      }
+
       const conciseInstructions =
         agentInstructions[item.agentId] +
         "Avoid stating or guessing the name of the AI model or provider. " +
@@ -631,7 +646,7 @@ async function runCentralBrain(task) {
         "Avoid repeating the user's task.";
 
       const response = await generateAI(
-        item.task,
+        specialistTask,
         conciseInstructions,
         700
       );
@@ -661,7 +676,7 @@ async function runCentralBrain(task) {
             "## 7. Risks and quality checks",
             "## 8. Next three actions",
             "Return only the completed report."
-          ].join("\\n");
+          ].join("\n");
 
           const repair = await generateAI(
             "ORIGINAL TASK:\\n" + item.task.slice(0, 2500) +
@@ -821,6 +836,23 @@ async function runCentralBrain(task) {
 }
 
 // =====================================
+// OWNER-ONLY YOUTUBE CHANNEL INTEGRATION
+// =====================================
+
+const youtubeHandlers = createYoutubeIntegrationHandlers();
+
+// OAuth callback is intentionally public, but accepts only a short-lived,
+// HMAC-signed state created after a verified owner session.
+app.get("/api/youtube/oauth/callback", youtubeHandlers.callback);
+app.use("/api/youtube", requireOwner);
+app.use("/api/youtube", limitApiRequests);
+app.get("/api/youtube/connect-url", youtubeHandlers.connectUrl);
+app.get("/api/youtube/status", youtubeHandlers.status);
+app.get("/api/youtube/channel", youtubeHandlers.channel);
+app.get("/api/youtube/videos", youtubeHandlers.videos);
+app.get("/api/youtube/analytics", youtubeHandlers.analytics);
+
+// =====================================
 // HEALTH API
 // =====================================
 
@@ -976,7 +1008,7 @@ app.post("/api/brain", async (req, res) => {
 
   try {
 
-    const result = await runCentralBrain(task);
+    const result = await runCentralBrain(task, req.ownerUser?.id);
 
     return res.json(result);
 
@@ -1055,12 +1087,22 @@ app.post("/api/task", async (req, res) => {
   try {
 
     if (agentId === "master") {
-      const result = await runCentralBrain(task);
+      const result = await runCentralBrain(task, req.ownerUser?.id);
       return res.json(result);
     }
 
+    let specialistTask = task;
+    if (agentId === "youtube") {
+      try {
+        const channelContext = await getYoutubeAgentContext({ ownerId: req.ownerUser?.id });
+        if (channelContext) specialistTask = task + "\n\n" + channelContext;
+      } catch (contextError) {
+        console.log("YouTube channel context unavailable; continuing with the user request only:", contextError.message);
+      }
+    }
+
     const response = await generateAI(
-      task,
+      specialistTask,
       agentInstructions[agentId],
       1200
     );
