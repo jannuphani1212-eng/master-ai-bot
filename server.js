@@ -7,6 +7,7 @@ import { extractCompletionText } from "./lib/completion-text.js";
 import { getMasterInstructions, getSpecialistInstructions } from "./lib/specialist-prompts.js";
 import { reviewSpecialistReport } from "./lib/quality-review.js";
 import { createSupabaseApprovalHandlers } from "./lib/supabase-approvals.js";
+import { createOwnerAuthMiddleware } from "./lib/owner-auth.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -55,9 +56,9 @@ function limitApiRequests(req, res, next) {
   next();
 }
 
-app.use(["/api/task", "/api/brain"], limitApiRequests);
-
 app.use(express.json({ limit: "1mb" }));
+app.use(["/api/task", "/api/brain"], createOwnerAuthMiddleware());
+app.use(["/api/task", "/api/brain"], limitApiRequests);
 app.use(express.static("public"));
 
 // =====================================
