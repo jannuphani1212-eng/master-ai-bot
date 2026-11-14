@@ -28,6 +28,7 @@ before(async () => {
       ...process.env,
       PORT: String(port),
       GROQ_API_KEY: "",
+      MISTRAL_API_KEY: "",
       OPENROUTER_API_KEY: "",
       SUPABASE_URL: "https://example.supabase.co",
       SUPABASE_ANON_KEY: "public-anon-key",
