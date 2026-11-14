@@ -359,6 +359,8 @@ approvalLoginForm.addEventListener("submit", async (event) => {
     approvalWorkspace.hidden = false;
     setApprovalMessage("Signed in. Loading your private approval queue...");
     await loadApprovalQueue();
+    await loadAffiliateCampaigns();
+    await loadYoutubeStatus();
   } catch (error) {
     approvalAccessToken = "";
     setApprovalMessage(error.message, true);
@@ -409,10 +411,166 @@ approvalLogoutButton.addEventListener("click", () => {
   approvalLoginForm.hidden = false;
   approvalList.textContent = "Sign in to view the owner queue.";
   resetYoutubePanel("Sign in as the owner to check the YouTube connection.");
+  resetAffiliatePanel("Sign in as the owner to view affiliate campaigns.");
   setApprovalMessage("Signed out. Your session token has been cleared from this page.");
 });
 
 approvalRefreshButton.addEventListener("click", loadApprovalQueue);
+
+
+// AFFILIATE VIDEO STUDIO
+const affiliateForm = document.getElementById("affiliateForm");
+const affiliateProductName = document.getElementById("affiliateProductName");
+const affiliateCategory = document.getElementById("affiliateCategory");
+const affiliateMerchant = document.getElementById("affiliateMerchant");
+const affiliateProductUrl = document.getElementById("affiliateProductUrl");
+const affiliateTrackingUrl = document.getElementById("affiliateTrackingUrl");
+const affiliateCommissionRate = document.getElementById("affiliateCommissionRate");
+const affiliateProductFacts = document.getElementById("affiliateProductFacts");
+const affiliateGenerateButton = document.getElementById("affiliateGenerateButton");
+const affiliateStatus = document.getElementById("affiliateStatus");
+const affiliateResult = document.getElementById("affiliateResult");
+const affiliateCampaignList = document.getElementById("affiliateCampaignList");
+
+function resetAffiliatePanel(message) {
+  affiliateStatus.textContent = message;
+  affiliateResult.textContent = "Your generated campaign package will appear here.";
+  affiliateCampaignList.textContent = "Sign in to load saved campaigns.";
+}
+
+async function affiliateApi(path, options = {}) {
+  if (!approvalAccessToken) throw new Error("Sign in with the owner account first.");
+  const response = await fetch(path, {
+    ...options,
+    cache: "no-store",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: "Bearer " + approvalAccessToken,
+      ...(options.headers || {})
+    }
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || "Affiliate request failed.");
+  return data;
+}
+
+function addAffiliateCampaignCard(campaign) {
+  const card = document.createElement("article");
+  card.className = "approval-card";
+  addText(card, "h4", campaign.product_name + " · " + campaign.category);
+  addText(card, "p", "Status: " + campaign.status + " · Research: " + campaign.research_status, "muted");
+  addText(card, "p", "Commission: " +
+    (campaign.commission_rate === null ? "Not provided" : campaign.commission_rate + "%") +
+    " · " + campaign.commission_status, "muted");
+
+  const preview = document.createElement("pre");
+  preview.textContent = JSON.stringify(campaign.content_json || {}, null, 2);
+  card.appendChild(preview);
+
+  const actions = document.createElement("div");
+  actions.className = "approval-actions";
+  const showClicks = document.createElement("button");
+  showClicks.type = "button";
+  showClicks.className = "secondary";
+  showClicks.textContent = "Refresh click count";
+  showClicks.addEventListener("click", async () => {
+    showClicks.disabled = true;
+    try {
+      const result = await affiliateApi("/api/affiliate/campaigns/" + encodeURIComponent(campaign.id) + "/clicks");
+      addText(card, "p", "Recorded clicks: " + Number(result.totalClicks || 0).toLocaleString(), "muted");
+    } catch (error) {
+      addText(card, "p", error.message, "warning-text");
+    } finally {
+      showClicks.disabled = false;
+    }
+  });
+  actions.appendChild(showClicks);
+
+  if (campaign.status === "draft") {
+    if (campaign.affiliate_url) {
+      const approve = document.createElement("button");
+      approve.type = "button";
+      approve.textContent = "Approve link tracking";
+      approve.addEventListener("click", async () => {
+        if (!window.confirm("Approve this saved campaign for affiliate click tracking? This will not publish content or spend money.")) return;
+        approve.disabled = true;
+        try {
+          await affiliateApi("/api/affiliate/campaigns/" + encodeURIComponent(campaign.id) + "/approve", { method: "POST", body: "{}" });
+          await loadAffiliateCampaigns();
+          affiliateStatus.textContent = "Campaign approved for link tracking only. No content was published.";
+        } catch (error) {
+          affiliateStatus.textContent = error.message;
+          approve.disabled = false;
+        }
+      });
+      actions.appendChild(approve);
+    } else {
+      addText(card, "p", "Add an approved affiliate link before enabling click tracking.", "warning-text");
+    }
+  } else if (campaign.affiliate_url && ["approved", "published"].includes(campaign.status)) {
+    const link = document.createElement("a");
+    link.href = "/r/" + encodeURIComponent(campaign.id) + "?src=other";
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = "Open tracked affiliate link";
+    actions.appendChild(link);
+  }
+  card.appendChild(actions);
+  affiliateCampaignList.appendChild(card);
+}
+
+async function loadAffiliateCampaigns() {
+  if (!approvalAccessToken) {
+    resetAffiliatePanel("Sign in as the owner to create and view affiliate campaigns.");
+    return;
+  }
+  affiliateStatus.textContent = "Loading your saved affiliate campaigns...";
+  try {
+    const data = await affiliateApi("/api/affiliate/campaigns");
+    affiliateCampaignList.replaceChildren();
+    const campaigns = Array.isArray(data.campaigns) ? data.campaigns : [];
+    if (!campaigns.length) {
+      affiliateCampaignList.textContent = "No campaigns saved yet. Add a product above to generate your first bilingual video package.";
+    } else {
+      campaigns.forEach(addAffiliateCampaignCard);
+    }
+    affiliateStatus.textContent = campaigns.length + " saved affiliate campaign(s). Drafts remain unpublished until you review them.";
+  } catch (error) {
+    affiliateStatus.textContent = error.message;
+  }
+}
+
+affiliateForm.addEventListener("submit", async event => {
+  event.preventDefault();
+  affiliateGenerateButton.disabled = true;
+  affiliateGenerateButton.textContent = "Generating drafts...";
+  affiliateStatus.textContent = "Creating English and Telugu Shorts/Reels packages...";
+  affiliateResult.textContent = "Please wait while the AI prepares your draft.";
+  try {
+    const payload = {
+      productName: affiliateProductName.value.trim(),
+      category: affiliateCategory.value,
+      merchant: affiliateMerchant.value.trim(),
+      productUrl: affiliateProductUrl.value.trim(),
+      affiliateUrl: affiliateTrackingUrl.value.trim(),
+      commissionRate: affiliateCommissionRate.value.trim(),
+      productFacts: affiliateProductFacts.value.trim()
+    };
+    const data = await affiliateApi("/api/affiliate/campaigns", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+    affiliateResult.textContent = JSON.stringify(data.campaign?.content_json || {}, null, 2);
+    affiliateStatus.textContent = "Campaign saved as a draft. Product claims, prices and commission still need official verification.";
+    await loadAffiliateCampaigns();
+  } catch (error) {
+    affiliateStatus.textContent = error.message;
+    affiliateResult.textContent = "The campaign was not saved.";
+  } finally {
+    affiliateGenerateButton.disabled = false;
+    affiliateGenerateButton.textContent = "Generate Telugu + English video drafts";
+  }
+});
 
 
 // GLOBAL RHYMES 4U YOUTUBE CONNECTION
