@@ -1296,13 +1296,17 @@ const blogDraftStatus = document.getElementById("blogDraftStatus");
 const blogDraftEditor = document.getElementById("blogDraftEditor");
 const blogDraftList = document.getElementById("blogDraftList");
 const blogGenerateButton = document.getElementById("blogGenerateButton");
+const blogCmsStatus = document.getElementById("blogCmsStatus");
+const bloggerSiteSelect = document.getElementById("bloggerSiteSelect");
+const wordpressSiteSelect = document.getElementById("wordpressSiteSelect");
+let blogCmsConnections = [];
 
 async function loadBlogDrafts() {
   if (!approvalAccessToken) return;
   blogDraftList.textContent = "Loading your private blog drafts...";
   try {
     const data = await approvalApi("/api/blog/drafts");
-    renderBlogDraftList(Array.isArray(data.drafts) ? data.drafts : []);
+    renderBlogDraftList(Array.isArray(data.drafts) ? data.drafts : []);\n    await loadBlogCmsConnections();
     blogDraftStatus.textContent = "Your owner-only blog draft workspace is connected.";
   } catch (error) {
     blogDraftList.textContent = error.message;
@@ -1345,6 +1349,20 @@ function renderBlogDraftList(drafts) {
       actions.append(approve, reject);
     }
     card.appendChild(actions);
+    const selectedCms = blogCmsConnections.filter(connection => connection.selected);
+    if (selectedCms.length && draft.status !== "rejected") {
+      const cmsActions = document.createElement("div");
+      cmsActions.className = "approval-actions";
+      selectedCms.forEach(connection => {
+        const sync = document.createElement("button");
+        sync.type = "button";
+        sync.className = "secondary";
+        sync.textContent = "Save to " + (connection.provider === "blogger" ? "Blogger" : "WordPress.com") + " draft";
+        sync.addEventListener("click", () => saveBlogDraftToCms(draft.id, connection.provider));
+        cmsActions.appendChild(sync);
+      });
+      card.appendChild(cmsActions);
+    }
     if (draft.decision_note) addText(card, "p", "Decision note: " + draft.decision_note);
     blogDraftList.appendChild(card);
   });
@@ -1420,6 +1438,21 @@ function showBlogDraftEditor(draft) {
     });
     blogDraftEditor.appendChild(save);
   }
+
+  const selectedCms = blogCmsConnections.filter(connection => connection.selected);
+  if (selectedCms.length && draft.status !== "rejected") {
+    const cmsActions = document.createElement("div");
+    cmsActions.className = "approval-actions";
+    selectedCms.forEach(connection => {
+      const sync = document.createElement("button");
+      sync.type = "button";
+      sync.className = "secondary";
+      sync.textContent = "Save to " + (connection.provider === "blogger" ? "Blogger" : "WordPress.com") + " draft";
+      sync.addEventListener("click", () => saveBlogDraftToCms(draft.id, connection.provider));
+      cmsActions.appendChild(sync);
+    });
+    blogDraftEditor.appendChild(cmsActions);
+  }
 }
 
 async function decideBlogDraft(id, decision) {
@@ -1471,4 +1504,106 @@ if (blogDraftForm) {
       blogGenerateButton.textContent = "Generate and save blog draft";
     }
   });
+}
+
+
+// BLOGGER + WORDPRESS.COM CMS CONNECTIONS
+async function loadBlogCmsConnections() {
+  if (!approvalAccessToken || !blogCmsStatus) return;
+  try {
+    const data = await approvalApi("/api/blog/cms/connections");
+    blogCmsConnections = Array.isArray(data.connections) ? data.connections : [];
+    for (const [provider, select] of [["blogger", bloggerSiteSelect], ["wordpress", wordpressSiteSelect]]) {
+      if (!select) continue;
+      const previous = select.value;
+      select.replaceChildren();
+      const sites = blogCmsConnections.filter(item => item.provider === provider);
+      if (!sites.length) {
+        const option = document.createElement("option");
+        option.value = "";
+        option.textContent = provider === "blogger" ? "No Blogger blog connected" : "No WordPress.com site connected";
+        select.appendChild(option);
+      } else {
+        sites.forEach(site => {
+          const option = document.createElement("option");
+          option.value = site.site_id;
+          option.textContent = site.site_name + (site.selected ? " · selected" : "");
+          select.appendChild(option);
+        });
+        const selected = sites.find(site => site.selected);
+        select.value = selected?.site_id || previous || sites[0].site_id;
+      }
+    }
+    const counts = ["blogger", "wordpress"].map(provider => {
+      const site = blogCmsConnections.find(item => item.provider === provider && item.selected);
+      return provider + ": " + (site ? site.site_name : "not connected");
+    });
+    blogCmsStatus.textContent = counts.join(" · ");
+  } catch (error) {
+    blogCmsStatus.textContent = "CMS connections could not be loaded: " + error.message;
+  }
+}
+
+async function startBlogCmsConnection(provider) {
+  if (!approvalAccessToken) {
+    blogCmsStatus.textContent = "Sign in as the owner first.";
+    return;
+  }
+  try {
+    blogCmsStatus.textContent = "Preparing secure " + provider + " connection...";
+    const data = await approvalApi("/api/blog/cms/" + provider + "/connect-url");
+    if (!data.authorizationUrl) throw new Error("The connection URL was not returned.");
+    window.location.assign(data.authorizationUrl);
+  } catch (error) {
+    blogCmsStatus.textContent = error.message;
+  }
+}
+
+async function selectBlogCmsSite(provider, siteId) {
+  if (!siteId) {
+    blogCmsStatus.textContent = "Connect a " + provider + " destination first.";
+    return;
+  }
+  try {
+    await approvalApi("/api/blog/cms/" + provider + "/select", {
+      method: "POST",
+      body: JSON.stringify({ siteId })
+    });
+    blogCmsStatus.textContent = "Destination selected. Articles will be saved as drafts only.";
+    await loadBlogCmsConnections();
+    await loadBlogDrafts();
+  } catch (error) {
+    blogCmsStatus.textContent = error.message;
+  }
+}
+
+async function saveBlogDraftToCms(draftId, provider) {
+  try {
+    blogCmsStatus.textContent = "Saving a private " + provider + " draft...";
+    const data = await approvalApi("/api/blog/cms/drafts/" + encodeURIComponent(draftId) + "/save", {
+      method: "POST",
+      body: JSON.stringify({ providers: [provider] })
+    });
+    const result = (data.results || []).find(item => item.provider === provider);
+    blogCmsStatus.textContent = result?.alreadySaved
+      ? "This article already has a " + provider + " draft. No duplicate was created."
+      : result?.success
+        ? "Saved to " + provider + " as a draft. Nothing was published."
+        : result?.error || data.message || "The CMS draft could not be saved.";
+  } catch (error) {
+    blogCmsStatus.textContent = error.message;
+  }
+}
+
+document.getElementById("bloggerConnectButton")?.addEventListener("click", () => startBlogCmsConnection("blogger"));
+document.getElementById("wordpressConnectButton")?.addEventListener("click", () => startBlogCmsConnection("wordpress"));
+document.getElementById("blogCmsRefreshButton")?.addEventListener("click", loadBlogCmsConnections);
+document.getElementById("bloggerSiteSelectButton")?.addEventListener("click", () => selectBlogCmsSite("blogger", bloggerSiteSelect?.value));
+document.getElementById("wordpressSiteSelectButton")?.addEventListener("click", () => selectBlogCmsSite("wordpress", wordpressSiteSelect?.value));
+
+const blogCmsResult = new URLSearchParams(window.location.search).get("blogcms");
+if (blogCmsResult === "blogger-connected" || blogCmsResult === "wordpress-connected") {
+  if (blogCmsStatus) blogCmsStatus.textContent = "Connection completed. Sign in as the owner to load your connected blogs.";
+} else if (blogCmsResult === "error") {
+  if (blogCmsStatus) blogCmsStatus.textContent = "The CMS connection failed. Check the OAuth app settings and try again.";
 }
