@@ -103,6 +103,7 @@ jobs:
           fi
 
       - name: Locate and verify AAB
+        id: locate_aab
         env:
           PROJECT_PATH: ${{ inputs.project_path }}
           BUILD_VARIANT: ${{ inputs.variant }}
@@ -126,14 +127,14 @@ jobs:
             fi
           fi
           sha256sum "$AAB" | tee "$RUNNER_TEMP/aab-sha256.txt"
-          echo "AAB_PATH=$AAB" >> "$GITHUB_ENV"
+          echo "aab_path=$AAB" >> "$GITHUB_OUTPUT"
 
       - name: Upload Android App Bundle
         uses: actions/upload-artifact@v4
         with:
           name: master-ai-android-${{ inputs.variant }}-${{ github.sha }}
           path: |
-            ${{ env.AAB_PATH }}
+            ${{ steps.locate_aab.outputs.aab_path }}
             ${{ runner.temp }}/aab-sha256.txt
           if-no-files-found: error
           retention-days: 14
