@@ -8,7 +8,7 @@ import { getMasterInstructions, getSpecialistInstructions } from "./lib/speciali
 import { reviewSpecialistReport } from "./lib/quality-review.js";
 import { createSupabaseApprovalHandlers } from "./lib/supabase-approvals.js";
 import { createOwnerAuthMiddleware } from "./lib/owner-auth.js";
-import { createYoutubeIntegrationHandlers } from "./lib/youtube-integration.js";
+import { createYoutubeIntegrationHandlers, getYoutubeAgentContext } from "./lib/youtube-integration.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -576,7 +576,7 @@ function compactReport(text, maxLength = 1800) {
 // CENTRAL AI BRAIN: EXECUTION
 // =====================================
 
-async function runCentralBrain(task) {
+async function runCentralBrain(task, ownerUserId) {
 
   let plan;
 
@@ -623,6 +623,18 @@ async function runCentralBrain(task) {
 
     try {
 
+      let specialistTask = item.task;
+      if (item.agentId === "youtube" && ownerUserId) {
+        try {
+          const channelContext = await getYoutubeAgentContext({ ownerId: ownerUserId });
+          if (channelContext) {
+            specialistTask = item.task + "\\n\\n" + channelContext;
+          }
+        } catch (contextError) {
+          console.log("YouTube channel context unavailable; continuing with the user request only:", contextError.message);
+        }
+      }
+
       const conciseInstructions =
         agentInstructions[item.agentId] +
         "Avoid stating or guessing the name of the AI model or provider. " +
@@ -634,7 +646,7 @@ async function runCentralBrain(task) {
         "Avoid repeating the user's task.";
 
       const response = await generateAI(
-        item.task,
+        specialistTask,
         conciseInstructions,
         700
       );
@@ -995,7 +1007,7 @@ app.post("/api/brain", async (req, res) => {
 
   try {
 
-    const result = await runCentralBrain(task);
+    const result = await runCentralBrain(task, req.ownerUser?.id);
 
     return res.json(result);
 
@@ -1074,12 +1086,22 @@ app.post("/api/task", async (req, res) => {
   try {
 
     if (agentId === "master") {
-      const result = await runCentralBrain(task);
+      const result = await runCentralBrain(task, req.ownerUser?.id);
       return res.json(result);
     }
 
+    let specialistTask = task;
+    if (agentId === "youtube") {
+      try {
+        const channelContext = await getYoutubeAgentContext({ ownerId: req.ownerUser?.id });
+        if (channelContext) specialistTask = task + "\\n\\n" + channelContext;
+      } catch (contextError) {
+        console.log("YouTube channel context unavailable; continuing with the user request only:", contextError.message);
+      }
+    }
+
     const response = await generateAI(
-      task,
+      specialistTask,
       agentInstructions[agentId],
       1200
     );
