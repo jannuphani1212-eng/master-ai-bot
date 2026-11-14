@@ -80,7 +80,7 @@ test("Instagram Business Login requests professional-account and publishing scop
   assert.equal(url.searchParams.get("client_id"), env.INSTAGRAM_APP_ID);
   assert.equal(url.searchParams.get("redirect_uri"), env.INSTAGRAM_REDIRECT_URI);
   assert.match(url.searchParams.get("scope"), /instagram_business_basic/);
-  assert.equal(url.searchParams.get("scope"), "instagram_business_basic,instagram_business_content_publishing");
+  assert.equal(url.searchParams.get("scope"), "instagram_business_basic,instagram_business_content_publish");
   assert.ok(url.searchParams.get("state"));
 });
 
