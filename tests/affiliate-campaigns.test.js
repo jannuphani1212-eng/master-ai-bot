@@ -147,6 +147,62 @@ test("public affiliate redirect records an approved click and uses the stored HT
   }
 });
 
+test("click count uses the exact PostgREST count for the authenticated owner", async () => {
+  const originalFetch = global.fetch;
+  let requestedUrl = "";
+  global.fetch = async (url, options = {}) => {
+    requestedUrl = String(url);
+    assert.equal(options.headers.Prefer, "count=exact");
+    assert.equal(options.headers.Range, "0-0");
+    return {
+      ok: true,
+      status: 200,
+      headers: { get(name) { return name.toLowerCase() === "content-range" ? "0-0/42" : null; } },
+      async text() { return "[]"; }
+    };
+  };
+  try {
+    const handlers = createAffiliateCampaignHandlers({
+      env,
+      generateAI: async () => ({ result: "{}", provider: "Groq" })
+    });
+    const res = mockRes();
+    await handlers.clicks({
+      params: { id: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee" },
+      ownerUser: { id: ownerId }
+    }, res);
+    assert.equal(res.body.totalClicks, 42);
+    assert.match(requestedUrl, new RegExp("owner_user_id=eq\\." + ownerId));
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test("a campaign without an affiliate URL cannot be approved for click tracking", async () => {
+  const originalFetch = global.fetch;
+  const calls = [];
+  global.fetch = async (url, options = {}) => {
+    calls.push({ url: String(url), method: options.method || "GET" });
+    return response(200, [{ id: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", affiliate_url: null, status: "draft" }]);
+  };
+  try {
+    const handlers = createAffiliateCampaignHandlers({
+      env,
+      generateAI: async () => ({ result: "{}", provider: "Groq" })
+    });
+    const res = mockRes();
+    await handlers.approve({
+      params: { id: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee" },
+      ownerUser: { id: ownerId }
+    }, res);
+    assert.equal(res.statusCode, 400);
+    assert.match(res.body.error, /Add an approved affiliate tracking URL/);
+    assert.equal(calls.length, 1);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
 test("campaign list query is restricted to the authenticated owner", async () => {
   const originalFetch = global.fetch;
   let requestedUrl = "";
