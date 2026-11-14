@@ -845,6 +845,7 @@ const youtubeHandlers = createYoutubeIntegrationHandlers();
 // HMAC-signed state created after a verified owner session.
 app.get("/api/youtube/oauth/callback", youtubeHandlers.callback);
 app.use("/api/youtube", requireOwner);
+app.use("/api/youtube", limitApiRequests);
 app.get("/api/youtube/connect-url", youtubeHandlers.connectUrl);
 app.get("/api/youtube/status", youtubeHandlers.status);
 app.get("/api/youtube/channel", youtubeHandlers.channel);
