@@ -31,7 +31,10 @@ create table if not exists public.blog_cms_publications (
   constraint blog_cms_publications_unique unique (owner_user_id, draft_id, provider)
 );
 
-create index if not exists blog_cms_publications_draft_id_idx\n  on public.blog_cms_publications (draft_id);\n\ncreate index if not exists blog_cms_publications_owner_created_idx
+create index if not exists blog_cms_publications_draft_id_idx
+  on public.blog_cms_publications (draft_id);
+
+create index if not exists blog_cms_publications_owner_created_idx
   on public.blog_cms_publications (owner_user_id, created_at desc);
 
 alter table public.blog_cms_connections enable row level security;
