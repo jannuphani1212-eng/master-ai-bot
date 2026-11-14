@@ -756,7 +756,9 @@ async function loadInstagramStatus() {
       instagramStatus.textContent = "Instagram is not connected.";
       return;
     }
-    accounts.filter(account => !account.reconnectRequired).forEach(account => {
+    accounts.filter(account => !account.reconnectRequired &&
+      ["BUSINESS", "CREATOR", "MEDIA_CREATOR"].includes(String(account.accountType || "").toUpperCase())
+    ).forEach(account => {
       const option = document.createElement("option");
       option.value = account.id;
       option.textContent = (account.username ? "@" + account.username : account.id) + " · " + account.accountType;
