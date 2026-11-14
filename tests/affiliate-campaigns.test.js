@@ -80,6 +80,7 @@ test("affiliate campaign generation saves a bilingual draft with unverified clai
     assert.deepEqual(savedBody.content_json, content);
     assert.match(generatedTask, /Telugu/);
     assert.match(generatedTask, /Do not claim you opened or researched either URL/);
+    assert.match(generatedTask, /officially verified above 5%/);
   } finally {
     global.fetch = originalFetch;
   }
