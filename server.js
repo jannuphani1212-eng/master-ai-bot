@@ -4,6 +4,7 @@ import { GoogleGenAI } from "@google/genai";
 import { fallbackAgentSelection, requestsAllSpecialists } from "./lib/routing.js";
 import { runProviderFallback } from "./lib/provider-fallback.js";
 import { resolveProviderOrder } from "./lib/provider-order.js";
+import { getOpenRouterMaxTokens } from "./lib/openrouter-request.js";
 import { extractCompletionText } from "./lib/completion-text.js";
 import { getMasterInstructions, getSpecialistInstructions } from "./lib/specialist-prompts.js";
 import { reviewSpecialistReport } from "./lib/quality-review.js";
@@ -321,7 +322,7 @@ async function callOpenRouter(
             }
           ],
           temperature: 0.4,
-          max_tokens: maxTokens
+          max_tokens: getOpenRouterMaxTokens(maxTokens)
         }),
         signal: controller.signal
       }
