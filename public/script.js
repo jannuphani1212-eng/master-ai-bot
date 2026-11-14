@@ -476,12 +476,15 @@ async function loadYoutubeStatus() {
 async function loadYoutubeData() {
   youtubeStatus.textContent = "Loading channel, recent videos and analytics...";
   try {
-    const [channelData, videoData, analyticsData] = await Promise.all([
+    const [channelResult, videoResult, analyticsResult] = await Promise.allSettled([
       youtubeApi("/api/youtube/channel"),
       youtubeApi("/api/youtube/videos"),
       youtubeApi("/api/youtube/analytics")
     ]);
-    const channel = channelData.channel;
+    if (channelResult.status !== "fulfilled") throw channelResult.reason;
+    const channel = channelResult.value.channel;
+    const videoData = videoResult.status === "fulfilled" ? videoResult.value : { videos: [] };
+    const analyticsData = analyticsResult.status === "fulfilled" ? analyticsResult.value : null;
     youtubeChannel.replaceChildren();
     youtubeChannel.hidden = false;
     if (channel.thumbnailUrl) {
@@ -504,7 +507,9 @@ async function loadYoutubeData() {
 
     youtubeVideos.replaceChildren();
     youtubeVideosHeading.hidden = false;
-    if (!videoData.videos?.length) {
+    if (videoResult.status !== "fulfilled") {
+      addText(youtubeVideos, "p", "Recent video data could not be loaded: " + videoResult.reason.message);
+    } else if (!videoData.videos?.length) {
       addText(youtubeVideos, "p", "No recent public or accessible videos were returned.");
     } else {
       videoData.videos.forEach(video => {
@@ -532,19 +537,21 @@ async function loadYoutubeData() {
 
     youtubeAnalytics.replaceChildren();
     youtubeAnalyticsHeading.hidden = false;
-    const headers = (analyticsData.headers || []).map(item => item.name);
-    const rows = analyticsData.rows || [];
-    const sumMetric = name => {
-      const index = headers.indexOf(name);
-      return index < 0 ? 0 : rows.reduce((total, row) => total + Number(row[index] || 0), 0);
-    };
-    const totalViews = sumMetric("views");
-    const minutes = sumMetric("estimatedMinutesWatched");
-    const subscribers = sumMetric("subscribersGained");
-    addYoutubeMetric(youtubeAnalytics, "Views · 28 days", totalViews.toLocaleString());
-    addYoutubeMetric(youtubeAnalytics, "Watch time", Math.round(minutes).toLocaleString() + " minutes");
-    addYoutubeMetric(youtubeAnalytics, "Subscribers gained", subscribers.toLocaleString());
-    youtubeStatus.textContent = "Global Rhymes 4U is connected. Channel and recent video data are live; analytics cover " + analyticsData.startDate + " to " + analyticsData.endDate + ".";
+    if (analyticsData) {
+      const headers = (analyticsData.headers || []).map(item => item.name);
+      const rows = analyticsData.rows || [];
+      const sumMetric = name => {
+        const index = headers.indexOf(name);
+        return index < 0 ? 0 : rows.reduce((total, row) => total + Number(row[index] || 0), 0);
+      };
+      addYoutubeMetric(youtubeAnalytics, "Views · 28 days", sumMetric("views").toLocaleString());
+      addYoutubeMetric(youtubeAnalytics, "Watch time", Math.round(sumMetric("estimatedMinutesWatched")).toLocaleString() + " minutes");
+      addYoutubeMetric(youtubeAnalytics, "Subscribers gained", sumMetric("subscribersGained").toLocaleString());
+    } else {
+      addText(youtubeAnalytics, "p", "YouTube Analytics is unavailable: " + analyticsResult.reason.message);
+    }
+    youtubeStatus.textContent = "Global Rhymes 4U is connected. Channel data is live" +
+      (analyticsData ? "; analytics cover " + analyticsData.startDate + " to " + analyticsData.endDate + "." : ". Some analytics are unavailable.");
   } catch (error) {
     youtubeStatus.textContent = "Channel connection is active, but some data could not be loaded: " + error.message;
   }
