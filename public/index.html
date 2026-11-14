@@ -90,6 +90,45 @@
   </div>
 </section>
 
+<section class="panel" id="affiliatePanel">
+  <h2>Affiliate Video Studio</h2>
+  <p class="muted">Create separate Telugu and English YouTube Shorts and Instagram Reels drafts across popular Indian product categories. Product facts, prices and commission terms are never treated as verified unless you provide official evidence.</p>
+  <form id="affiliateForm" class="approval-form">
+    <label for="affiliateProductName">Product name</label>
+    <input id="affiliateProductName" maxlength="180" required placeholder="Example: Stainless steel wrist watch">
+    <label for="affiliateCategory">Product category</label>
+    <select id="affiliateCategory" required>
+      <option value="Fashion">Fashion</option>
+      <option value="Watches">Watches</option>
+      <option value="Electronics">Electronics</option>
+      <option value="Mobile accessories">Mobile accessories</option>
+      <option value="Home and kitchen">Home and kitchen</option>
+      <option value="Beauty and personal care">Beauty and personal care</option>
+      <option value="Fitness">Fitness</option>
+      <option value="Books">Books</option>
+      <option value="Appliances">Appliances</option>
+      <option value="Travel accessories">Travel accessories</option>
+      <option value="Family and lifestyle">Family and lifestyle</option>
+      <option value="Other">Other</option>
+    </select>
+    <label for="affiliateMerchant">Merchant (optional)</label>
+    <input id="affiliateMerchant" maxlength="120" placeholder="Example: Amazon India">
+    <label for="affiliateProductUrl">Product page URL (optional)</label>
+    <input id="affiliateProductUrl" type="url" placeholder="https://...">
+    <label for="affiliateTrackingUrl">Your approved affiliate link (optional)</label>
+    <input id="affiliateTrackingUrl" type="url" placeholder="Add after your affiliate program approves you">
+    <label for="affiliateCommissionRate">Commission rate % (optional; unverified until checked)</label>
+    <input id="affiliateCommissionRate" type="number" min="0" max="100" step="0.01" placeholder="Leave blank if unknown">
+    <label for="affiliateProductFacts">Verified product facts and notes</label>
+    <textarea id="affiliateProductFacts" rows="4" maxlength="4000" placeholder="Paste only product facts you have checked. Do not include private account information."></textarea>
+    <button type="submit" id="affiliateGenerateButton">Generate Telugu + English video drafts</button>
+  </form>
+  <p id="affiliateStatus" class="muted" aria-live="polite">Sign in as the owner to create and view affiliate campaigns.</p>
+  <div id="affiliateResult" class="result" aria-live="polite">Your generated campaign package will appear here.</div>
+  <h3>Saved affiliate campaigns</h3>
+  <div id="affiliateCampaignList" class="approval-list">Sign in to load saved campaigns.</div>
+</section>
+
 <section class="panel" id="youtubePanel">
   <h2>YouTube Channel Connections</h2>
   <p class="muted">Connect each YouTube channel you own or are authorized to manage, including Global Rhymes 4U and your separate affiliate channel. Channel data is read-only; publishing and editing remain disabled.</p>
