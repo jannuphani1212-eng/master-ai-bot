@@ -29,7 +29,10 @@ before(async () => {
       PORT: String(port),
       GEMINI_API_KEY: "",
       GROQ_API_KEY: "",
-      OPENROUTER_API_KEY: ""
+      OPENROUTER_API_KEY: "",
+      SUPABASE_URL: "https://example.supabase.co",
+      SUPABASE_ANON_KEY: "public-anon-key",
+      SUPABASE_OWNER_USER_ID: ""
     },
     stdio: "ignore"
   });
