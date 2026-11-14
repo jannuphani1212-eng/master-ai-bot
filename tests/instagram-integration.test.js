@@ -290,6 +290,9 @@ test("Instagram Reel preparation requires exact owner approval and creates one c
     if (target === "https://supabase.example.test/rest/v1/instagram_publish_jobs" && options.method === "POST") {
       return response(201, [job]);
     }
+    if (target.startsWith("https://graph.instagram.com/v27.0/178400001/content_publishing_limit?")) {
+      return response(200, { data: [{ quota_usage: 2, config: { quota_total: 50 } }] });
+    }
     if (target === "https://graph.instagram.com/v27.0/178400001/media" && options.method === "POST") {
       return response(200, { id: "container-123" });
     }
@@ -379,6 +382,9 @@ test("Instagram Reel publication occurs only after owner approval and ready stat
     if (target.startsWith("https://supabase.example.test/rest/v1/instagram_connections?")) {
       return response(200, [igConnection]);
     }
+    if (target.startsWith("https://graph.instagram.com/v27.0/178400001/content_publishing_limit?")) {
+      return response(200, { data: [{ quota_usage: 3, config: { quota_total: 50 } }] });
+    }
     if (target === "https://graph.instagram.com/v27.0/178400001/media_publish" && options.method === "POST") {
       return response(200, { id: "published-media-123" });
     }
@@ -394,6 +400,57 @@ test("Instagram Reel publication occurs only after owner approval and ready stat
     assert.equal(res.body.success, true);
     assert.equal(res.body.mediaId, "published-media-123");
     assert.ok(methods.some(call => call.target.endsWith("/media_publish")));
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+
+test("Instagram publishing quota prevents preparing a Reel when the 24-hour limit is reached", async () => {
+  const originalFetch = global.fetch;
+  let containerCreated = false;
+  const job = {
+    id: "job-2222",
+    approval_request_id: "approval-1111",
+    owner_user_id: ownerId,
+    ig_user_id: "178400001",
+    video_url: "https://cdn.example.test/reel.mp4",
+    caption: "Sample Reel caption #affiliate",
+    share_to_feed: true,
+    status: "preparing"
+  };
+  global.fetch = async (url, options = {}) => {
+    const target = String(url);
+    if (target.startsWith("https://supabase.example.test/rest/v1/approval_requests?")) {
+      return response(200, [approvalRequest]);
+    }
+    if (target.startsWith("https://supabase.example.test/rest/v1/instagram_publish_jobs?")) {
+      return response(200, []);
+    }
+    if (target.startsWith("https://supabase.example.test/rest/v1/instagram_connections?")) {
+      return response(200, [igConnection]);
+    }
+    if (target.startsWith("https://graph.instagram.com/v27.0/178400001/content_publishing_limit?")) {
+      return response(200, { data: [{ quota_usage: 50, config: { quota_total: 50 } }] });
+    }
+    if (target === "https://supabase.example.test/rest/v1/instagram_publish_jobs" && options.method === "POST") {
+      return response(201, [job]);
+    }
+    if (target.endsWith("/media") && options.method === "POST") {
+      containerCreated = true;
+      return response(200, { id: "container-should-not-exist" });
+    }
+    throw new Error("Unexpected request: " + target);
+  };
+  try {
+    const handlers = createInstagramIntegrationHandlers({ env });
+    const res = mockRes();
+    await handlers.prepareApprovedReel({
+      ownerUser: { id: ownerId },
+      params: { id: "approval-1111" }
+    }, res);
+    assert.equal(res.statusCode, 429);
+    assert.equal(containerCreated, false);
   } finally {
     global.fetch = originalFetch;
   }
