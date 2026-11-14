@@ -1,63 +1,38 @@
 # Android cloud AAB builds
 
-## Current status
+## Current app
 
-The repository now contains a manual GitHub Actions workflow at `.github/workflows/android-cloud-build.yml`. It can build an Android Gradle project stored in this repository without requiring a PC. The current repository does not yet contain a complete Android app project at `android-app/`, so the workflow is infrastructure-ready but cannot produce an app bundle until the app-development agent commits a real Android project.
+The repository contains an Android companion app in `android-app/`. It opens the existing Master AI Bot HTTPS dashboard in a hardened WebView. It reuses the existing backend and owner login; it is not a native rewrite.
 
-## Run a debug AAB
+## Automatic debug build
 
-1. Open the repository's **Actions** tab.
-2. Select **Android cloud AAB build**.
-3. Choose **Run workflow**.
-4. Set `project_path` to the Android project directory (default `android-app`).
-5. Choose `debug`.
-6. Run the workflow and download the generated artifact after it succeeds.
+The **Android cloud AAB build** workflow runs on pushes to the feature branch and when the Android project changes in a pull request targeting `main`. It defaults to `android-app` and creates a debug AAB. It installs Java 17, Android SDK platform 35/build-tools 35.0.0, and Gradle 8.13.
 
-Debug builds use the Android debug signing key and are for testing only. They are not Play Store release bundles.
+After a successful run:
+1. Open the repository's Actions tab.
+2. Open the **Android cloud AAB build** run.
+3. Download the `master-ai-android-debug` artifact.
+4. Keep the AAB and SHA-256 checksum together.
+
+You can also manually run the workflow and choose the project path and build variant.
 
 ## Configure a signed release
 
 Create and preserve one release keystore for the app. Never create a different signing key for every release. Add these repository Actions secrets:
 
-- `ANDROID_KEYSTORE_BASE64` — base64-encoded bytes of the owner's existing keystore.
+- `ANDROID_KEYSTORE_BASE64` — base64-encoded bytes of the owner's keystore.
 - `ANDROID_KEY_ALIAS`
 - `ANDROID_KEYSTORE_PASSWORD`
 - `ANDROID_KEY_PASSWORD`
 
-Do not paste these values into chat, commit them, or put them in ordinary repository files.
+The app's Gradle release signing configuration reads these environment variables injected by the workflow. The workflow fails safely if any secret is missing, and verifies the resulting AAB signature before upload.
 
-The Android app's Gradle release signing configuration must read the environment variables injected by the workflow. Kotlin DSL example:
-
-```kotlin
-val releaseKeystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
-
-android {
-    signingConfigs {
-        if (!releaseKeystorePath.isNullOrBlank()) {
-            create("release") {
-                storeFile = file(releaseKeystorePath)
-                storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
-                keyAlias = System.getenv("ANDROID_KEY_ALIAS")
-                keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
-            }
-        }
-    }
-
-    buildTypes {
-        release {
-            if (!releaseKeystorePath.isNullOrBlank()) {
-                signingConfig = signingConfigs.getByName("release")
-            }
-        }
-    }
-}
-```
-
-Then run the workflow with `variant=release`. The workflow checks that the resulting AAB is signed and uploads the artifact with a SHA-256 checksum. It does not upload or publish to Google Play Console.
+Never paste these values into chat, commit them, or place them in ordinary repository files.
 
 ## Important limitations
 
-- The workflow builds an existing Android Gradle project; it does not yet convert a chat response into source files automatically.
-- A release build fails safely if signing secrets are missing or the AAB is unsigned.
-- Google Play Console developer registration, app listing, policy declarations, testing tracks and publishing still require owner action.
+- This is a WebView companion app, not a native rewrite of the web dashboard.
+- OAuth providers that block embedded WebViews may require completing sign-in in the external browser; test each provider on a real Android device.
+- A debug AAB is for testing, not a Play Store release.
+- The workflow does not upload or publish to Google Play Console. Developer registration, app listing, policy declarations, testing tracks and publishing require owner action.
 - Keep the same signing key for future updates to the same app.
