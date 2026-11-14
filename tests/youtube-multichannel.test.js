@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import { createYoutubeIntegrationHandlers, getYoutubeAgentContext } from "../lib/youtube-integration.js";
 
 const ownerId = "11111111-2222-4333-8444-555555555555";
@@ -11,6 +12,14 @@ const env = {
   SUPABASE_SERVICE_ROLE_KEY: "test-service-role-key",
   YOUTUBE_TOKEN_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 };
+
+function encryptedTestToken() {
+  const key = Buffer.from(env.YOUTUBE_TOKEN_ENCRYPTION_KEY, "hex");
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+  const encrypted = Buffer.concat([cipher.update("refresh-token", "utf8"), cipher.final()]);
+  return [iv, cipher.getAuthTag(), encrypted].map(part => part.toString("base64url")).join(".");
+}
 
 function response(status, body) {
   return {
@@ -91,7 +100,7 @@ test("agent context stays channel-neutral for multiple unrelated YouTube channel
           return response(200, [{
             channel_id: channel.id,
             channel_title: channel.title,
-            refresh_token_ciphertext: "AA.AA.AA"
+            refresh_token_ciphertext: encryptedTestToken()
           }]);
         }
         if (target === "https://oauth2.googleapis.com/token") {
