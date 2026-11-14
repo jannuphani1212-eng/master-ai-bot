@@ -356,26 +356,35 @@ async function callOpenRouter(
 // =====================================
 
 async function generateAI(task, instructions, maxTokens = 900) {
-  const providers = [
-    {
-      id: "gemini",
-      name: "Gemini",
-      key: "GEMINI_API_KEY",
-      call: callGemini
-    },
-    {
+  const providerCatalog = {
+    groq: {
       id: "groq",
       name: "Groq",
       key: "GROQ_API_KEY",
       call: callGroq
     },
-    {
+    openrouter: {
       id: "openrouter",
       name: "OpenRouter",
       key: "OPENROUTER_API_KEY",
       call: callOpenRouter
+    },
+    gemini: {
+      id: "gemini",
+      name: "Gemini",
+      key: "GEMINI_API_KEY",
+      call: callGemini
     }
-  ].map((provider) => ({
+  };
+  const configuredOrder = String(
+    process.env.AI_PROVIDER_ORDER || "groq,openrouter,gemini"
+  ).split(",").map(value => value.trim().toLowerCase()).filter(Boolean);
+  const uniqueOrder = [...new Set(configuredOrder)];
+  const providerOrder = uniqueOrder.filter(id => providerCatalog[id]);
+  for (const id of Object.keys(providerCatalog)) {
+    if (!providerOrder.includes(id)) providerOrder.push(id);
+  }
+  const providers = providerOrder.map(id => providerCatalog[id]).map(provider => ({
     ...provider,
     available: Boolean(process.env[provider.key]),
     call: () => provider.call(task, instructions, maxTokens)
