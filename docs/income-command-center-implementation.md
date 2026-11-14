@@ -72,9 +72,10 @@ This repository is the existing Master AI Bot only: one coordinating Master agen
 
 ## 8. Blogging and SEO
 
-- Blogging: draft, source-check, editorial review, owner approval, then publish via an authorized CMS integration.
-- SEO: Search Console/analytics integration with read-only scopes first; report indexed pages, queries, impressions, clicks and technical issues from real data.
-- Avoid guaranteed ranking or traffic claims.
+- SEO implemented on the feature branch: read-only Google Search Console OAuth, encrypted refresh-token storage, connected property listing and query/page/country/device/date performance reports. Only properties returned for the connected Google account can be queried.
+- The Search Console connection table is applied with RLS enabled and backend service-role-only access. Google OAuth credentials and property permissions still require owner setup and live testing.
+- Blogging content drafting remains available through the Blogging specialist, but a CMS connection (WordPress, Blogger or another platform), saved editorial workflow and owner-approved publishing are not implemented yet.
+- Avoid guaranteed ranking or traffic claims; Search Console returns top rows and may not include every query/page.
 
 ## 9. Release and security gates
 
@@ -92,13 +93,14 @@ The feature branch now contains:
 - Multi-channel YouTube connection storage, encrypted refresh-token persistence, a channel selector and channel-scoped read-only data requests. The new Supabase table is applied; real Google OAuth testing still requires the owner's accounts and Meta/Google credentials.
 - An Affiliate Video Studio that saves English + Telugu Shorts/Reels drafts, marks product research and commission claims unverified, supports owner-approved HTTPS click tracking, and imports normalized official commission CSV rows for owner review. Only owner-confirmed entries contribute to verified commission summaries.
 - Instagram Business/Creator account OAuth, encrypted long-lived token storage, refresh and dashboard status. Instagram Reels publishing is not implemented.
+- Google Search Console read-only OAuth, encrypted refresh-token storage, property listing and real search-performance queries. CMS publishing is not implemented.
 - A manual Android cloud AAB workflow with debug/release modes, owner-keystore secret checks, signature verification and artifact upload. A complete Android app project is not yet present in the repository.
 
 Still incomplete:
 - Live affiliate product/catalog research and direct official commission/order API imports.
 - Instagram media upload, Reels publishing and exact-content approval execution.
 - A complete Android app project and actual AAB build verification; Play Console upload/publishing.
-- Blogging CMS and SEO/Search Console integrations.
+- Blogging CMS connection and owner-approved publishing.
 - Live Google/Instagram OAuth and end-to-end Render verification.
 
-The Supabase tables for YouTube, Instagram, affiliate campaigns, click events and commission entries have been created with RLS enabled and access limited to the backend service role. The feature branch is not merged or deployed. Do not treat any unconnected integration or unverified metric as complete.
+The Supabase tables for YouTube, Instagram, Search Console, affiliate campaigns, click events and commission entries have been created with RLS enabled and access limited to the backend service role. The feature branch is not merged or deployed. Do not treat any unconnected integration or unverified metric as complete.
