@@ -281,6 +281,9 @@ test("Instagram Reel preparation requires exact owner approval and creates one c
     if (target.startsWith("https://supabase.example.test/rest/v1/approval_requests?")) {
       return response(200, [approvalRequest]);
     }
+    if (target.startsWith("https://supabase.example.test/rest/v1/instagram_publish_jobs?") && options.method === "PATCH") {
+      return response(200, [{ ...job, container_id: "container-123", status: "processing" }]);
+    }
     if (target.startsWith("https://supabase.example.test/rest/v1/instagram_publish_jobs?")) {
       return response(200, []);
     }
@@ -295,9 +298,6 @@ test("Instagram Reel preparation requires exact owner approval and creates one c
     }
     if (target === "https://graph.instagram.com/v27.0/178400001/media" && options.method === "POST") {
       return response(200, { id: "container-123" });
-    }
-    if (target.startsWith("https://supabase.example.test/rest/v1/instagram_publish_jobs?") && options.method === "PATCH") {
-      return response(200, [{ ...job, container_id: "container-123", status: "processing" }]);
     }
     throw new Error("Unexpected request: " + target + " " + (options.method || "GET"));
   };
