@@ -40,7 +40,7 @@ This repository is the existing Master AI Bot only: one coordinating Master agen
 
 ## 4. Multiple YouTube channels
 
-- Replace the current single-row/single-channel storage assumption with an owner-scoped channel table keyed by provider channel ID.
+- Replace the current single-row/single-channel storage assumption with an owner-scoped channel table keyed by owner + provider channel ID. The multi-channel schema, encrypted token storage, channel selector, channel-scoped read-only API requests and selected-channel specialist context are implemented on the feature branch; deployment still requires running the SQL schema and reconnecting accounts.
 - Keep Global Rhymes 4U as its own connection and add the affiliate channel as a separate connection.
 - Encrypt each refresh token with authenticated encryption and bind OAuth state to the owner and intended connection flow.
 - Read-only analytics and channel data can be enabled after authorization. Upload/edit/delete remain disabled until a separate publishing feature and explicit approval are implemented.
