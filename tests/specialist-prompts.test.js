@@ -30,6 +30,8 @@ test("specialist prompts contain domain-specific quality requirements", () => {
   assert.match(getSpecialistInstructions("youtube"), /retention/);
   assert.match(getSpecialistInstructions("blogging"), /editorial calendar/);
   assert.match(getSpecialistInstructions("app-development"), /acceptance criteria/);
+  assert.match(getSpecialistInstructions("app-development"), /Android cloud AAB workflow/);
+  assert.match(getSpecialistInstructions("app-development"), /persistent signing keystore/);
   assert.match(getSpecialistInstructions("seo"), /crawlability/);
 });
 
