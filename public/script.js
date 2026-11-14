@@ -919,7 +919,7 @@ instagramReelForm.addEventListener("submit", async event => {
 });
 instagramPublishRefreshButton.addEventListener("click", loadInstagramPublishRequests);
 
-const instagramResult = new URLSearchParams(window.location.search).get("instagram");const instagramResult = new URLSearchParams(window.location.search).get("instagram");
+const instagramResult = new URLSearchParams(window.location.search).get("instagram");
 if (instagramResult === "connected") {
   instagramStatus.textContent = "Instagram authorization succeeded. Sign in as the owner to load the connected account.";
 } else if (instagramResult === "professional-required") {
