@@ -93,6 +93,7 @@ create trigger approval_request_update_guard
 -- New public-schema tables are not automatically exposed through the Data API.
 -- Grant only the authenticated role; RLS still limits rows to the owner.
 grant usage on schema public to authenticated;
+revoke all on table public.approval_requests from anon, public;
 grant select, insert, update on table public.approval_requests to authenticated;
 
--- Deliberately no anon grant and no DELETE policy: requests remain private and auditable.
+-- Deliberately no anon access and no DELETE policy: requests remain private and auditable.
