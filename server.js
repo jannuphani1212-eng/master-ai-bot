@@ -636,15 +636,62 @@ async function runCentralBrain(task) {
         700
       );
 
+      let specialistReport = response.result;
+      let specialistProvider = response.provider;
+      let qualityReview = reviewSpecialistReport(specialistReport);
+      let reportRepaired = false;
+
+      // Automatically repair incomplete reports once before showing them to the user.
+      // The repair prompt forbids inventing evidence, metrics, research or completed actions.
+      if (qualityReview.score < 70) {
+        try {
+          const repairInstructions = [
+            "You are a strict specialist report editor.",
+            "Rewrite the supplied specialist draft into the exact eight-section report format below.",
+            "Keep the original task and specialist role. Do not invent facts, research, sources, prices, commissions, metrics, test results or completed actions.",
+            "If information is missing, explicitly write 'Not provided' or 'Needs live verification' and state a reasonable assumption only when clearly labelled.",
+            "Make the report useful and specific. Include concrete deliverables and exactly three next actions.",
+            "Use these exact Markdown headings, each on its own line:",
+            "## 1. Executive summary",
+            "## 2. Audience and assumptions",
+            "## 3. Research and evidence",
+            "## 4. Recommended strategy",
+            "## 5. Concrete deliverables",
+            "## 6. Measurement and KPIs",
+            "## 7. Risks and quality checks",
+            "## 8. Next three actions",
+            "Return only the completed report."
+          ].join("\\n");
+
+          const repair = await generateAI(
+            "ORIGINAL TASK:\\n" + item.task.slice(0, 2500) +
+            "\\n\\nSPECIALIST DRAFT TO IMPROVE:\\n" + compactReport(specialistReport, 3500),
+            repairInstructions,
+            1100
+          );
+
+          if (repair.result && repair.result.trim()) {
+            specialistReport = repair.result.trim();
+            specialistProvider = [...new Set([response.provider, repair.provider])].join(" + ");
+            qualityReview = reviewSpecialistReport(specialistReport);
+            reportRepaired = true;
+            providersUsed.add(repair.provider);
+          }
+        } catch (repairError) {
+          console.error(agent.name + " report repair failed:", repairError.message);
+        }
+      }
+
       providersUsed.add(response.provider);
 
       specialistResults.push({
         agentId: item.agentId,
         name: agent.name,
         success: true,
-        provider: response.provider,
-        qualityReview: reviewSpecialistReport(response.result),
-        result: response.result
+        provider: specialistProvider,
+        reportRepaired,
+        qualityReview,
+        result: specialistReport
       });
 
     } catch (error) {
