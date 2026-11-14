@@ -314,7 +314,14 @@ async function callOpenRouter(
             }
           ],
           temperature: 0.4,
-          max_tokens: maxTokens
+          // Reserve most of the output budget for the user-facing answer.
+          // OpenRouter free routing may select reasoning models that otherwise
+          // spend the entire max_tokens budget on reasoning and return empty content.
+          reasoning: {
+            effort: "low",
+            exclude: true
+          },
+          max_tokens: Math.max(maxTokens + 1000, 2000)
         }),
         signal: controller.signal
       }
