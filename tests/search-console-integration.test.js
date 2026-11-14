@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createCipheriv } from "node:crypto";
 import { createSearchConsoleHandlers } from "../lib/search-console-integration.js";
 
 const ownerId = "11111111-2222-4333-8444-555555555555";
@@ -11,6 +12,14 @@ const env = {
   SUPABASE_URL: "https://supabase.example.test",
   SUPABASE_SERVICE_ROLE_KEY: "test-service-role-key"
 };
+
+function encryptedRefreshToken(token) {
+  const key = Buffer.from(env.SEARCH_CONSOLE_TOKEN_ENCRYPTION_KEY, "hex");
+  const iv = Buffer.alloc(12, 7);
+  const cipher = createCipheriv("aes-256-gcm", key, iv);
+  const encrypted = Buffer.concat([cipher.update(token, "utf8"), cipher.final()]);
+  return [iv, cipher.getAuthTag(), encrypted].map(part => part.toString("base64url")).join(".");
+}
 
 function response(status, body) {
   return {
@@ -86,7 +95,7 @@ test("Search Console site list and query are restricted to connected owner prope
   const ownerConnection = {
     owner_user_id: ownerId,
     google_email: "owner@example.com",
-    refresh_token_ciphertext: "token-ciphertext",
+    refresh_token_ciphertext: encryptedRefreshToken("refresh-token"),
     updated_at: new Date().toISOString()
   };
   const calls = [];
@@ -128,7 +137,7 @@ test("Search Console site list and query are restricted to connected owner prope
     assert.equal(res.body.rows[0].clicks, 25);
     assert.equal(res.body.rows[0].impressions, 500);
     assert.ok(calls.some(call => call.target.includes("owner_user_id=eq." + ownerId)));
-    const queryCall = calls.find(call => call.target.startsWith("https://www.googleapis.com/webmasters/v3/sites/"));
+    const queryCall = calls.find(call => call.target.includes("/searchAnalytics/query"));
     assert.equal(JSON.parse(queryCall.options.body).dimensions[0], "page");
   } finally {
     global.fetch = originalFetch;
@@ -143,7 +152,7 @@ test("Search Console query refuses properties outside the connected account", as
       return response(200, [{
         owner_user_id: ownerId,
         google_email: "owner@example.com",
-        refresh_token_ciphertext: "token-ciphertext"
+        refresh_token_ciphertext: encryptedRefreshToken("refresh-token")
       }]);
     }
     if (target === "https://oauth2.googleapis.com/token") {
