@@ -14,6 +14,7 @@ import { createAffiliateCampaignHandlers } from "./lib/affiliate-campaigns.js";
 import { createInstagramIntegrationHandlers } from "./lib/instagram-integration.js";
 import { createSearchConsoleHandlers } from "./lib/search-console-integration.js";
 import { createBlogDraftHandlers } from "./lib/blog-drafts.js";
+import { createBlogCmsHandlers } from "./lib/blog-cms-integration.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -923,6 +924,19 @@ app.get("/api/blog/drafts", blogDraftHandlers.list);
 app.post("/api/blog/drafts", blogDraftHandlers.generate);
 app.patch("/api/blog/drafts/:id", blogDraftHandlers.update);
 app.post("/api/blog/drafts/:id/decision", blogDraftHandlers.decide);
+
+// =====================================
+// BLOGGER + WORDPRESS.COM DRAFT CONNECTORS
+// =====================================
+
+const blogCmsHandlers = createBlogCmsHandlers();
+app.get("/api/blog/cms/:provider/callback", limitApiRequests, blogCmsHandlers.callback);
+app.use("/api/blog/cms", requireOwner);
+app.use("/api/blog/cms", limitApiRequests);
+app.get("/api/blog/cms/:provider/connect-url", blogCmsHandlers.connectUrl);
+app.get("/api/blog/cms/connections", blogCmsHandlers.connections);
+app.post("/api/blog/cms/:provider/select", blogCmsHandlers.selectSite);
+app.post("/api/blog/cms/drafts/:id/save", blogCmsHandlers.saveDraft);
 
 // =====================================
 // HEALTH API
