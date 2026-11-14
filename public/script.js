@@ -508,12 +508,14 @@ function addAffiliateCampaignCard(campaign) {
       addText(card, "p", "Add an approved affiliate link before enabling click tracking.", "warning-text");
     }
   } else if (campaign.affiliate_url && ["approved", "published"].includes(campaign.status)) {
-    const link = document.createElement("a");
-    link.href = "/r/" + encodeURIComponent(campaign.id) + "?src=other";
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
-    link.textContent = "Open tracked affiliate link";
-    actions.appendChild(link);
+    for (const source of ["youtube_shorts", "instagram_reels"]) {
+      const link = document.createElement("a");
+      link.href = "/r/" + encodeURIComponent(campaign.id) + "?src=" + source;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = source === "youtube_shorts" ? "Tracked YouTube Shorts link" : "Tracked Instagram Reels link";
+      actions.appendChild(link);
+    }
   }
   card.appendChild(actions);
   affiliateCampaignList.appendChild(card);
