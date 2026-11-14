@@ -1306,7 +1306,8 @@ async function loadBlogDrafts() {
   blogDraftList.textContent = "Loading your private blog drafts...";
   try {
     const data = await approvalApi("/api/blog/drafts");
-    renderBlogDraftList(Array.isArray(data.drafts) ? data.drafts : []);\n    await loadBlogCmsConnections();
+    renderBlogDraftList(Array.isArray(data.drafts) ? data.drafts : []);
+    await loadBlogCmsConnections();
     blogDraftStatus.textContent = "Your owner-only blog draft workspace is connected.";
   } catch (error) {
     blogDraftList.textContent = error.message;
