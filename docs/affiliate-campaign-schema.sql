@@ -35,6 +35,9 @@ create table if not exists public.affiliate_click_events (
 create index if not exists affiliate_click_events_campaign_clicked_idx
   on public.affiliate_click_events (owner_user_id, campaign_id, clicked_at desc);
 
+create index if not exists affiliate_click_events_campaign_id_idx
+  on public.affiliate_click_events (campaign_id);
+
 alter table public.affiliate_campaigns enable row level security;
 alter table public.affiliate_click_events enable row level security;
 revoke all on table public.affiliate_campaigns from anon, authenticated;
