@@ -360,6 +360,7 @@ approvalLoginForm.addEventListener("submit", async (event) => {
     setApprovalMessage("Signed in. Loading your private approval queue...");
     await loadApprovalQueue();
     await loadAffiliateCampaigns();
+    await loadCommissionData();
     await loadInstagramStatus();
     await loadYoutubeStatus();
   } catch (error) {
@@ -413,6 +414,7 @@ approvalLogoutButton.addEventListener("click", () => {
   approvalList.textContent = "Sign in to view the owner queue.";
   resetYoutubePanel("Sign in as the owner to check the YouTube connection.");
   resetAffiliatePanel("Sign in as the owner to view affiliate campaigns.");
+  resetCommissionPanel("Sign in as the owner to import commission reports.");
   resetInstagramPanel("Sign in as the owner to connect an Instagram professional account.");
   setApprovalMessage("Signed out. Your session token has been cleared from this page.");
 });
@@ -573,6 +575,116 @@ affiliateForm.addEventListener("submit", async event => {
   } finally {
     affiliateGenerateButton.disabled = false;
     affiliateGenerateButton.textContent = "Generate Telugu + English video drafts";
+  }
+});
+
+
+// AFFILIATE COMMISSION REPORTS
+const commissionImportForm = document.getElementById("commissionImportForm");
+const commissionProgram = document.getElementById("commissionProgram");
+const commissionSourceReference = document.getElementById("commissionSourceReference");
+const commissionCsv = document.getElementById("commissionCsv");
+const commissionImportButton = document.getElementById("commissionImportButton");
+const commissionStatus = document.getElementById("commissionStatus");
+const commissionSummary = document.getElementById("commissionSummary");
+const commissionEntries = document.getElementById("commissionEntries");
+
+function resetCommissionPanel(message) {
+  commissionStatus.textContent = message;
+  commissionSummary.textContent = "No verified commission totals loaded.";
+  commissionEntries.textContent = "Sign in to load imported commission entries.";
+}
+
+async function loadCommissionData() {
+  if (!approvalAccessToken) {
+    resetCommissionPanel("Sign in as the owner to import commission reports.");
+    return;
+  }
+  commissionStatus.textContent = "Loading commission entries...";
+  try {
+    const data = await affiliateApi("/api/affiliate/commissions");
+    commissionSummary.replaceChildren();
+    const summaries = Array.isArray(data.summary) ? data.summary : [];
+    if (!summaries.length) {
+      commissionSummary.textContent = "No owner-verified commission totals yet.";
+    } else {
+      summaries.forEach(item => {
+        const card = document.createElement("article");
+        card.className = "approval-card";
+        addText(card, "h4", "Verified commission totals · " + item.currency);
+        addText(card, "p", "Pending: " + Number(item.pending).toFixed(2) +
+          " · Approved: " + Number(item.approved).toFixed(2) +
+          " · Paid: " + Number(item.paid).toFixed(2), "muted");
+        addText(card, "p", "Verified total: " + Number(item.verifiedTotal).toFixed(2) + " " + item.currency);
+        commissionSummary.appendChild(card);
+      });
+    }
+
+    commissionEntries.replaceChildren();
+    const entries = Array.isArray(data.commissions) ? data.commissions : [];
+    if (!entries.length) {
+      commissionEntries.textContent = "No commission rows imported yet.";
+    } else {
+      entries.forEach(entry => {
+        const card = document.createElement("article");
+        card.className = "approval-card";
+        addText(card, "h4", entry.program + " · " + entry.external_order_id);
+        addText(card, "p", Number(entry.commission_amount).toFixed(2) + " " + entry.currency +
+          " · " + entry.status + " · " + entry.report_date, "muted");
+        addText(card, "p", "Source: " + entry.source_reference + " · " + entry.verification_status, "muted");
+        if (entry.verification_status !== "owner_verified") {
+          const verify = document.createElement("button");
+          verify.type = "button";
+          verify.textContent = "Confirm against official report";
+          verify.addEventListener("click", async () => {
+            if (!window.confirm("Have you checked this exact order and commission amount against the official affiliate report?")) return;
+            verify.disabled = true;
+            try {
+              await affiliateApi("/api/affiliate/commissions/" + encodeURIComponent(entry.id) + "/verify", {
+                method: "POST",
+                body: "{}"
+              });
+              await loadCommissionData();
+              commissionStatus.textContent = "Commission entry confirmed by the owner. Only confirmed rows contribute to totals.";
+            } catch (error) {
+              commissionStatus.textContent = error.message;
+              verify.disabled = false;
+            }
+          });
+          card.appendChild(verify);
+        }
+        commissionEntries.appendChild(card);
+      });
+    }
+    commissionStatus.textContent = entries.length + " commission row(s) loaded; " +
+      Number(data.needsReview || 0) + " still need owner review.";
+  } catch (error) {
+    commissionStatus.textContent = error.message;
+  }
+}
+
+commissionImportForm.addEventListener("submit", async event => {
+  event.preventDefault();
+  commissionImportButton.disabled = true;
+  commissionImportButton.textContent = "Importing...";
+  commissionStatus.textContent = "Validating and importing the official report...";
+  try {
+    const result = await affiliateApi("/api/affiliate/commissions/import", {
+      method: "POST",
+      body: JSON.stringify({
+        program: commissionProgram.value.trim(),
+        sourceReference: commissionSourceReference.value.trim(),
+        csvText: commissionCsv.value
+      })
+    });
+    commissionStatus.textContent = result.importedCount + " row(s) imported. Review each row before confirming it.";
+    commissionCsv.value = "";
+    await loadCommissionData();
+  } catch (error) {
+    commissionStatus.textContent = error.message;
+  } finally {
+    commissionImportButton.disabled = false;
+    commissionImportButton.textContent = "Import official report";
   }
 });
 
