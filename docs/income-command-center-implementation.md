@@ -88,15 +88,17 @@ This repository is the existing Master AI Bot only: one coordinating Master agen
 
 The feature branch now contains:
 - Premium navy/gold dashboard styling while preserving the existing owner approval and YouTube panels.
-- Configurable Groq → OpenRouter → Gemini provider order, deterministic order tests and automated CI checks. This does not prove every provider key works live or guarantee quota availability.
-- Multi-channel YouTube connection storage, encrypted refresh-token persistence, a channel selector and channel-scoped read-only data requests. The new Supabase table is applied, but Google OAuth still needs live testing with the owner's real accounts after merge/deploy.
-- An Affiliate Video Studio that creates saved English + Telugu Shorts/Reels drafts, keeps research/commission values unverified, and enables owner-approved HTTPS affiliate click tracking. This does not import affiliate orders or commission statements and does not publish content.
+- Configurable Groq → OpenRouter → Gemini provider order, deterministic provider tests and automated CI checks. This does not prove every provider key works live or guarantee quota availability.
+- Multi-channel YouTube connection storage, encrypted refresh-token persistence, a channel selector and channel-scoped read-only data requests. The new Supabase table is applied; real Google OAuth testing still requires the owner's accounts and Meta/Google credentials.
+- An Affiliate Video Studio that saves English + Telugu Shorts/Reels drafts, marks product research and commission claims unverified, supports owner-approved HTTPS click tracking, and imports normalized official commission CSV rows for owner review. Only owner-confirmed entries contribute to verified commission summaries.
+- Instagram Business/Creator account OAuth, encrypted long-lived token storage, refresh and dashboard status. Instagram Reels publishing is not implemented.
+- A manual Android cloud AAB workflow with debug/release modes, owner-keystore secret checks, signature verification and artifact upload. A complete Android app project is not yet present in the repository.
 
 Still incomplete:
-- Instagram OAuth/API connection and publishing.
-- Official affiliate product research sources, conversion imports and verified/paid commission reporting.
-- Cloud Android AAB builds and Play Console upload workflow.
+- Live affiliate product/catalog research and direct official commission/order API imports.
+- Instagram media upload, Reels publishing and exact-content approval execution.
+- A complete Android app project and actual AAB build verification; Play Console upload/publishing.
 - Blogging CMS and SEO/Search Console integrations.
-- Live OAuth, account and end-to-end Render verification.
+- Live Google/Instagram OAuth and end-to-end Render verification.
 
-The Supabase tables for YouTube and affiliate campaigns/click events have been created with RLS enabled and access limited to the backend service role. The feature branch is not merged or deployed. Do not treat any unconnected integration or unverified metric as complete.
+The Supabase tables for YouTube, Instagram, affiliate campaigns, click events and commission entries have been created with RLS enabled and access limited to the backend service role. The feature branch is not merged or deployed. Do not treat any unconnected integration or unverified metric as complete.
