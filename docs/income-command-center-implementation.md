@@ -64,11 +64,11 @@ This repository is the existing Master AI Bot only: one coordinating Master agen
 
 ## 7. App Development cloud AAB
 
-- Add a cloud build workflow (GitHub Actions / Gradle) that accepts a reviewed Android project.
-- Build debug artifacts for testing; signed release AAB requires owner-provided signing secrets stored only in GitHub Actions secrets.
-- Do not commit keystores, passwords or signing keys.
-- Store build artifacts with commit SHA, build logs, test results and checksum.
-- Play Console upload/publishing remains a separate owner-authorized step.
+- Implemented: manual GitHub Actions Android cloud AAB workflow with project-path and debug/release inputs, Gradle build, artifact upload and SHA-256 checksum.
+- Release builds require the owner's persistent keystore and GitHub Actions signing secrets; the workflow verifies the release AAB signature.
+- Added Android cloud build instructions and signing configuration guidance.
+- Still needed: a complete Android project in the repository, actual debug/release build verification, build artifact retention/traceability tests and any Play Console upload workflow.
+- Do not commit keystores, passwords or signing keys. Play Console upload/publishing remains a separate owner-authorized step.
 
 ## 8. Blogging and SEO
 
