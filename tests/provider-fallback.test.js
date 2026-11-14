@@ -13,6 +13,17 @@ test("provider fallback uses the next available provider after a failure", async
   assert.deepEqual(result, { result: "backup answer", provider: "Groq" });
 });
 
+test("a Gemini timeout proceeds to Groq and returns the backup response", async () => {
+  const attempts = [];
+  const result = await runProviderFallback([
+    { id: "gemini", name: "Gemini", call: async () => { attempts.push("Gemini"); throw new Error("Gemini request timed out after 45000ms"); } },
+    { id: "groq", name: "Groq", call: async () => { attempts.push("Groq"); return "Groq backup response"; } },
+    { id: "openrouter", name: "OpenRouter", call: async () => { attempts.push("OpenRouter"); return "unused"; } }
+  ]);
+  assert.deepEqual(attempts, ["Gemini", "Groq"]);
+  assert.deepEqual(result, { result: "Groq backup response", provider: "Groq" });
+});
+
 test("provider fallback skips providers in cooldown or without configuration", async () => {
   const attempts = [];
   const result = await runProviderFallback([
