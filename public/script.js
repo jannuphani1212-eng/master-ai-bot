@@ -364,6 +364,7 @@ approvalLoginForm.addEventListener("submit", async (event) => {
     await loadInstagramStatus();
     await loadInstagramPublishRequests();
     await loadSearchConsoleSites();
+    await loadBlogDrafts();
     await loadYoutubeStatus();
   } catch (error) {
     approvalAccessToken = "";
@@ -1286,4 +1287,188 @@ if (youtubeResult === "connected") {
   youtubeStatus.textContent = "Google authorization succeeded, but no YouTube channel was returned. Confirm that this Google account owns or manages a YouTube channel and try again.";
 } else if (youtubeResult === "error") {
   youtubeStatus.textContent = "Google could not complete the connection. Check the Google Cloud OAuth setup and try again.";
+}
+
+
+// BLOGGING BOT · OWNER-ONLY DRAFT STUDIO
+const blogDraftForm = document.getElementById("blogDraftForm");
+const blogDraftStatus = document.getElementById("blogDraftStatus");
+const blogDraftEditor = document.getElementById("blogDraftEditor");
+const blogDraftList = document.getElementById("blogDraftList");
+const blogGenerateButton = document.getElementById("blogGenerateButton");
+
+async function loadBlogDrafts() {
+  if (!approvalAccessToken) return;
+  blogDraftList.textContent = "Loading your private blog drafts...";
+  try {
+    const data = await approvalApi("/api/blog/drafts");
+    renderBlogDraftList(Array.isArray(data.drafts) ? data.drafts : []);
+    blogDraftStatus.textContent = "Your owner-only blog draft workspace is connected.";
+  } catch (error) {
+    blogDraftList.textContent = error.message;
+    blogDraftStatus.textContent = "Blog drafts could not be loaded. Check the database setup.";
+  }
+}
+
+function renderBlogDraftList(drafts) {
+  blogDraftList.replaceChildren();
+  if (!drafts.length) {
+    addText(blogDraftList, "p", "No saved blog drafts yet. Create your first draft above.");
+    return;
+  }
+  drafts.forEach(draft => {
+    const card = document.createElement("article");
+    card.className = "approval-card";
+    const content = draft.content_json || {};
+    addText(card, "h4", content.title || draft.topic || "Untitled blog draft");
+    addText(card, "p", "Topic: " + (draft.topic || "Not available") + " · Language: " + (draft.language || "English") + " · Status: " + (draft.status || "draft"));
+    addText(card, "p", "SEO title: " + (content.metaTitle || "Not generated") + " · Keyword: " + (draft.target_keyword || content.targetKeyword || "Not set"), "muted");
+    addText(card, "p", "Saved: " + (draft.created_at ? new Date(draft.created_at).toLocaleString() : "Not available"), "muted");
+    const actions = document.createElement("div");
+    actions.className = "approval-actions";
+    const edit = document.createElement("button");
+    edit.type = "button";
+    edit.className = "secondary";
+    edit.textContent = draft.status === "draft" ? "Open / edit draft" : "View approved draft";
+    edit.addEventListener("click", () => showBlogDraftEditor(draft));
+    actions.appendChild(edit);
+    if (draft.status === "draft") {
+      const approve = document.createElement("button");
+      approve.type = "button";
+      approve.textContent = "Approve draft";
+      approve.addEventListener("click", () => decideBlogDraft(draft.id, "approved"));
+      const reject = document.createElement("button");
+      reject.type = "button";
+      reject.className = "secondary";
+      reject.textContent = "Reject draft";
+      reject.addEventListener("click", () => decideBlogDraft(draft.id, "rejected"));
+      actions.append(approve, reject);
+    }
+    card.appendChild(actions);
+    if (draft.decision_note) addText(card, "p", "Decision note: " + draft.decision_note);
+    blogDraftList.appendChild(card);
+  });
+}
+
+function showBlogDraftEditor(draft) {
+  const content = { ...(draft.content_json || {}) };
+  blogDraftEditor.replaceChildren();
+  addText(blogDraftEditor, "h3", content.title || draft.topic || "Blog draft");
+  addText(blogDraftEditor, "p", "Status: " + (draft.status || "draft") + " · AI provider: " + (draft.generation_provider || "Not reported"), "muted");
+
+  const fields = [
+    ["title", "Article title", 1, 180],
+    ["metaTitle", "SEO meta title", 1, 180],
+    ["metaDescription", "Meta description", 3, 320],
+    ["articleMarkdown", "Full article draft (Markdown)", 14, 30000]
+  ];
+  const controls = {};
+  fields.forEach(([key, label, rows, maxLength]) => {
+    const wrapper = document.createElement("div");
+    const fieldLabel = document.createElement("label");
+    fieldLabel.textContent = label;
+    const input = rows === 1 ? document.createElement("input") : document.createElement("textarea");
+    if (rows > 1) input.rows = rows;
+    input.maxLength = maxLength;
+    input.value = String(content[key] || "");
+    input.disabled = draft.status !== "draft";
+    fieldLabel.appendChild(input);
+    wrapper.appendChild(fieldLabel);
+    blogDraftEditor.appendChild(wrapper);
+    controls[key] = input;
+  });
+
+  const detail = document.createElement("details");
+  const summary = document.createElement("summary");
+  summary.textContent = "View outline, keywords and fact-check notes";
+  detail.appendChild(summary);
+  const extra = document.createElement("pre");
+  extra.textContent = JSON.stringify({
+    slug: content.slug || "",
+    alternateTitles: content.alternateTitles || [],
+    secondaryKeywords: content.secondaryKeywords || [],
+    outline: content.outline || [],
+    FAQ: content.faq || [],
+    factChecksNeeded: content.factChecksNeeded || [],
+    qualityChecklist: content.qualityChecklist || []
+  }, null, 2);
+  detail.appendChild(extra);
+  blogDraftEditor.appendChild(detail);
+
+  if (draft.status === "draft") {
+    const save = document.createElement("button");
+    save.type = "button";
+    save.textContent = "Save edits";
+    save.addEventListener("click", async () => {
+      save.disabled = true;
+      try {
+        content.title = controls.title.value.trim();
+        content.metaTitle = controls.metaTitle.value.trim();
+        content.metaDescription = controls.metaDescription.value.trim();
+        content.articleMarkdown = controls.articleMarkdown.value;
+        await approvalApi("/api/blog/drafts/" + encodeURIComponent(draft.id), {
+          method: "PATCH",
+          body: JSON.stringify({ content })
+        });
+        blogDraftStatus.textContent = "Draft edits saved.";
+        await loadBlogDrafts();
+      } catch (error) {
+        blogDraftStatus.textContent = error.message;
+      } finally {
+        save.disabled = false;
+      }
+    });
+    blogDraftEditor.appendChild(save);
+  }
+}
+
+async function decideBlogDraft(id, decision) {
+  const label = decision === "approved" ? "approve" : "reject";
+  if (!window.confirm("Are you sure you want to " + label + " this blog draft? This records your review only. It will NOT publish the article.")) return;
+  try {
+    const data = await approvalApi("/api/blog/drafts/" + encodeURIComponent(id) + "/decision", {
+      method: "POST",
+      body: JSON.stringify({ decision })
+    });
+    blogDraftStatus.textContent = data.message || "Your review decision was saved. Nothing was published.";
+    await loadBlogDrafts();
+  } catch (error) {
+    blogDraftStatus.textContent = error.message;
+  }
+}
+
+if (blogDraftForm) {
+  blogDraftForm.addEventListener("submit", async event => {
+    event.preventDefault();
+    if (!approvalAccessToken) {
+      blogDraftStatus.textContent = "Sign in as the owner first.";
+      return;
+    }
+    blogGenerateButton.disabled = true;
+    blogGenerateButton.textContent = "Generating draft...";
+    blogDraftStatus.textContent = "The Blogging specialist is preparing your article and SEO fields...";
+    blogDraftEditor.textContent = "Generating and saving your blog draft. Please wait.";
+    try {
+      const data = await approvalApi("/api/blog/drafts", {
+        method: "POST",
+        body: JSON.stringify({
+          topic: document.getElementById("blogTopic").value,
+          language: document.getElementById("blogLanguage").value,
+          audience: document.getElementById("blogAudience").value,
+          targetKeyword: document.getElementById("blogKeyword").value,
+          notes: document.getElementById("blogNotes").value
+        })
+      });
+      if (!data.draft) throw new Error("The blog draft was not returned by the server.");
+      blogDraftStatus.textContent = "Blog draft generated and saved. Review it before approving.";
+      showBlogDraftEditor(data.draft);
+      await loadBlogDrafts();
+    } catch (error) {
+      blogDraftStatus.textContent = error.message;
+      blogDraftEditor.textContent = "The draft was not saved. Check AI provider and database configuration, then try again.";
+    } finally {
+      blogGenerateButton.disabled = false;
+      blogGenerateButton.textContent = "Generate and save blog draft";
+    }
+  });
 }
