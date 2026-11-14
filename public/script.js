@@ -567,6 +567,8 @@ youtubeRefreshButton.addEventListener("click", loadYoutubeStatus);
 const youtubeResult = new URLSearchParams(window.location.search).get("youtube");
 if (youtubeResult === "connected") {
   youtubeStatus.textContent = "Google authorization succeeded. Sign in as the owner to load your channel.";
+} else if (youtubeResult === "channel-mismatch") {
+  youtubeStatus.textContent = "The selected Google account did not return a channel named Global Rhymes 4U. Sign in with the dedicated channel account and try again.";
 } else if (youtubeResult === "error") {
   youtubeStatus.textContent = "Google could not complete the connection. Check the Google Cloud OAuth setup and try again.";
 }
