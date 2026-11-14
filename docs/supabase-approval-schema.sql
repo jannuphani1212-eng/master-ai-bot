@@ -1,6 +1,6 @@
 -- Master AI Bot: owner-controlled approval records
--- Run this in the Supabase SQL Editor for the dedicated project.
--- No external action executor is included by this schema.
+-- Run this in the dedicated Supabase project connected to Master AI Bot.
+-- This schema records proposals and decisions only. It never executes external actions.
 
 create table if not exists public.approval_requests (
   id uuid primary key default gen_random_uuid(),
@@ -35,27 +35,25 @@ alter table public.approval_requests enable row level security;
 
 drop policy if exists "Owner can read own approval requests" on public.approval_requests;
 create policy "Owner can read own approval requests"
-  on public.approval_requests for select
-  using (auth.uid() = owner_id);
+  on public.approval_requests for select to authenticated
+  using ((select auth.uid()) = owner_id);
 
 drop policy if exists "Owner can create own approval requests" on public.approval_requests;
 create policy "Owner can create own approval requests"
-  on public.approval_requests for insert
-  with check (auth.uid() = owner_id and auth.uid() = created_by);
+  on public.approval_requests for insert to authenticated
+  with check ((select auth.uid()) = owner_id and (select auth.uid()) = created_by);
 
 drop policy if exists "Owner can decide pending approval requests" on public.approval_requests;
 create policy "Owner can decide pending approval requests"
-  on public.approval_requests for update
-  using (auth.uid() = owner_id and status = 'pending')
+  on public.approval_requests for update to authenticated
+  using ((select auth.uid()) = owner_id and status = 'pending')
   with check (
-    auth.uid() = owner_id
+    (select auth.uid()) = owner_id
     and status in ('approved', 'rejected')
-    and decided_by = auth.uid()
+    and decided_by = (select auth.uid())
     and decided_at is not null
   );
 
--- Keep request identity and proposed action immutable. Only a pending
--- request may transition once to approved or rejected.
 create or replace function public.guard_approval_request_update()
 returns trigger
 language plpgsql
@@ -82,7 +80,7 @@ begin
   end if;
 
   new.decided_at := now();
-  new.decided_by := auth.uid();
+  new.decided_by := (select auth.uid());
   return new;
 end;
 $$;
@@ -92,4 +90,9 @@ create trigger approval_request_update_guard
   before update on public.approval_requests
   for each row execute function public.guard_approval_request_update();
 
--- Deliberately no DELETE policy: decisions remain auditable.
+-- New public-schema tables are not automatically exposed through the Data API.
+-- Grant only the authenticated role; RLS still limits rows to the owner.
+grant usage on schema public to authenticated;
+grant select, insert, update on table public.approval_requests to authenticated;
+
+-- Deliberately no anon grant and no DELETE policy: requests remain private and auditable.
