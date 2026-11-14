@@ -11,6 +11,7 @@ The following tables are created in the Master AI Bot Supabase project:
 - `affiliate_campaigns`
 - `affiliate_click_events`
 - `affiliate_commissions`
+- `blog_drafts` (existing owner-scoped Blogging Studio table)
 
 All have Row Level Security enabled. The browser roles `anon` and `authenticated` have no table privileges; the backend `service_role` is the only granted role. There are intentionally no RLS policies on these tables because browser clients must not access them directly. The Express server enforces owner authentication and filters every owner-scoped query by the verified owner ID.
 
