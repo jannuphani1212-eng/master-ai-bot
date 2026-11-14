@@ -152,6 +152,25 @@
   </div>
   <p id="instagramStatus" class="muted" aria-live="polite">Sign in as the owner to connect an Instagram professional account.</p>
   <div id="instagramAccounts" class="approval-list">No Instagram account loaded.</div>
+  <h3>Request approval to publish a Reel</h3>
+  <p class="muted">Use a publicly accessible HTTPS video URL. The bot first creates an approval request containing the exact account, video URL and caption. It will not prepare or publish until that request is approved.</p>
+  <form id="instagramReelForm" class="approval-form">
+    <label for="instagramPublishAccount">Instagram account</label>
+    <select id="instagramPublishAccount" required>
+      <option value="">Connect an Instagram professional account first</option>
+    </select>
+    <label for="instagramReelVideoUrl">Public video URL (HTTPS)</label>
+    <input id="instagramReelVideoUrl" type="url" required placeholder="https://.../your-reel-video.mp4">
+    <label for="instagramReelCaption">Exact Reel caption</label>
+    <textarea id="instagramReelCaption" rows="4" maxlength="2200" required placeholder="Write the caption and affiliate disclosure here."></textarea>
+    <label><input id="instagramShareToFeed" type="checkbox" checked> Also share to Instagram feed</label>
+    <button type="submit" id="instagramRequestApprovalButton">Request owner approval</button>
+  </form>
+  <p id="instagramPublishStatus" class="muted" aria-live="polite">No Reel publishing request created.</p>
+  <div class="approval-toolbar">
+    <button type="button" id="instagramPublishRefreshButton" class="secondary">Refresh publishing requests</button>
+  </div>
+  <div id="instagramPublishRequests" class="approval-list">No publishing requests loaded.</div>
 </section>
 
 <section class="panel" id="searchConsolePanel">
