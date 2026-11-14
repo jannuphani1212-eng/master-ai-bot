@@ -48,10 +48,11 @@ This repository is the existing Master AI Bot only: one coordinating Master agen
 
 ## 5. Instagram
 
-- Use Meta's supported Instagram professional-account OAuth/API flow and required permissions.
-- Store tokens server-side encrypted, track expiry and reconnect state, and verify that the account is eligible for the selected publishing API.
-- Create a preview/approval queue. Publishing must require an explicit owner approval tied to the exact media, caption and destination account.
-- If API permissions are unavailable, provide an export/manual-publishing workflow rather than pretending to publish.
+- Implemented on the feature branch: Meta Instagram Login OAuth for professional Business/Creator accounts, owner-signed state, short-to-long-lived token exchange, AES-256-GCM token storage, token refresh and reconnect status.
+- The `instagram_connections` Supabase table is applied with RLS enabled and service-role-only privileges.
+- Dashboard connection UI is implemented. Meta app credentials and real account authorization remain owner setup steps.
+- Not implemented: media upload, Reels publishing, scheduled publishing or an approval action bound to an exact video/caption/account. Keep publishing disabled until those controls and Meta app access are verified.
+- The Affiliate Video Studio currently creates scripts and captions, not video files.
 
 ## 6. Affiliate tracking and commissions
 
