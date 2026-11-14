@@ -143,6 +143,32 @@
   <div id="commissionEntries" class="approval-list">Sign in to load imported commission entries.</div>
 </section>
 
+<section class="panel" id="blogDraftPanel">
+  <h2>Blogging Bot · Blog Draft Studio</h2>
+  <p class="muted">Generate SEO-friendly article drafts, outlines, titles and meta descriptions. Drafts are private to the owner. Approval records your decision only; nothing is published automatically.</p>
+  <form id="blogDraftForm" class="approval-form">
+    <label for="blogTopic">Blog topic</label>
+    <input id="blogTopic" maxlength="180" required placeholder="Example: Best budget smartwatches in India">
+    <label for="blogLanguage">Language</label>
+    <select id="blogLanguage">
+      <option value="English">English</option>
+      <option value="Telugu">Telugu</option>
+      <option value="Bilingual">English + Telugu</option>
+    </select>
+    <label for="blogAudience">Target audience (optional)</label>
+    <input id="blogAudience" maxlength="180" placeholder="Example: Indian students and first-time buyers">
+    <label for="blogKeyword">Primary SEO keyword (optional)</label>
+    <input id="blogKeyword" maxlength="120" placeholder="Example: best budget smartwatch India">
+    <label for="blogNotes">Extra notes (optional)</label>
+    <textarea id="blogNotes" rows="4" maxlength="3000" placeholder="Add facts, product details, website tone or points to cover."></textarea>
+    <button type="submit" id="blogGenerateButton">Generate and save blog draft</button>
+  </form>
+  <p id="blogDraftStatus" class="muted" aria-live="polite">Sign in as the owner to create and manage blog drafts.</p>
+  <div id="blogDraftEditor" class="result" aria-live="polite">Your generated draft will appear here.</div>
+  <h3>Saved blog drafts</h3>
+  <div id="blogDraftList" class="approval-list">Sign in to load saved blog drafts.</div>
+</section>
+
 <section class="panel" id="instagramPanel">
   <h2>Instagram Professional Account</h2>
   <p class="muted">Connect your separate affiliate Instagram Business or Creator account. This connection is for account access and future approved publishing; it does not automatically publish Reels.</p>
