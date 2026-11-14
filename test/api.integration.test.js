@@ -1,10 +1,13 @@
 import test, { before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:net";
+import { createServer as createHttpServer } from "node:http";
 import { spawn } from "node:child_process";
 
 let child;
 let baseUrl;
+let authServer;
+let authUrl;
 
 async function getFreePort() {
   const server = createServer();
@@ -21,7 +24,24 @@ async function getFreePort() {
 
 before(async () => {
   const port = await getFreePort();
+  const authPort = await getFreePort();
   baseUrl = `http://127.0.0.1:${port}`;
+  authUrl = `http://127.0.0.1:${authPort}`;
+
+  // Local Supabase Auth stub for protected-route integration tests.
+  authServer = createHttpServer((req, res) => {
+    if (req.url !== "/auth/v1/user" || req.headers.authorization !== "Bearer test-owner-token") {
+      res.writeHead(401, { "content-type": "application/json" });
+      res.end(JSON.stringify({ message: "Invalid test session" }));
+      return;
+    }
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ id: "test-owner-user" }));
+  });
+  await new Promise((resolve, reject) => {
+    authServer.once("error", reject);
+    authServer.listen(authPort, "127.0.0.1", resolve);
+  });
 
   child = spawn(process.execPath, ["server.js"], {
     env: {
@@ -30,9 +50,9 @@ before(async () => {
       GEMINI_API_KEY: "",
       GROQ_API_KEY: "",
       OPENROUTER_API_KEY: "",
-      SUPABASE_URL: "https://example.supabase.co",
+      SUPABASE_URL: authUrl,
       SUPABASE_ANON_KEY: "public-anon-key",
-      SUPABASE_OWNER_USER_ID: ""
+      SUPABASE_OWNER_USER_ID: "test-owner-user"
     },
     stdio: "ignore"
   });
@@ -62,10 +82,9 @@ before(async () => {
   }
 });
 
-after(() => {
-  if (child && child.exitCode === null) {
-    child.kill();
-  }
+after(async () => {
+  if (child && child.exitCode === null) child.kill();
+  if (authServer) await new Promise((resolve) => authServer.close(resolve));
 });
 
 test("status endpoint reports the Central Brain and five specialists", async () => {
@@ -87,7 +106,7 @@ test("status endpoint reports the Central Brain and five specialists", async () 
 test("Central Brain rejects an empty task with HTTP 400", async () => {
   const response = await fetch(`${baseUrl}/api/brain`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", authorization: "Bearer test-owner-token" },
     body: JSON.stringify({})
   });
   const data = await response.json();
@@ -100,7 +119,7 @@ test("Central Brain rejects an empty task with HTTP 400", async () => {
 test("Central Brain reports missing provider configuration with HTTP 503", async () => {
   const response = await fetch(`${baseUrl}/api/brain`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", authorization: "Bearer test-owner-token" },
     body: JSON.stringify({ task: "Check all five specialists" })
   });
   const data = await response.json();
@@ -113,7 +132,7 @@ test("Central Brain reports missing provider configuration with HTTP 503", async
 test("task endpoint rejects an unknown specialist with HTTP 400", async () => {
   const response = await fetch(`${baseUrl}/api/task`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", authorization: "Bearer test-owner-token" },
     body: JSON.stringify({ task: "Run a task", agentId: "unknown-agent" })
   });
   const data = await response.json();

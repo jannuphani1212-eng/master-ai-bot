@@ -176,9 +176,16 @@ taskForm.addEventListener("submit", async (event) => {
   taskResult.textContent = "Sending your task to the AI backend...";
 
   try {
+    if (!approvalAccessToken) {
+      throw new Error("Please sign in with the owner account in the Owner Approval Center before submitting AI tasks.");
+    }
+
     const response = await fetch("/api/task", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + approvalAccessToken
+      },
       body: JSON.stringify({ task, agentId })
     });
 
