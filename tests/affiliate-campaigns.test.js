@@ -204,6 +204,93 @@ test("a campaign without an affiliate URL cannot be approved for click tracking"
   }
 });
 
+test("official commission CSV imports as owner-review-only rows", async () => {
+  const originalFetch = global.fetch;
+  let savedRows = [];
+  let requestedUrl = "";
+  global.fetch = async (url, options = {}) => {
+    requestedUrl = String(url);
+    savedRows = JSON.parse(options.body);
+    return response(201, savedRows.map((row, index) => ({ id: "commission-" + index, ...row })));
+  };
+  try {
+    const handlers = createAffiliateCampaignHandlers({
+      env,
+      generateAI: async () => ({ result: "{}", provider: "Groq" })
+    });
+    const res = mockRes();
+    await handlers.importCommissions({
+      ownerUser: { id: ownerId },
+      body: {
+        program: "Amazon Associates",
+        sourceReference: "November 2026 official report",
+        csvText: "order_id,report_date,commission_amount,currency,status\nORDER-1,2026-11-14,12.50,INR,paid\nORDER-2,2026-11-13,5.00,INR,pending"
+      }
+    }, res);
+    assert.equal(res.statusCode, 201);
+    assert.equal(res.body.importedCount, 2);
+    assert.ok(requestedUrl.includes("on_conflict=owner_user_id,program,external_order_id"));
+    assert.deepEqual(savedRows.map(row => row.external_order_id), ["ORDER-1", "ORDER-2"]);
+    assert.ok(savedRows.every(row => row.owner_user_id === ownerId));
+    assert.ok(savedRows.every(row => row.verification_status === "needs_owner_review"));
+    assert.ok(savedRows.every(row => row.source_type === "official_report_csv"));
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test("commission CSV rejects invalid dates and statuses before writing", async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async () => { throw new Error("Database must not be called"); };
+  try {
+    const handlers = createAffiliateCampaignHandlers({
+      env,
+      generateAI: async () => ({ result: "{}", provider: "Groq" })
+    });
+    const res = mockRes();
+    await handlers.importCommissions({
+      ownerUser: { id: ownerId },
+      body: {
+        program: "Affiliate Program",
+        sourceReference: "Report",
+        csvText: "order_id,report_date,commission_amount,currency,status\nORDER-1,2026-02-30,12.50,INR,paid"
+      }
+    }, res);
+    assert.equal(res.statusCode, 400);
+    assert.match(res.body.error, /real date/);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test("commission summary counts only entries the owner has verified", async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async () => response(200, [
+    { id: "1", currency: "INR", commission_amount: "20.00", status: "paid", verification_status: "owner_verified" },
+    { id: "2", currency: "INR", commission_amount: "10.00", status: "pending", verification_status: "owner_verified" },
+    { id: "3", currency: "INR", commission_amount: "500.00", status: "paid", verification_status: "needs_owner_review" }
+  ]);
+  try {
+    const handlers = createAffiliateCampaignHandlers({
+      env,
+      generateAI: async () => ({ result: "{}", provider: "Groq" })
+    });
+    const res = mockRes();
+    await handlers.listCommissions({ ownerUser: { id: ownerId } }, res);
+    assert.equal(res.body.needsReview, 1);
+    assert.deepEqual(res.body.summary, [{
+      currency: "INR",
+      pending: 10,
+      approved: 0,
+      paid: 20,
+      void: 0,
+      verifiedTotal: 30
+    }]);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
 test("campaign list query is restricted to the authenticated owner", async () => {
   const originalFetch = global.fetch;
   let requestedUrl = "";
