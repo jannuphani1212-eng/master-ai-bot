@@ -1,6 +1,18 @@
 name: Android cloud AAB build
 
 on:
+  push:
+    branches:
+      - feature/master-income-command-center
+    paths:
+      - "android-app/**"
+      - ".github/workflows/android-cloud-build.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "android-app/**"
+      - ".github/workflows/android-cloud-build.yml"
   workflow_dispatch:
     inputs:
       project_path:
@@ -43,7 +55,7 @@ jobs:
 
       - name: Validate Android project
         env:
-          PROJECT_PATH: ${{ inputs.project_path }}
+          PROJECT_PATH: ${{ inputs.project_path || 'android-app' }}
         run: |
           set -euo pipefail
           if [[ "$PROJECT_PATH" == *".."* || "$PROJECT_PATH" == /* ]]; then
@@ -76,7 +88,7 @@ jobs:
           chmod 600 "$RUNNER_TEMP/master-ai-release.keystore"
 
       - name: Build debug Android App Bundle
-        if: inputs.variant == 'debug'
+        if: inputs.variant != 'release'
         env:
           PROJECT_PATH: ${{ inputs.project_path }}
         run: |
@@ -111,7 +123,7 @@ jobs:
         id: locate_aab
         env:
           PROJECT_PATH: ${{ inputs.project_path }}
-          BUILD_VARIANT: ${{ inputs.variant }}
+          BUILD_VARIANT: ${{ inputs.variant || 'debug' }}
         run: |
           set -euo pipefail
           AAB="$(find "$PROJECT_PATH" -type f -path "*/outputs/bundle/$BUILD_VARIANT/*.aab" -print -quit)"
@@ -137,7 +149,7 @@ jobs:
       - name: Upload Android App Bundle
         uses: actions/upload-artifact@v4
         with:
-          name: master-ai-android-${{ inputs.variant }}-${{ github.sha }}
+          name: master-ai-android-${{ inputs.variant || 'debug' }}-${{ github.sha }}
           path: |
             ${{ steps.locate_aab.outputs.aab_path }}
             ${{ runner.temp }}/aab-sha256.txt
