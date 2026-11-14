@@ -44,7 +44,6 @@ test("Instagram Business Login requests professional-account and publishing scop
   assert.match(url.searchParams.get("scope"), /instagram_business_basic/);
   assert.match(url.searchParams.get("scope"), /instagram_business_content_publish/);
   assert.doesNotMatch(url.searchParams.get("scope"), /instagram_business_content_publishing/);
-  assert.match(url.searchParams.get("scope"), /instagram_business_content_publishing/);
   assert.ok(url.searchParams.get("state"));
 });
 
