@@ -3,6 +3,7 @@ import "dotenv/config";
 import { GoogleGenAI } from "@google/genai";
 import { fallbackAgentSelection, requestsAllSpecialists } from "./lib/routing.js";
 import { runProviderFallback } from "./lib/provider-fallback.js";
+import { resolveProviderOrder } from "./lib/provider-order.js";
 import { extractCompletionText } from "./lib/completion-text.js";
 import { getMasterInstructions, getSpecialistInstructions } from "./lib/specialist-prompts.js";
 import { reviewSpecialistReport } from "./lib/quality-review.js";
@@ -376,14 +377,10 @@ async function generateAI(task, instructions, maxTokens = 900) {
       call: callGemini
     }
   };
-  const configuredOrder = String(
-    process.env.AI_PROVIDER_ORDER || "groq,openrouter,gemini"
-  ).split(",").map(value => value.trim().toLowerCase()).filter(Boolean);
-  const uniqueOrder = [...new Set(configuredOrder)];
-  const providerOrder = uniqueOrder.filter(id => providerCatalog[id]);
-  for (const id of Object.keys(providerCatalog)) {
-    if (!providerOrder.includes(id)) providerOrder.push(id);
-  }
+  const providerOrder = resolveProviderOrder(
+    process.env.AI_PROVIDER_ORDER,
+    Object.keys(providerCatalog)
+  );
   const providers = providerOrder.map(id => providerCatalog[id]).map(provider => ({
     ...provider,
     available: Boolean(process.env[provider.key]),
