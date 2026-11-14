@@ -8,6 +8,7 @@ import { getMasterInstructions, getSpecialistInstructions } from "./lib/speciali
 import { reviewSpecialistReport } from "./lib/quality-review.js";
 import { createSupabaseApprovalHandlers } from "./lib/supabase-approvals.js";
 import { createOwnerAuthMiddleware } from "./lib/owner-auth.js";
+import { createYoutubeIntegrationHandlers } from "./lib/youtube-integration.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -57,7 +58,8 @@ function limitApiRequests(req, res, next) {
 }
 
 app.use(express.json({ limit: "1mb" }));
-app.use(["/api/task", "/api/brain"], createOwnerAuthMiddleware());
+const requireOwner = createOwnerAuthMiddleware();
+app.use(["/api/task", "/api/brain"], requireOwner);
 app.use(["/api/task", "/api/brain"], limitApiRequests);
 app.use(express.static("public"));
 
@@ -820,6 +822,22 @@ async function runCentralBrain(task) {
     result: finalResult
   };
 }
+
+// =====================================
+// OWNER-ONLY YOUTUBE CHANNEL INTEGRATION
+// =====================================
+
+const youtubeHandlers = createYoutubeIntegrationHandlers();
+
+// OAuth callback is intentionally public, but accepts only a short-lived,
+// HMAC-signed state created after a verified owner session.
+app.get("/api/youtube/oauth/callback", youtubeHandlers.callback);
+app.use("/api/youtube", requireOwner);
+app.get("/api/youtube/connect-url", youtubeHandlers.connectUrl);
+app.get("/api/youtube/status", youtubeHandlers.status);
+app.get("/api/youtube/channel", youtubeHandlers.channel);
+app.get("/api/youtube/videos", youtubeHandlers.videos);
+app.get("/api/youtube/analytics", youtubeHandlers.analytics);
 
 // =====================================
 // HEALTH API
