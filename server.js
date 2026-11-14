@@ -12,6 +12,7 @@ import { createOwnerAuthMiddleware } from "./lib/owner-auth.js";
 import { createYoutubeIntegrationHandlers, getYoutubeAgentContext } from "./lib/youtube-integration.js";
 import { createAffiliateCampaignHandlers } from "./lib/affiliate-campaigns.js";
 import { createInstagramIntegrationHandlers } from "./lib/instagram-integration.js";
+import { createSearchConsoleHandlers } from "./lib/search-console-integration.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -892,6 +893,18 @@ app.use("/api/instagram", requireOwner);
 app.use("/api/instagram", limitApiRequests);
 app.get("/api/instagram/connect-url", instagramHandlers.connectUrl);
 app.get("/api/instagram/status", instagramHandlers.status);
+
+// =====================================
+// GOOGLE SEARCH CONSOLE — READ ONLY
+// =====================================
+
+const searchConsoleHandlers = createSearchConsoleHandlers();
+app.get("/api/seo/search-console/oauth/callback", limitApiRequests, searchConsoleHandlers.callback);
+app.use("/api/seo/search-console", requireOwner);
+app.use("/api/seo/search-console", limitApiRequests);
+app.get("/api/seo/search-console/connect-url", searchConsoleHandlers.connectUrl);
+app.get("/api/seo/search-console/sites", searchConsoleHandlers.sites);
+app.post("/api/seo/search-console/query", searchConsoleHandlers.query);
 
 // =====================================
 // HEALTH API
