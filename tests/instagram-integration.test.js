@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createCipheriv } from "node:crypto";
 import { createInstagramIntegrationHandlers } from "../lib/instagram-integration.js";
 
 const ownerId = "11111111-2222-4333-8444-555555555555";
@@ -10,6 +11,43 @@ const env = {
   INSTAGRAM_TOKEN_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
   SUPABASE_URL: "https://supabase.example.test",
   SUPABASE_SERVICE_ROLE_KEY: "test-service-role-key"
+};
+
+function encryptedInstagramToken(token) {
+  const key = Buffer.from(env.INSTAGRAM_TOKEN_ENCRYPTION_KEY, "hex");
+  const iv = Buffer.alloc(12, 3);
+  const cipher = createCipheriv("aes-256-gcm", key, iv);
+  const encrypted = Buffer.concat([cipher.update(token, "utf8"), cipher.final()]);
+  return [iv, cipher.getAuthTag(), encrypted].map(part => part.toString("base64url")).join(".");
+}
+
+const igConnection = {
+  owner_user_id: ownerId,
+  ig_user_id: "178400001",
+  username: "affiliate.brand",
+  account_type: "BUSINESS",
+  access_token_ciphertext: encryptedInstagramToken("long-lived-token"),
+  expires_at: new Date(Date.now() + 40 * 86400000).toISOString(),
+  updated_at: new Date().toISOString()
+};
+
+const approvalRequest = {
+  id: "approval-1111",
+  owner_id: ownerId,
+  created_by: ownerId,
+  action_type: "instagram_reel_publish",
+  status: "approved",
+  payload: {
+    platform: "instagram",
+    mediaType: "REELS",
+    igUserId: "178400001",
+    username: "affiliate.brand",
+    videoUrl: "https://cdn.example.test/reel.mp4",
+    caption: "Sample Reel caption #affiliate",
+    shareToFeed: true,
+    affiliateDisclosureConfirmed: true,
+    mediaRightsConfirmed: true
+  }
 };
 
 function response(status, body) {
@@ -152,6 +190,210 @@ test("Instagram status is owner-scoped and returns account metadata only", async
     assert.equal(res.body.accounts[0].username, "affiliate.brand");
     assert.equal(res.body.accounts[0].accountType, "CREATOR");
     assert.equal(res.body.accounts[0].access_token, undefined);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+
+test("Instagram Reel approval request stores exact content without publishing", async () => {
+  const originalFetch = global.fetch;
+  let savedApproval;
+  global.fetch = async (url, options = {}) => {
+    const target = String(url);
+    if (target.startsWith("https://supabase.example.test/rest/v1/instagram_connections?")) {
+      return response(200, [igConnection]);
+    }
+    if (target === "https://supabase.example.test/rest/v1/approval_requests") {
+      savedApproval = JSON.parse(options.body);
+      return response(201, [{
+        id: "approval-new",
+        status: "pending",
+        title: savedApproval.title,
+        ...savedApproval
+      }]);
+    }
+    throw new Error("Unexpected request: " + target);
+  };
+  try {
+    const handlers = createInstagramIntegrationHandlers({ env });
+    const res = mockRes();
+    await handlers.createPublishRequest({
+      ownerUser: { id: ownerId },
+      body: {
+        igUserId: "178400001",
+        videoUrl: "https://cdn.example.test/reel.mp4",
+        caption: "Review this Reel #affiliate",
+        shareToFeed: true,
+        affiliateDisclosureConfirmed: true,
+        mediaRightsConfirmed: true
+      }
+    }, res);
+    assert.equal(res.statusCode, 201);
+    assert.equal(savedApproval.owner_id, ownerId);
+    assert.equal(savedApproval.created_by, ownerId);
+    assert.equal(savedApproval.action_type, "instagram_reel_publish");
+    assert.equal(savedApproval.payload.videoUrl, "https://cdn.example.test/reel.mp4");
+    assert.equal(savedApproval.payload.caption, "Review this Reel #affiliate");
+    assert.equal(res.body.approvalRequest.status, "pending");
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test("Instagram Reel approval request requires affiliate disclosure and media rights confirmation", async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async () => { throw new Error("Storage must not be called"); };
+  try {
+    const handlers = createInstagramIntegrationHandlers({ env });
+    const res = mockRes();
+    await handlers.createPublishRequest({
+      ownerUser: { id: ownerId },
+      body: {
+        igUserId: "178400001",
+        videoUrl: "https://cdn.example.test/reel.mp4",
+        caption: "Caption without required confirmation"
+      }
+    }, res);
+    assert.equal(res.statusCode, 400);
+    assert.match(res.body.error, /affiliate disclosure/);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test("Instagram Reel preparation requires exact owner approval and creates one container", async () => {
+  const originalFetch = global.fetch;
+  const calls = [];
+  const job = {
+    id: "job-1111",
+    approval_request_id: "approval-1111",
+    owner_user_id: ownerId,
+    ig_user_id: "178400001",
+    video_url: "https://cdn.example.test/reel.mp4",
+    caption: "Sample Reel caption #affiliate",
+    share_to_feed: true,
+    status: "preparing"
+  };
+  global.fetch = async (url, options = {}) => {
+    const target = String(url);
+    calls.push({ target, method: options.method || "GET" });
+    if (target.startsWith("https://supabase.example.test/rest/v1/approval_requests?")) {
+      return response(200, [approvalRequest]);
+    }
+    if (target.startsWith("https://supabase.example.test/rest/v1/instagram_publish_jobs?")) {
+      return response(200, []);
+    }
+    if (target.startsWith("https://supabase.example.test/rest/v1/instagram_connections?")) {
+      return response(200, [igConnection]);
+    }
+    if (target === "https://supabase.example.test/rest/v1/instagram_publish_jobs" && options.method === "POST") {
+      return response(201, [job]);
+    }
+    if (target === "https://graph.instagram.com/v27.0/178400001/media" && options.method === "POST") {
+      return response(200, { id: "container-123" });
+    }
+    if (target.startsWith("https://supabase.example.test/rest/v1/instagram_publish_jobs?") && options.method === "PATCH") {
+      return response(200, [{ ...job, container_id: "container-123", status: "processing" }]);
+    }
+    throw new Error("Unexpected request: " + target + " " + (options.method || "GET"));
+  };
+  try {
+    const handlers = createInstagramIntegrationHandlers({ env });
+    const res = mockRes();
+    await handlers.prepareApprovedReel({
+      ownerUser: { id: ownerId },
+      params: { id: "approval-1111" }
+    }, res);
+    assert.equal(res.statusCode, 201);
+    assert.equal(res.body.publishJob.status, "processing");
+    assert.equal(res.body.publishJob.container_id, "container-123");
+    assert.equal(calls.filter(call => call.target.endsWith("/media")).length, 1);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test("Instagram Reel publishing refuses to publish before container is ready", async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async url => {
+    const target = String(url);
+    if (target.startsWith("https://supabase.example.test/rest/v1/approval_requests?")) {
+      return response(200, [approvalRequest]);
+    }
+    if (target.startsWith("https://supabase.example.test/rest/v1/instagram_publish_jobs?")) {
+      return response(200, [{
+        id: "job-1111",
+        approval_request_id: "approval-1111",
+        status: "processing",
+        container_id: "container-123"
+      }]);
+    }
+    throw new Error("Instagram publish API must not be called before readiness.");
+  };
+  try {
+    const handlers = createInstagramIntegrationHandlers({ env });
+    const res = mockRes();
+    await handlers.publishApprovedReel({
+      ownerUser: { id: ownerId },
+      params: { id: "approval-1111" }
+    }, res);
+    assert.equal(res.statusCode, 409);
+    assert.match(res.body.error, /not ready/);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test("Instagram Reel publication occurs only after owner approval and ready status", async () => {
+  const originalFetch = global.fetch;
+  const methods = [];
+  global.fetch = async (url, options = {}) => {
+    const target = String(url);
+    methods.push({ target, method: options.method || "GET" });
+    if (target.startsWith("https://supabase.example.test/rest/v1/approval_requests?")) {
+      return response(200, [approvalRequest]);
+    }
+    if (target.startsWith("https://supabase.example.test/rest/v1/instagram_publish_jobs?") && !options.method) {
+      return response(200, [{
+        id: "job-1111",
+        approval_request_id: "approval-1111",
+        owner_user_id: ownerId,
+        ig_user_id: "178400001",
+        container_id: "container-123",
+        status: "ready"
+      }]);
+    }
+    if (target.startsWith("https://supabase.example.test/rest/v1/instagram_publish_jobs?") && options.method === "PATCH") {
+      const patch = JSON.parse(options.body);
+      return response(200, [{
+        id: "job-1111",
+        approval_request_id: "approval-1111",
+        owner_user_id: ownerId,
+        ig_user_id: "178400001",
+        container_id: "container-123",
+        status: patch.status,
+        media_id: patch.media_id
+      }]);
+    }
+    if (target.startsWith("https://supabase.example.test/rest/v1/instagram_connections?")) {
+      return response(200, [igConnection]);
+    }
+    if (target === "https://graph.instagram.com/v27.0/178400001/media_publish" && options.method === "POST") {
+      return response(200, { id: "published-media-123" });
+    }
+    throw new Error("Unexpected request: " + target + " " + (options.method || "GET"));
+  };
+  try {
+    const handlers = createInstagramIntegrationHandlers({ env });
+    const res = mockRes();
+    await handlers.publishApprovedReel({
+      ownerUser: { id: ownerId },
+      params: { id: "approval-1111" }
+    }, res);
+    assert.equal(res.body.success, true);
+    assert.equal(res.body.mediaId, "published-media-123");
+    assert.ok(methods.some(call => call.target.endsWith("/media_publish")));
   } finally {
     global.fetch = originalFetch;
   }
