@@ -143,14 +143,15 @@ test("task endpoint rejects an unknown specialist with HTTP 400", async () => {
 });
 
 
-test("approval config endpoint does not expose private owner settings when unconfigured", async () => {
+test("approval config returns public sign-in settings without exposing owner identity", async () => {
   const response = await fetch(`${baseUrl}/api/approvals/config`);
   const data = await response.json();
 
-  assert.equal(response.status, 503);
-  assert.equal(data.success, false);
-  assert.equal(data.supabaseUrl, undefined);
-  assert.equal(data.anonKey, undefined);
+  assert.equal(response.status, 200);
+  assert.equal(data.success, true);
+  assert.equal(data.supabaseUrl, authUrl);
+  assert.equal(data.anonKey, "public-anon-key");
+  assert.equal(data.ownerUserId, undefined);
 });
 
 
