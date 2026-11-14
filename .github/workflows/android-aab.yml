@@ -1,0 +1,104 @@
+name: Android AAB cloud build
+
+on:
+  workflow_dispatch:
+    inputs:
+      project_dir:
+        description: "Folder containing gradlew and the Android Gradle project"
+        required: true
+        default: "android"
+        type: string
+      gradle_task:
+        description: "Gradle task (bundleDebug for a test AAB; bundleRelease only after project signing is configured)"
+        required: true
+        default: "bundleDebug"
+        type: choice
+        options:
+          - bundleDebug
+          - bundleRelease
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-aab-${{ github.ref }}-${{ inputs.project_dir }}
+  cancel-in-progress: false
+
+jobs:
+  build-aab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Validate Android project path
+        env:
+          PROJECT_DIR: ${{ inputs.project_dir }}
+        run: |
+          set -euo pipefail
+          if [[ "$PROJECT_DIR" == /* || "$PROJECT_DIR" == *".."* || ! "$PROJECT_DIR" =~ ^[A-Za-z0-9_./-]+$ ]]; then
+            echo "::error::project_dir must be a safe repository-relative path."
+            exit 1
+          fi
+          if [[ ! -f "$PROJECT_DIR/gradlew" ]]; then
+            echo "::error::No Gradle wrapper found at $PROJECT_DIR/gradlew."
+            exit 1
+          fi
+          if [[ ! -f "$PROJECT_DIR/gradle/wrapper/gradle-wrapper.properties" ]]; then
+            echo "::error::Gradle wrapper properties are missing."
+            exit 1
+          fi
+          chmod +x "$PROJECT_DIR/gradlew"
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Build Android App Bundle
+        working-directory: ${{ inputs.project_dir }}
+        env:
+          GRADLE_TASK: ${{ inputs.gradle_task }}
+        run: |
+          set -euo pipefail
+          ./gradlew --no-daemon --stacktrace "$GRADLE_TASK"
+
+      - name: Collect AAB artifacts
+        id: collect
+        env:
+          PROJECT_DIR: ${{ inputs.project_dir }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/aab-artifacts"
+          find "$PROJECT_DIR" -type f -path "*/build/outputs/bundle/*/*.aab" -print -exec cp {} "$RUNNER_TEMP/aab-artifacts/" \;
+          if ! compgen -G "$RUNNER_TEMP/aab-artifacts/*.aab" > /dev/null; then
+            echo "::error::Gradle completed but no AAB artifact was found."
+            exit 1
+          fi
+          sha256sum "$RUNNER_TEMP/aab-artifacts"/*.aab | tee "$RUNNER_TEMP/aab-artifacts/SHA256SUMS.txt"
+          echo "artifact_dir=$RUNNER_TEMP/aab-artifacts" >> "$GITHUB_OUTPUT"
+
+      - name: Upload AAB and checksum
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-aab-${{ github.run_number }}
+          path: ${{ steps.collect.outputs.artifact_dir }}/*
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Build summary
+        if: always()
+        run: |
+          {
+            echo "## Android AAB build"
+            echo "- Source commit: $GITHUB_SHA"
+            echo "- Requested task: ${{ inputs.gradle_task }}"
+            echo "- Project directory: ${{ inputs.project_dir }}"
+            echo "- Result: ${{ job.status }}"
+            echo "- Play Console upload/publishing is not performed."
+          } >> "$GITHUB_STEP_SUMMARY"
