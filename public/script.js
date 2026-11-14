@@ -362,6 +362,7 @@ approvalLoginForm.addEventListener("submit", async (event) => {
     await loadAffiliateCampaigns();
     await loadCommissionData();
     await loadInstagramStatus();
+    await loadSearchConsoleSites();
     await loadYoutubeStatus();
   } catch (error) {
     approvalAccessToken = "";
@@ -416,6 +417,7 @@ approvalLogoutButton.addEventListener("click", () => {
   resetAffiliatePanel("Sign in as the owner to view affiliate campaigns.");
   resetCommissionPanel("Sign in as the owner to import commission reports.");
   resetInstagramPanel("Sign in as the owner to connect an Instagram professional account.");
+  resetSearchConsolePanel("Sign in as the owner to connect Google Search Console.");
   setApprovalMessage("Signed out. Your session token has been cleared from this page.");
 });
 
@@ -764,6 +766,174 @@ if (instagramResult === "connected") {
   instagramStatus.textContent = "Instagram could not complete authorization. Check the Meta app settings, redirect URI and permissions.";
 }
 
+
+// GOOGLE SEARCH CONSOLE — READ-ONLY SEO REPORTS
+const searchConsoleConnectButton = document.getElementById("searchConsoleConnectButton");
+const searchConsoleRefreshButton = document.getElementById("searchConsoleRefreshButton");
+const searchConsoleStatus = document.getElementById("searchConsoleStatus");
+const searchConsoleSiteSelect = document.getElementById("searchConsoleSite");
+const searchConsoleQueryForm = document.getElementById("searchConsoleQueryForm");
+const searchConsoleStartDate = document.getElementById("searchConsoleStartDate");
+const searchConsoleEndDate = document.getElementById("searchConsoleEndDate");
+const searchConsoleDimension = document.getElementById("searchConsoleDimension");
+const searchConsoleRowLimit = document.getElementById("searchConsoleRowLimit");
+const searchConsoleQueryButton = document.getElementById("searchConsoleQueryButton");
+const searchConsoleReport = document.getElementById("searchConsoleReport");
+
+function resetSearchConsolePanel(message) {
+  searchConsoleStatus.textContent = message;
+  searchConsoleSiteSelect.replaceChildren();
+  const option = document.createElement("option");
+  option.value = "";
+  option.textContent = "Connect Google Search Console first";
+  searchConsoleSiteSelect.appendChild(option);
+  searchConsoleReport.textContent = "Connect Search Console and choose a property to view its search performance.";
+}
+
+async function searchConsoleApi(path, options = {}) {
+  if (!approvalAccessToken) throw new Error("Sign in with the owner account first.");
+  const response = await fetch(path, {
+    ...options,
+    cache: "no-store",
+    headers: {
+      ...(options.headers || {}),
+      Authorization: "Bearer " + approvalAccessToken,
+      ...(options.body ? { "Content-Type": "application/json" } : {})
+    }
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || "Search Console request failed.");
+  return data;
+}
+
+async function loadSearchConsoleSites() {
+  if (!approvalAccessToken) {
+    resetSearchConsolePanel("Sign in as the owner to connect Google Search Console.");
+    return;
+  }
+  searchConsoleStatus.textContent = "Loading Search Console accounts and properties...";
+  try {
+    const data = await searchConsoleApi("/api/seo/search-console/sites");
+    searchConsoleSiteSelect.replaceChildren();
+    let optionCount = 0;
+    (data.accounts || []).forEach(account => {
+      (account.sites || []).forEach(site => {
+        if (!site.siteUrl || site.permissionLevel === "siteUnverifiedUser") return;
+        const option = document.createElement("option");
+        option.value = String(optionCount++);
+        option.dataset.siteUrl = site.siteUrl;
+        option.dataset.googleEmail = account.googleEmail;
+        option.textContent = site.siteUrl + " · " + account.googleEmail;
+        searchConsoleSiteSelect.appendChild(option);
+      });
+    });
+    if (!optionCount) {
+      const option = document.createElement("option");
+      option.value = "";
+      option.textContent = "No accessible Search Console properties found";
+      searchConsoleSiteSelect.appendChild(option);
+      const needsReconnect = (data.accounts || []).some(account => account.reconnectRequired);
+      searchConsoleStatus.textContent = needsReconnect
+        ? "A Google connection needs reconnecting. Reconnect the account and refresh."
+        : "Google account connected, but no readable Search Console properties were returned.";
+      return;
+    }
+    searchConsoleStatus.textContent = optionCount + " accessible Search Console property/properties found. Reports are read-only and use finalized data.";
+  } catch (error) {
+    searchConsoleStatus.textContent = error.message;
+  }
+}
+
+searchConsoleConnectButton.addEventListener("click", async () => {
+  searchConsoleConnectButton.disabled = true;
+  searchConsoleStatus.textContent = "Preparing Google Search Console authorization...";
+  try {
+    const data = await searchConsoleApi("/api/seo/search-console/connect-url");
+    window.location.assign(data.authorizationUrl);
+  } catch (error) {
+    searchConsoleStatus.textContent = error.message;
+    searchConsoleConnectButton.disabled = false;
+  }
+});
+searchConsoleRefreshButton.addEventListener("click", loadSearchConsoleSites);
+
+searchConsoleQueryForm.addEventListener("submit", async event => {
+  event.preventDefault();
+  const selected = searchConsoleSiteSelect.selectedOptions[0];
+  if (!selected?.dataset.siteUrl || !selected.dataset.googleEmail) {
+    searchConsoleStatus.textContent = "Choose an accessible Search Console property first.";
+    return;
+  }
+  searchConsoleQueryButton.disabled = true;
+  searchConsoleQueryButton.textContent = "Loading report...";
+  searchConsoleReport.textContent = "Querying finalized Search Console data...";
+  try {
+    const data = await searchConsoleApi("/api/seo/search-console/query", {
+      method: "POST",
+      body: JSON.stringify({
+        siteUrl: selected.dataset.siteUrl,
+        googleEmail: selected.dataset.googleEmail,
+        startDate: searchConsoleStartDate.value,
+        endDate: searchConsoleEndDate.value,
+        dimension: searchConsoleDimension.value,
+        rowLimit: Number(searchConsoleRowLimit.value)
+      })
+    });
+    searchConsoleReport.replaceChildren();
+    addText(searchConsoleReport, "p", data.siteUrl + " · " + data.startDate + " to " + data.endDate, "muted");
+    addText(searchConsoleReport, "p", "Google Search Console rows are limited to the top results and may not include every query or page.", "muted");
+    const rows = Array.isArray(data.rows) ? data.rows : [];
+    if (!rows.length) {
+      addText(searchConsoleReport, "p", "No Search Console rows were returned for this date range and dimension.", "muted");
+    } else {
+      const table = document.createElement("table");
+      const head = document.createElement("thead");
+      const headerRow = document.createElement("tr");
+      [data.dimension, "Clicks", "Impressions", "CTR", "Average position"].forEach(label => {
+        const th = document.createElement("th");
+        th.textContent = label;
+        headerRow.appendChild(th);
+      });
+      head.appendChild(headerRow);
+      table.appendChild(head);
+      const body = document.createElement("tbody");
+      rows.forEach(row => {
+        const tr = document.createElement("tr");
+        const values = [
+          Array.isArray(row.keys) ? row.keys.join(" · ") : "",
+          Number(row.clicks || 0).toLocaleString(),
+          Number(row.impressions || 0).toLocaleString(),
+          (Number(row.ctr || 0) * 100).toFixed(2) + "%",
+          Number(row.position || 0).toFixed(2)
+        ];
+        values.forEach(value => {
+          const td = document.createElement("td");
+          td.textContent = value;
+          tr.appendChild(td);
+        });
+        body.appendChild(tr);
+      });
+      table.appendChild(body);
+      searchConsoleReport.appendChild(table);
+    }
+    searchConsoleStatus.textContent = rows.length + " Search Console row(s) returned. These are actual Google Search Console values, not forecasts.";
+  } catch (error) {
+    searchConsoleStatus.textContent = error.message;
+    searchConsoleReport.textContent = "The report could not be loaded.";
+  } finally {
+    searchConsoleQueryButton.disabled = false;
+    searchConsoleQueryButton.textContent = "Run SEO performance report";
+  }
+});
+
+const searchConsoleResult = new URLSearchParams(window.location.search).get("searchConsole");
+if (searchConsoleResult === "connected") {
+  searchConsoleStatus.textContent = "Google authorization succeeded. Sign in as the owner to load your Search Console properties.";
+} else if (searchConsoleResult === "reauthorize") {
+  searchConsoleStatus.textContent = "Google did not return a refresh token. Reconnect and approve offline access.";
+} else if (searchConsoleResult === "error") {
+  searchConsoleStatus.textContent = "Search Console authorization failed. Check the Google API project, OAuth redirect URI and Search Console API access.";
+}
 
 // GLOBAL RHYMES 4U YOUTUBE CONNECTION
 const youtubeConnectButton = document.getElementById("youtubeConnectButton");
