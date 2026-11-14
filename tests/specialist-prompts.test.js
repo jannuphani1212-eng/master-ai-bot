@@ -39,7 +39,7 @@ test("affiliate specialist supports the separate Telugu and English short-form s
   assert.match(prompt, /YouTube Shorts and Instagram Reels/);
   assert.match(prompt, /above 5%/);
   assert.match(prompt, /Never invent product URLs, prices, discounts, ratings, review counts, stock, commission rates/);
-  assert.match(prompt, /separate from Global Rhymes 4U/);
+  assert.match(prompt, /distinct from Global Rhymes 4U/);
 });
 
 test("unknown specialist IDs are rejected", () => {
