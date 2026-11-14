@@ -152,3 +152,24 @@ test("approval config endpoint does not expose private owner settings when uncon
   assert.equal(data.supabaseUrl, undefined);
   assert.equal(data.anonKey, undefined);
 });
+
+
+test("YouTube channel endpoints require the signed-in owner", async () => {
+  const response = await fetch(`${baseUrl}/api/youtube/status`);
+  const data = await response.json();
+
+  assert.equal(response.status, 401);
+  assert.equal(data.success, false);
+});
+
+test("YouTube status reports missing private configuration without exposing secrets", async () => {
+  const response = await fetch(`${baseUrl}/api/youtube/status`, {
+    headers: { authorization: "Bearer test-owner-token" }
+  });
+  const data = await response.json();
+
+  assert.equal(response.status, 503);
+  assert.equal(data.success, false);
+  assert.equal(data.channel, undefined);
+  assert.equal(data.refresh_token, undefined);
+});
