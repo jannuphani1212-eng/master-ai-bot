@@ -786,11 +786,12 @@ async function runCentralBrain(task) {
 app.get("/api/approvals/config", (req, res) => {
   const supabaseUrl = String(process.env.SUPABASE_URL || "").trim().replace(/\/+$/, "");
   const anonKey = String(process.env.SUPABASE_ANON_KEY || "").trim();
+  const ownerUserId = String(process.env.SUPABASE_OWNER_USER_ID || "").trim();
 
-  if (!supabaseUrl || !anonKey) {
+  if (!supabaseUrl || !anonKey || !ownerUserId) {
     return res.status(503).json({
       success: false,
-      error: "Approval sign-in is not configured yet. Add the Supabase URL and anon key in Render."
+      error: "Approval sign-in is not configured yet. Add the Supabase URL, anon key, and owner user ID in Render."
     });
   }
 
