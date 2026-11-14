@@ -31,7 +31,7 @@
 - `GEMINI_API_KEY`
 - `GROQ_API_KEY`
 - `OPENROUTER_API_KEY`
-- `AI_PROVIDER_ORDER` (recommended: `groq,openrouter,gemini`)
+- `AI_PROVIDER_ORDER` (recommended: `gemini,groq,openrouter`)
 - Optional model overrides: `GEMINI_MODEL`, `GROQ_MODEL`, `OPENROUTER_MODEL`
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
