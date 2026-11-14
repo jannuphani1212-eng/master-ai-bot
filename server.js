@@ -876,6 +876,9 @@ app.get("/api/affiliate/campaigns", affiliateHandlers.list);
 app.post("/api/affiliate/campaigns", affiliateHandlers.generate);
 app.post("/api/affiliate/campaigns/:id/approve", affiliateHandlers.approve);
 app.get("/api/affiliate/campaigns/:id/clicks", affiliateHandlers.clicks);
+app.get("/api/affiliate/commissions", affiliateHandlers.listCommissions);
+app.post("/api/affiliate/commissions/import", affiliateHandlers.importCommissions);
+app.post("/api/affiliate/commissions/:id/verify", affiliateHandlers.verifyCommission);
 
 // =====================================
 // INSTAGRAM PROFESSIONAL ACCOUNT LINK
