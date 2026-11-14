@@ -32,6 +32,8 @@ jobs:
         run: node --check lib/affiliate-campaigns.js
       - name: Validate Instagram integration syntax
         run: node --check lib/instagram-integration.js
+      - name: Validate Search Console integration syntax
+        run: node --check lib/search-console-integration.js
       - name: Run unit and integration tests
         run: npm test
       - name: Validate package.json
