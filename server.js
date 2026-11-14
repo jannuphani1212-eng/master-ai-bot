@@ -943,7 +943,7 @@ app.get("/api/status", (req, res) => {
       groq: process.env.GROQ_MODEL || "openai/gpt-oss-20b",
       openrouter: process.env.OPENROUTER_MODEL || "openrouter/free"
     },
-    providerOrder: ["Gemini", "Groq", "OpenRouter"],
+    providerOrder: resolveProviderOrder(process.env.AI_PROVIDER_ORDER, ["groq", "openrouter", "gemini"]).map(id => ({ groq: "Groq", openrouter: "OpenRouter", gemini: "Gemini" })[id]),
     approvalPolicy: "Proposal only: external actions require explicit user approval.",
     supabaseApprovalStorage: {
       configured: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY && process.env.SUPABASE_OWNER_USER_ID),
