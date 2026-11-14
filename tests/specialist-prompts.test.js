@@ -44,6 +44,12 @@ test("affiliate specialist supports the separate Telugu and English short-form s
   assert.match(prompt, /distinct from Global Rhymes 4U/);
 });
 
+test("SEO specialist uses only actual Search Console evidence", () => {
+  const prompt = getSpecialistInstructions("seo");
+  assert.match(prompt, /exact property and date range/);
+  assert.match(prompt, /do not extrapolate missing rows/);
+});
+
 test("unknown specialist IDs are rejected", () => {
   assert.throws(
     () => getSpecialistInstructions("unknown"),
