@@ -360,6 +360,7 @@ approvalLoginForm.addEventListener("submit", async (event) => {
     setApprovalMessage("Signed in. Loading your private approval queue...");
     await loadApprovalQueue();
     await loadAffiliateCampaigns();
+    await loadInstagramStatus();
     await loadYoutubeStatus();
   } catch (error) {
     approvalAccessToken = "";
@@ -412,6 +413,7 @@ approvalLogoutButton.addEventListener("click", () => {
   approvalList.textContent = "Sign in to view the owner queue.";
   resetYoutubePanel("Sign in as the owner to check the YouTube connection.");
   resetAffiliatePanel("Sign in as the owner to view affiliate campaigns.");
+  resetInstagramPanel("Sign in as the owner to connect an Instagram professional account.");
   setApprovalMessage("Signed out. Your session token has been cleared from this page.");
 });
 
@@ -573,6 +575,82 @@ affiliateForm.addEventListener("submit", async event => {
     affiliateGenerateButton.textContent = "Generate Telugu + English video drafts";
   }
 });
+
+
+// INSTAGRAM PROFESSIONAL ACCOUNT CONNECTION
+const instagramConnectButton = document.getElementById("instagramConnectButton");
+const instagramRefreshButton = document.getElementById("instagramRefreshButton");
+const instagramStatus = document.getElementById("instagramStatus");
+const instagramAccounts = document.getElementById("instagramAccounts");
+
+function resetInstagramPanel(message) {
+  instagramStatus.textContent = message;
+  instagramAccounts.textContent = "No Instagram account loaded.";
+}
+
+async function instagramApi(path) {
+  if (!approvalAccessToken) throw new Error("Sign in with the owner account first.");
+  const response = await fetch(path, {
+    cache: "no-store",
+    headers: { Authorization: "Bearer " + approvalAccessToken }
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || "Instagram request failed.");
+  return data;
+}
+
+async function loadInstagramStatus() {
+  if (!approvalAccessToken) {
+    resetInstagramPanel("Sign in as the owner to connect an Instagram professional account.");
+    return;
+  }
+  instagramStatus.textContent = "Checking Instagram account connections...";
+  try {
+    const data = await instagramApi("/api/instagram/status");
+    instagramAccounts.replaceChildren();
+    const accounts = Array.isArray(data.accounts) ? data.accounts : [];
+    if (!accounts.length) {
+      instagramAccounts.textContent = "No Instagram account connected yet. Connect the separate affiliate Business or Creator account.";
+      instagramStatus.textContent = "Instagram is not connected.";
+      return;
+    }
+    accounts.forEach(account => {
+      const card = document.createElement("article");
+      card.className = "approval-card";
+      addText(card, "h4", account.username ? "@" + account.username : "Instagram account");
+      addText(card, "p", "Account type: " + (account.accountType || "Unknown"), "muted");
+      addText(card, "p", account.reconnectRequired
+        ? "Reconnect required to refresh this account's access."
+        : "Token expiry: " + new Date(account.expiresAt).toLocaleString(), "muted");
+      instagramAccounts.appendChild(card);
+    });
+    instagramStatus.textContent = accounts.length + " Instagram account connection(s) found. Reels publishing remains disabled until the publishing workflow is separately approved and tested.";
+  } catch (error) {
+    instagramStatus.textContent = error.message;
+  }
+}
+
+instagramConnectButton.addEventListener("click", async () => {
+  instagramConnectButton.disabled = true;
+  instagramStatus.textContent = "Preparing Instagram Business Login...";
+  try {
+    const data = await instagramApi("/api/instagram/connect-url");
+    window.location.assign(data.authorizationUrl);
+  } catch (error) {
+    instagramStatus.textContent = error.message;
+    instagramConnectButton.disabled = false;
+  }
+});
+instagramRefreshButton.addEventListener("click", loadInstagramStatus);
+
+const instagramResult = new URLSearchParams(window.location.search).get("instagram");
+if (instagramResult === "connected") {
+  instagramStatus.textContent = "Instagram authorization succeeded. Sign in as the owner to load the connected account.";
+} else if (instagramResult === "professional-required") {
+  instagramStatus.textContent = "This Instagram account is personal. Switch it to a Business or Creator professional account, then connect again.";
+} else if (instagramResult === "error") {
+  instagramStatus.textContent = "Instagram could not complete authorization. Check the Meta app settings, redirect URI and permissions.";
+}
 
 
 // GLOBAL RHYMES 4U YOUTUBE CONNECTION
