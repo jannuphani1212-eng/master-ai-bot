@@ -6,6 +6,8 @@ The following tables are created in the Master AI Bot Supabase project:
 
 - `youtube_channel_connections`
 - `instagram_connections`
+- `instagram_publish_jobs`
+- `search_console_connections`
 - `affiliate_campaigns`
 - `affiliate_click_events`
 - `affiliate_commissions`
