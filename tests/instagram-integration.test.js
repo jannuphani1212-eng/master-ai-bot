@@ -42,7 +42,7 @@ const approvalRequest = {
     mediaType: "REELS",
     igUserId: "178400001",
     username: "affiliate.brand",
-    videoUrl: "https://cdn.example.test/reel.mp4",
+    videoUrl: "https://cdn.example.com/reel.mp4",
     caption: "Sample Reel caption #affiliate",
     shareToFeed: true,
     affiliateDisclosureConfirmed: true,
@@ -222,7 +222,7 @@ test("Instagram Reel approval request stores exact content without publishing", 
       ownerUser: { id: ownerId },
       body: {
         igUserId: "178400001",
-        videoUrl: "https://cdn.example.test/reel.mp4",
+        videoUrl: "https://cdn.example.com/reel.mp4",
         caption: "Review this Reel #affiliate",
         shareToFeed: true,
         affiliateDisclosureConfirmed: true,
@@ -233,7 +233,7 @@ test("Instagram Reel approval request stores exact content without publishing", 
     assert.equal(savedApproval.owner_id, ownerId);
     assert.equal(savedApproval.created_by, ownerId);
     assert.equal(savedApproval.action_type, "instagram_reel_publish");
-    assert.equal(savedApproval.payload.videoUrl, "https://cdn.example.test/reel.mp4");
+    assert.equal(savedApproval.payload.videoUrl, "https://cdn.example.com/reel.mp4");
     assert.equal(savedApproval.payload.caption, "Review this Reel #affiliate");
     assert.equal(res.body.approvalRequest.status, "pending");
   } finally {
@@ -251,7 +251,7 @@ test("Instagram Reel approval request requires affiliate disclosure and media ri
       ownerUser: { id: ownerId },
       body: {
         igUserId: "178400001",
-        videoUrl: "https://cdn.example.test/reel.mp4",
+        videoUrl: "https://cdn.example.com/reel.mp4",
         caption: "Caption without required confirmation"
       }
     }, res);
@@ -270,7 +270,7 @@ test("Instagram Reel preparation requires exact owner approval and creates one c
     approval_request_id: "approval-1111",
     owner_user_id: ownerId,
     ig_user_id: "178400001",
-    video_url: "https://cdn.example.test/reel.mp4",
+    video_url: "https://cdn.example.com/reel.mp4",
     caption: "Sample Reel caption #affiliate",
     share_to_feed: true,
     status: "preparing"
@@ -414,7 +414,7 @@ test("Instagram publishing quota prevents preparing a Reel when the 24-hour limi
     approval_request_id: "approval-1111",
     owner_user_id: ownerId,
     ig_user_id: "178400001",
-    video_url: "https://cdn.example.test/reel.mp4",
+    video_url: "https://cdn.example.com/reel.mp4",
     caption: "Sample Reel caption #affiliate",
     share_to_feed: true,
     status: "preparing"
