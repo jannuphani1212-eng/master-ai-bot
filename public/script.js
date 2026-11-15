@@ -236,7 +236,7 @@ taskForm.addEventListener("submit", async (event) => {
 });
 
 refreshButton.addEventListener("click", loadSystemStatus);
-connectionStatus.addEventListener("click",()=>diagnosticsDialog.showModal());
+connectionStatus.addEventListener("click",()=>{if(!approvalAccessToken){ownerLoginDialog.showModal();return;}diagnosticsDialog.showModal();});
 document.getElementById("closeDiagnosticsDialog").addEventListener("click",()=>diagnosticsDialog.close());
 ownerSignInButton.addEventListener("click",()=>{if(approvalAccessToken){approvalPanel.scrollIntoView({behavior:"smooth"});return;}ownerLoginDialog.showModal();});
 document.getElementById("closeLoginDialog").addEventListener("click",()=>ownerLoginDialog.close());
