@@ -55,7 +55,8 @@ async function loadSystemStatus() {
       `Agents available: ${Array.isArray(data.agents) ? data.agents.length : 0}`,
       "Provider order: " + (data.providerOrder || ["Gemini", "Groq", "OpenRouter"]).join(" → "),
       ...providerLines,
-      "Approval policy: " + (data.approvalPolicy || "Review outputs before external actions.")
+      "Approval policy: " + (data.approvalPolicy || "Review outputs before external actions."),
+      "Approval database configuration: " + (data.supabaseApprovalStorage?.configured ? "Configured; table access is checked after owner sign-in." : "Missing Supabase environment settings.")
     ].join("\n");
 
     displayAgents(Array.isArray(data.agents) ? data.agents : []);
@@ -72,7 +73,7 @@ function displayAgents(agents) {
   agentList.replaceChildren();
   const team=[["master","Master AI Brain","Plans, delegates and combines reports.","✦","ORCHESTRATOR"],["youtube","YouTube","Video ideas, channel strategy and growth.","▶","VIDEO"],["app-development","App Development","App architecture and implementation plans.","▣","PRODUCT & CODE"],["affiliate","Affiliate Marketing","Product research and conversion strategy.","↗","REVENUE"],["blogging","Blogging","Articles and editorial planning.","✎","CONTENT"],["seo","SEO","Keywords and search strategy.","⌕","DISCOVERY"]];
   const byId=new Map(agents.map(agent=>[agent.id,agent]));
-  team.forEach(([id,name,role,icon,tag])=>{const source=byId.get(id)||{};const card=document.createElement("article");card.className="agent-card"+(id==="master"?" master-agent":"");addText(card,"span",icon,"agent-icon");const body=document.createElement("div");addText(body,"h3",source.name||name);addText(body,"p",source.role||role);addText(body,"span",tag,"agent-role");card.appendChild(body);addText(card,"span","● Ready","agent-state");agentList.appendChild(card);});
+  team.forEach(([id,name,role,icon,tag])=>{const source=byId.get(id)||{};const card=document.createElement("article");card.className="agent-card"+(id==="master"?" master-agent":"");addText(card,"span",icon,"agent-icon");const body=document.createElement("div");addText(body,"h3",source.name||name);addText(body,"p",source.role||role);addText(body,"span",tag,"agent-role");card.appendChild(body);addText(card,"span","● Configured","agent-state");agentList.appendChild(card);});
 }
 
 function displayTaskResult(data, selectedAgent) {
