@@ -1,117 +1,29 @@
-<!DOCTYPE html><html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#101827">
-  <meta name="description" content="Master AI Bot dashboard for managing five specialist AI bots.">
-  <title>Master AI Bot</title>
-  <link rel="stylesheet" href="/style.css">
-</head>
-<body>
-  <header class="topbar">
-    <div>
-      <h1>🤖 Master AI Bot</h1>
-      <p>One controller. Five specialist bots.</p>
-    </div>
-    <span id="connectionStatus" class="status">Checking...</span>
-  </header>  <main class="container">
-    <section class="welcome">
-      <h2>Your AI Command Center</h2>
-      <p>Describe what you want to accomplish. Your Master AI Bot will help plan the work and coordinate the specialist bots.</p>
-    </section><section class="panel">
-  <h2>Give Your Bot a Task</h2>
-  <form id="taskForm">
-    <label for="taskInput">What would you like to create or accomplish?</label>
-    <textarea id="taskInput" rows="4" placeholder="Example: Help me plan and build an Android expense-tracking app." required></textarea>
-
-    <label for="agentSelect">Choose an agent</label>
-    <select id="agentSelect">
-      <option value="master">Master AI Bot — Coordinate my task</option>
-      <option value="affiliate">Affiliate Marketing Bot</option>
-      <option value="youtube">YouTube Bot</option>
-      <option value="blogging">Blogging Bot</option>
-      <option value="app-development">App Development Bot</option>
-      <option value="seo">SEO Bot</option>
-    </select>
-
-    <button type="submit" id="submitButton">Prepare My Task</button>
-  </form>
-  <div id="taskResult" class="result" aria-live="polite">
-    Your task results will appear here.
-  </div>
-</section>
-
-<section class="panel">
-  <h2>Meet Your Six AI Agents</h2>
-  <p class="muted">All five specialist bots are connected to the Master AI Brain. Choose one specialist or let the Master coordinate the work.</p>
-  <div id="agentList" class="agent-grid">
-    <p>Loading agents...</p>
-  </div>
-</section>
-
-<section class="panel" id="approvalPanel">
-  <h2>Owner Approval Center</h2>
-  <p class="muted">Sign in with your Supabase owner account to review proposals. Approval records do not publish, spend, send, delete or deploy anything automatically.</p>
-  <form id="approvalLoginForm" class="approval-form">
-    <label for="approvalEmail">Owner email</label>
-    <input id="approvalEmail" type="email" autocomplete="username" required>
-    <label for="approvalPassword">Password</label>
-    <input id="approvalPassword" type="password" autocomplete="current-password" required>
-    <button type="submit" id="approvalLoginButton">Sign in securely</button>
-  </form>
-  <p id="approvalMessage" class="muted" aria-live="polite">Approval storage setup may be required in Supabase and Render.</p>
-  <div id="approvalWorkspace" hidden>
-    <div class="approval-toolbar">
-      <strong id="approvalOwnerLabel">Owner session active</strong>
-      <button type="button" id="approvalLogoutButton" class="secondary">Sign out</button>
-      <button type="button" id="approvalRefreshButton" class="secondary">Refresh queue</button>
-    </div>
-    <h3>Create an approval proposal</h3>
-    <form id="approvalCreateForm" class="approval-form">
-      <label for="approvalTitle">Proposal title</label>
-      <input id="approvalTitle" maxlength="200" required placeholder="Example: Publish the reviewed YouTube video">
-      <label for="approvalActionType">Action category</label>
-      <select id="approvalActionType">
-        <option value="publish">Publish content</option>
-        <option value="send">Send a message</option>
-        <option value="purchase">Purchase</option>
-        <option value="spend">Spend money</option>
-        <option value="delete">Delete data</option>
-        <option value="account_change">Account change</option>
-        <option value="deploy">Deploy code</option>
-        <option value="other">Other</option>
-      </select>
-      <label for="approvalPayload">Details (JSON object)</label>
-      <textarea id="approvalPayload" rows="4">{}</textarea>
-      <button type="submit" id="approvalCreateButton">Save proposal for review</button>
-    </form>
-    <h3>Approval queue</h3>
-    <div id="approvalList" class="approval-list" aria-live="polite">No proposals loaded.</div>
-  </div>
-</section>
-
-<section class="panel" id="youtubePanel">
-  <h2>Global Rhymes 4U — YouTube Channel</h2>
-  <p class="muted">Connect the dedicated Global Rhymes 4U Google account. Channel data is read-only in this first integration; the bot cannot publish or change videos.</p>
-  <div class="approval-toolbar">
-    <button type="button" id="youtubeConnectButton">Connect YouTube channel</button>
-    <button type="button" id="youtubeRefreshButton" class="secondary">Refresh channel data</button>
-  </div>
-  <p id="youtubeStatus" class="muted" aria-live="polite">Sign in as the owner to check the YouTube connection.</p>
-  <div id="youtubeChannel" class="youtube-channel" hidden></div>
-  <h3 id="youtubeVideosHeading" hidden>Recent videos</h3>
-  <div id="youtubeVideos" class="youtube-video-grid"></div>
-  <h3 id="youtubeAnalyticsHeading" hidden>Last 28 days analytics</h3>
-  <div id="youtubeAnalytics" class="youtube-analytics"></div>
-</section>
-
-<section class="panel">
-  <h2>System Status</h2>
-  <button type="button" id="refreshButton" class="secondary">Refresh Status</button>
-  <pre id="systemStatus">Checking backend...</pre>
-</section>
-
-  </main>  <footer>
-    <p>Master AI Bot · Built step by step</p>
-  </footer>  <script src="/script.js" defer></script></body>
-</html>
+<!doctype html>
+<html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#0B0F19">
+<meta name="description" content="Master AI Bot — one orchestrator coordinating five specialist AI bots for content, apps, affiliate marketing and SEO.">
+<meta property="og:type" content="website"><meta property="og:title" content="Master AI Bot | AI Command Center"><meta property="og:description" content="One Master Orchestrator + five specialist bots. Plan, coordinate and review AI work in one command center."><meta property="og:url" content="https://master-ai-bot-iskj.onrender.com/">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230B0F19'/%3E%3Ctext x='50' y='67' text-anchor='middle' font-size='58'%3E🤖%3C/text%3E%3C/svg%3E">
+<title>Master AI Bot | AI Command Center</title><link rel="stylesheet" href="/style.css"></head><body>
+<header class="topbar"><a class="brand" href="/" aria-label="Master AI Bot home"><span class="brand-mark">✦</span><span><strong>MASTER AI BOT</strong><small>INTELLIGENT WORKSPACE</small></span></a><div class="header-actions"><button type="button" id="connectionStatus" class="status status-checking" aria-label="Open system diagnostics">● Connecting</button><button type="button" id="ownerSignInButton" class="secondary sign-in-trigger">Owner sign in</button></div></header>
+<main class="container">
+<section class="welcome"><div class="eyebrow">YOUR PERSONAL AI OPERATING SYSTEM</div><h1>One brain. <span>Five specialists.</span><br>Infinite ways to build.</h1><p>Give your Master AI Brain a goal. It plans the work, routes tasks to the right specialists and brings their results together for your review.</p><div class="hero-meta"><span>✦ 1 Master Orchestrator</span><span>✦ 5 Specialist Bots</span><span>✦ Owner-controlled actions</span></div></section>
+<section class="panel task-panel"><div class="section-heading"><div><div class="eyebrow">START WITH A GOAL</div><h2>Give Your Bot a Task</h2></div><span class="private-note">Sign-in required to run</span></div>
+<form id="taskForm"><label for="taskInput">What would you like to create or accomplish?</label><textarea id="taskInput" rows="4" placeholder="Example: Create a 30-day content plan for my YouTube channel..." required></textarea>
+<div class="prompt-chips" aria-label="Quick task templates">
+<button type="button" class="prompt-chip" data-prompt="Draft 5 engaging video ideas for my Global Rhymes 4U YouTube channel, with titles and audience hooks.">🎬 Global Rhymes video ideas</button>
+<button type="button" class="prompt-chip" data-prompt="Research relevant trending keywords and build an SEO content plan for my niche.">⌕ Research trending keywords</button>
+<button type="button" class="prompt-chip" data-prompt="Generate a clear Android app feature specification with user flows and an MVP roadmap.">▣ Generate app feature spec</button>
+<button type="button" class="prompt-chip" data-prompt="Create a beginner-friendly affiliate marketing campaign plan for India with content ideas and tracking metrics.">↗ Affiliate campaign plan</button></div>
+<div class="task-controls"><div class="agent-select-wrap"><label for="agentSelect">Work mode</label><select id="agentSelect"><option value="master">Master AI Brain — coordinate relevant specialists</option><option value="affiliate">Affiliate Marketing Specialist</option><option value="youtube">YouTube Specialist</option><option value="blogging">Blogging Specialist</option><option value="app-development">App Development Specialist</option><option value="seo">SEO Specialist</option></select></div><button type="submit" id="submitButton" class="primary-button">Prepare my task <span>→</span></button></div></form>
+<div id="taskFeed" class="task-feed" aria-live="polite" hidden></div><div id="taskResult" class="result" aria-live="polite">Your task results will appear here after you sign in.</div></section>
+<section class="panel agents-panel"><div class="eyebrow">THE TEAM</div><h2>1 Master Orchestrator + 5 Specialist Bots</h2><p class="muted">The Master AI Brain coordinates the specialist team. Each specialist focuses on a dedicated workstream.</p><div id="agentList" class="agent-grid"><article class="agent-card skeleton"><div class="skeleton-line short"></div><div class="skeleton-line"></div><div class="skeleton-pill"></div></article><article class="agent-card skeleton"><div class="skeleton-line short"></div><div class="skeleton-line"></div><div class="skeleton-pill"></div></article><article class="agent-card skeleton"><div class="skeleton-line short"></div><div class="skeleton-line"></div><div class="skeleton-pill"></div></article><article class="agent-card skeleton"><div class="skeleton-line short"></div><div class="skeleton-line"></div><div class="skeleton-pill"></div></article><article class="agent-card skeleton"><div class="skeleton-line short"></div><div class="skeleton-line"></div><div class="skeleton-pill"></div></article></div><p id="wakeMessage" class="wake-message">Waking up Master AI Brain (this can take a little while after inactivity)…</p></section>
+<section class="panel private-panel" id="approvalPanel" hidden><div class="eyebrow">OWNER WORKSPACE</div><h2>Owner Approval Center</h2><p class="muted">Review proposals before any external action. Approval records do not publish, spend, send, delete or deploy anything automatically.</p><p id="approvalMessage" class="muted" aria-live="polite">Checking approval configuration…</p><div id="approvalWorkspace" hidden>
+<div class="approval-toolbar"><strong id="approvalOwnerLabel">Owner session active</strong><button type="button" id="approvalLogoutButton" class="secondary">Sign out</button><button type="button" id="approvalRefreshButton" class="secondary">Refresh queue</button></div>
+<h3>Create an approval proposal</h3><form id="approvalCreateForm" class="approval-form"><label for="approvalTitle">Proposal title</label><input id="approvalTitle" maxlength="200" required placeholder="Example: Publish the reviewed YouTube video"><label for="approvalActionType">Action category</label><select id="approvalActionType"><option value="publish">Publish content</option><option value="send">Send a message</option><option value="purchase">Purchase</option><option value="spend">Spend money</option><option value="delete">Delete data</option><option value="account_change">Account change</option><option value="deploy">Deploy code</option><option value="other">Other</option></select><label for="approvalPayload">Details (JSON object)</label><textarea id="approvalPayload" rows="4">{}</textarea><button type="submit" id="approvalCreateButton" class="primary-button">Save proposal for review</button></form>
+<h3>Approval queue</h3><div id="approvalList" class="approval-list" aria-live="polite">No proposals loaded.</div></div></section>
+<section class="panel private-panel" id="youtubePanel" hidden><div class="eyebrow">CONNECTED ACCOUNT</div><h2>Global Rhymes 4U — YouTube</h2><p class="muted">Channel information and analytics are read-only. The bot cannot publish or modify videos.</p><div class="approval-toolbar"><button type="button" id="youtubeConnectButton" class="primary-button">Connect YouTube channel</button><button type="button" id="youtubeRefreshButton" class="secondary">Refresh channel data</button></div><p id="youtubeStatus" class="muted" aria-live="polite">Sign in as owner to check the connection.</p><div id="youtubeChannel" class="youtube-channel" hidden></div><h3 id="youtubeVideosHeading" hidden>Recent videos</h3><div id="youtubeVideos" class="youtube-video-grid"></div><h3 id="youtubeAnalyticsHeading" hidden>Last 28 days analytics</h3><div id="youtubeAnalytics" class="youtube-analytics"></div></section>
+</main><footer>MASTER AI BOT <span>·</span> You stay in control of every external action.</footer>
+<dialog id="ownerLoginDialog" class="modal"><div class="modal-head"><div><div class="eyebrow">RESTRICTED ACCESS</div><h2>Owner sign in</h2></div><button type="button" id="closeLoginDialog" class="icon-button" aria-label="Close">×</button></div><p class="muted">Sign in with your Supabase owner account to open private controls, approvals and connected account data.</p><form id="approvalLoginForm" class="approval-form"><label for="approvalEmail">Owner email</label><input id="approvalEmail" type="email" autocomplete="username" required><label for="approvalPassword">Password</label><input id="approvalPassword" type="password" autocomplete="current-password" required><button type="submit" id="approvalLoginButton" class="primary-button">Sign in securely</button></form></dialog>
+<dialog id="diagnosticsDialog" class="modal diagnostics-modal"><div class="modal-head"><div><div class="eyebrow">LIVE TELEMETRY</div><h2>System diagnostics</h2></div><button type="button" id="closeDiagnosticsDialog" class="icon-button" aria-label="Close">×</button></div><p class="muted">Technical status from the running backend. Provider availability does not guarantee quota or successful completion.</p><pre id="systemStatus">Connecting to backend…</pre><button type="button" id="refreshButton" class="secondary">Refresh diagnostics</button></dialog><div id="toast" class="toast" role="status" aria-live="polite"></div>
+<script src="/script.js" defer></script></body></html>
