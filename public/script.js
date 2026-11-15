@@ -214,9 +214,12 @@ loadSystemStatus();
 
 
 // OWNER APPROVAL CENTER
-// The access token stays in memory only and is cleared when the page is refreshed.
+// Keep only the Supabase refresh token between page loads. A fresh access token
+// is requested from Supabase when the dashboard opens; passwords are never stored.
 let approvalAccessToken = "";
+let approvalRefreshToken = "";
 let approvalConfig = null;
+const APPROVAL_SESSION_KEY = "masterAiBot.ownerRefreshToken";
 
 const approvalLoginForm = document.getElementById("approvalLoginForm");
 const approvalEmail = document.getElementById("approvalEmail");
@@ -246,6 +249,68 @@ async function getApprovalConfig() {
   return approvalConfig;
 }
 
+function saveApprovalRefreshToken(token) {
+  approvalRefreshToken = token || "";
+  try {
+    if (approvalRefreshToken) {
+      localStorage.setItem(APPROVAL_SESSION_KEY, approvalRefreshToken);
+    } else {
+      localStorage.removeItem(APPROVAL_SESSION_KEY);
+    }
+  } catch {
+    setApprovalMessage("Browser storage is unavailable. You may need to sign in again after refreshing.", true);
+  }
+}
+
+function clearApprovalSession() {
+  approvalAccessToken = "";
+  saveApprovalRefreshToken("");
+}
+
+async function refreshApprovalSession() {
+  if (!approvalRefreshToken) return false;
+  const config = await getApprovalConfig();
+  const response = await fetch(config.supabaseUrl + "/auth/v1/token?grant_type=refresh_token", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: config.anonKey
+    },
+    body: JSON.stringify({ refresh_token: approvalRefreshToken })
+  });
+  const session = await response.json().catch(() => ({}));
+  if (!response.ok || !session.access_token || !session.refresh_token) {
+    clearApprovalSession();
+    return false;
+  }
+  approvalAccessToken = session.access_token;
+  saveApprovalRefreshToken(session.refresh_token);
+  return true;
+}
+
+async function restoreApprovalSession() {
+  try {
+    const storedToken = localStorage.getItem(APPROVAL_SESSION_KEY);
+    if (!storedToken) return;
+    approvalRefreshToken = storedToken;
+    setApprovalMessage("Restoring your secure owner session...");
+    const restored = await refreshApprovalSession();
+    if (!restored) {
+      approvalLoginForm.hidden = false;
+      approvalWorkspace.hidden = true;
+      setApprovalMessage("Your saved sign-in has expired. Please sign in again.", true);
+      return;
+    }
+    approvalLoginForm.hidden = true;
+    approvalWorkspace.hidden = false;
+    setApprovalMessage("Owner session restored. Loading your approval queue...");
+    await loadApprovalQueue();
+    await loadYoutubeStatus();
+  } catch (error) {
+    setApprovalMessage("Could not restore your owner session: " + error.message, true);
+  }
+}
+
 async function approvalApi(path, options = {}) {
   const response = await fetch(path, {
     ...options,
@@ -270,7 +335,7 @@ async function loadApprovalQueue() {
   } catch (error) {
     approvalList.textContent = error.message;
     if (/session|sign-in|authorised/i.test(error.message)) {
-      approvalAccessToken = "";
+      clearApprovalSession();
       approvalWorkspace.hidden = true;
       approvalLoginForm.hidden = false;
     }
@@ -354,13 +419,14 @@ approvalLoginForm.addEventListener("submit", async (event) => {
       throw new Error(session.msg || session.message || session.error_description || "Sign-in failed. Check the owner email and password.");
     }
     approvalAccessToken = session.access_token;
+    saveApprovalRefreshToken(session.refresh_token);
     approvalPassword.value = "";
     approvalLoginForm.hidden = true;
     approvalWorkspace.hidden = false;
     setApprovalMessage("Signed in. Loading your private approval queue...");
     await loadApprovalQueue();
   } catch (error) {
-    approvalAccessToken = "";
+    clearApprovalSession();
     setApprovalMessage(error.message, true);
   } finally {
     approvalLoginButton.disabled = false;
@@ -404,7 +470,7 @@ approvalCreateForm.addEventListener("submit", async (event) => {
 });
 
 approvalLogoutButton.addEventListener("click", () => {
-  approvalAccessToken = "";
+  clearApprovalSession();
   approvalWorkspace.hidden = true;
   approvalLoginForm.hidden = false;
   approvalList.textContent = "Sign in to view the owner queue.";
@@ -579,3 +645,7 @@ if (youtubeResult === "connected") {
 } else if (youtubeResult === "error") {
   youtubeStatus.textContent = "Google could not complete the connection. Check the Google Cloud OAuth setup and try again.";
 }
+
+// Restore the owner session after a page refresh without asking for the password again.
+restoreApprovalSession();
+
