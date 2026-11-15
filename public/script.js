@@ -193,7 +193,8 @@ taskForm.addEventListener("submit", async (event) => {
 
   try {
     if (!approvalAccessToken) {
-      throw new Error("Please sign in with the owner account in the Owner Approval Center before submitting AI tasks.");
+      ownerLoginDialog.showModal();
+      throw new Error("Please sign in with your owner account before running a task.");
     }
 
     const response = await fetch("/api/task", {
@@ -219,7 +220,7 @@ taskForm.addEventListener("submit", async (event) => {
     taskResult.textContent =
       "Task not completed.\n\n" +
       error.message +
-      "\n\nCheck backend status and configured AI providers.";
+      "\n\nOpen Owner sign in to authorize a task, then try again.";
   } finally {
     submitButton.disabled = false;
     submitButton.textContent = "Prepare My Task";
@@ -260,6 +261,11 @@ const approvalRefreshButton = document.getElementById("approvalRefreshButton");
 function setApprovalMessage(message, isError = false) {
   approvalMessage.textContent = message;
   approvalMessage.className = isError ? "warning-text" : "muted";
+  const loginFeedback = document.getElementById("loginFeedback");
+  if (loginFeedback) {
+    loginFeedback.textContent = message;
+    loginFeedback.className = isError ? "warning-text" : "muted";
+  }
 }
 
 async function getApprovalConfig() {
@@ -362,6 +368,7 @@ async function loadApprovalQueue() {
       clearApprovalSession();
       approvalWorkspace.hidden = true;
       approvalLoginForm.hidden = false;
+      setPrivatePanelsVisible(false);
     }
     setApprovalMessage(error.message, true);
   }
@@ -378,7 +385,8 @@ function renderApprovalQueue(items) {
     const card = document.createElement("article");
     card.className = "approval-card";
     addText(card, "h4", item.title || "Untitled proposal");
-    addText(card, "p", "Category: " + (item.action_type || "other") + " · Status: " + (item.status || "unknown"));
+    addText(card, "p", "Agent: " + (item.payload?.agentName || item.payload?.agent || "Not specified") + " · Action: " + (item.action_type || "other") + " · Status: " + (item.status || "unknown"));
+    addText(card, "p", "Estimated cost / impact: " + (item.payload?.estimatedCost ?? item.payload?.estimatedImpact ?? "Not provided"));
     addText(card, "p", "Created: " + (item.created_at ? new Date(item.created_at).toLocaleString() : "Not available"));
     const details = document.createElement("pre");
     details.textContent = JSON.stringify(item.payload || {}, null, 2);
@@ -390,12 +398,12 @@ function renderApprovalQueue(items) {
       actions.className = "approval-actions";
       const approve = document.createElement("button");
       approve.type = "button";
-      approve.textContent = "Approve proposal";
+      approve.textContent = "Approve";
       approve.addEventListener("click", () => decideApproval(item.id, "approved"));
       const reject = document.createElement("button");
       reject.type = "button";
       reject.className = "secondary";
-      reject.textContent = "Reject proposal";
+      reject.textContent = "Reject";
       reject.addEventListener("click", () => decideApproval(item.id, "rejected"));
       actions.append(approve, reject);
       card.appendChild(actions);
