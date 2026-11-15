@@ -215,7 +215,14 @@ taskForm.addEventListener("submit", async (event) => {
       throw new Error(data.error || "The task could not be completed.");
     }
 
-    addFeedStep("Specialist response received. Preparing your report.",true);
+    if (Array.isArray(data.specialistResults) && data.specialistResults.length) {
+      data.specialistResults.forEach(item => {
+        addFeedStep((item.success ? "Completed: " : "Needs attention: ") + (item.name || item.agentId) + (item.provider ? " · " + item.provider : ""), Boolean(item.success));
+      });
+      addFeedStep("Master Brain is assembling the combined report.", true);
+    } else {
+      addFeedStep("Response received from " + (data.agent || agentId) + (data.provider ? " · " + data.provider : ""), true);
+    }
     displayTaskResult(data, agentId);
   } catch (error) {
     taskResult.textContent =
