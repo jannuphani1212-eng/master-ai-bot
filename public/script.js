@@ -7,6 +7,17 @@ const agentSelect = document.getElementById("agentSelect");
 const taskResult = document.getElementById("taskResult");
 const submitButton = document.getElementById("submitButton");
 const refreshButton = document.getElementById("refreshButton");
+const diagnosticsDialog = document.getElementById("diagnosticsDialog");
+const ownerLoginDialog = document.getElementById("ownerLoginDialog");
+const ownerSignInButton = document.getElementById("ownerSignInButton");
+const toastElement = document.getElementById("toast");
+const wakeMessage = document.getElementById("wakeMessage");
+const taskFeed = document.getElementById("taskFeed");
+const approvalPanel = document.getElementById("approvalPanel");
+const youtubePanel = document.getElementById("youtubePanel");
+function showToast(message){toastElement.textContent=message;toastElement.classList.add("show");setTimeout(()=>toastElement.classList.remove("show"),2600);}
+function setPrivatePanelsVisible(visible){approvalPanel.hidden=!visible;youtubePanel.hidden=!visible;ownerSignInButton.textContent=visible?"Owner workspace":"Owner sign in";}
+function addFeedStep(message,done=false){const row=document.createElement("div");row.className="feed-step"+(done?" done":"");const dot=document.createElement("span");dot.className="feed-dot";const label=document.createElement("span");label.textContent=message;row.append(dot,label);taskFeed.appendChild(row);}
 
 function addText(parent, tag, text, className) {
   const element = document.createElement(tag);
@@ -17,8 +28,9 @@ function addText(parent, tag, text, className) {
 }
 
 async function loadSystemStatus() {
-  connectionStatus.textContent = "Connecting...";
-  systemStatus.textContent = "Checking backend...";
+  connectionStatus.textContent = "● Waking up";
+  connectionStatus.className = "status status-checking";
+  systemStatus.textContent = "Waking up Master AI Brain…";
 
   try {
     const response = await fetch("/api/status", { cache: "no-store" });
@@ -35,7 +47,9 @@ async function loadSystemStatus() {
       return `${name}: ${state}`;
     });
 
-    connectionStatus.textContent = "● Backend connected";
+    connectionStatus.textContent = "● System Online";
+    connectionStatus.className = "status";
+    wakeMessage.textContent = "Master AI Brain is online. Your specialist team is ready.";
     systemStatus.textContent = [
       data.message || "Backend is running.",
       `Agents available: ${Array.isArray(data.agents) ? data.agents.length : 0}`,
@@ -46,22 +60,19 @@ async function loadSystemStatus() {
 
     displayAgents(Array.isArray(data.agents) ? data.agents : []);
   } catch (error) {
-    connectionStatus.textContent = "● Offline";
-    systemStatus.textContent =
-      "Backend is not reachable. Check the deployment and try again.";
-    agentList.textContent = "Agent information is unavailable.";
+    connectionStatus.textContent = "● Waking up";
+    connectionStatus.className = "status status-offline";
+    wakeMessage.textContent = "The backend is taking longer than usual to wake up. Please wait and retry.";
+    systemStatus.textContent = "Backend is not reachable. Check the deployment and try again.";
+    agentList.innerHTML = '<article class="agent-card skeleton"><div class="skeleton-line short"></div><div class="skeleton-line"></div><div class="skeleton-pill"></div></article>'.repeat(5);
   }
 }
 
 function displayAgents(agents) {
   agentList.replaceChildren();
-  agents.forEach((agent) => {
-    const card = document.createElement("article");
-    card.className = "agent-card";
-    addText(card, "h3", agent.name);
-    addText(card, "p", agent.role);
-    agentList.appendChild(card);
-  });
+  const team=[["master","Master AI Brain","Plans, delegates and combines reports.","✦","ORCHESTRATOR"],["youtube","YouTube","Video ideas, channel strategy and growth.","▶","VIDEO"],["app-development","App Development","App architecture and implementation plans.","▣","PRODUCT & CODE"],["affiliate","Affiliate Marketing","Product research and conversion strategy.","↗","REVENUE"],["blogging","Blogging","Articles and editorial planning.","✎","CONTENT"],["seo","SEO","Keywords and search strategy.","⌕","DISCOVERY"]];
+  const byId=new Map(agents.map(agent=>[agent.id,agent]));
+  team.forEach(([id,name,role,icon,tag])=>{const source=byId.get(id)||{};const card=document.createElement("article");card.className="agent-card"+(id==="master"?" master-agent":"");addText(card,"span",icon,"agent-icon");const body=document.createElement("div");addText(body,"h3",source.name||name);addText(body,"p",source.role||role);addText(body,"span",tag,"agent-role");card.appendChild(body);addText(card,"span","● Ready","agent-state");agentList.appendChild(card);});
 }
 
 function displayTaskResult(data, selectedAgent) {
@@ -172,8 +183,13 @@ taskForm.addEventListener("submit", async (event) => {
   }
 
   submitButton.disabled = true;
-  submitButton.textContent = "Working...";
-  taskResult.textContent = "Sending your task to the AI backend...";
+  submitButton.textContent = "Working…";
+  taskResult.textContent = "";
+  taskFeed.hidden = false;
+  taskFeed.replaceChildren();
+  addFeedStep("Master Brain received your goal");
+  addFeedStep(agentId==="master"?"Planning and routing to specialists…":"Routing to "+agentSelect.options[agentSelect.selectedIndex].text);
+  addFeedStep("Generating proposal with the AI provider…");
 
   try {
     if (!approvalAccessToken) {
@@ -197,6 +213,7 @@ taskForm.addEventListener("submit", async (event) => {
       throw new Error(data.error || "The task could not be completed.");
     }
 
+    addFeedStep("Specialist response received. Preparing your report.",true);
     displayTaskResult(data, agentId);
   } catch (error) {
     taskResult.textContent =
@@ -210,6 +227,11 @@ taskForm.addEventListener("submit", async (event) => {
 });
 
 refreshButton.addEventListener("click", loadSystemStatus);
+connectionStatus.addEventListener("click",()=>diagnosticsDialog.showModal());
+document.getElementById("closeDiagnosticsDialog").addEventListener("click",()=>diagnosticsDialog.close());
+ownerSignInButton.addEventListener("click",()=>{if(approvalAccessToken){approvalPanel.scrollIntoView({behavior:"smooth"});return;}ownerLoginDialog.showModal();});
+document.getElementById("closeLoginDialog").addEventListener("click",()=>ownerLoginDialog.close());
+document.querySelectorAll(".prompt-chip").forEach(button=>button.addEventListener("click",()=>{taskInput.value=button.dataset.prompt||"";taskInput.focus();}));
 loadSystemStatus();
 
 
@@ -303,6 +325,8 @@ async function restoreApprovalSession() {
     }
     approvalLoginForm.hidden = true;
     approvalWorkspace.hidden = false;
+    ownerLoginDialog.close();
+    setPrivatePanelsVisible(true);
     setApprovalMessage("Owner session restored. Loading your approval queue...");
     await loadApprovalQueue();
     await loadYoutubeStatus();
@@ -389,6 +413,7 @@ async function decideApproval(id, status) {
       body: JSON.stringify({ status })
     });
     setApprovalMessage("Decision recorded. No external action was executed.");
+    showToast(status==="approved"?"Approved for record only — no action executed.":"Proposal rejected.");
     await loadApprovalQueue();
     await loadYoutubeStatus();
   } catch (error) {
@@ -423,8 +448,12 @@ approvalLoginForm.addEventListener("submit", async (event) => {
     approvalPassword.value = "";
     approvalLoginForm.hidden = true;
     approvalWorkspace.hidden = false;
+    ownerLoginDialog.close();
+    setPrivatePanelsVisible(true);
     setApprovalMessage("Signed in. Loading your private approval queue...");
+    showToast("Owner session verified.");
     await loadApprovalQueue();
+    await loadYoutubeStatus();
   } catch (error) {
     clearApprovalSession();
     setApprovalMessage(error.message, true);
@@ -473,6 +502,7 @@ approvalLogoutButton.addEventListener("click", () => {
   clearApprovalSession();
   approvalWorkspace.hidden = true;
   approvalLoginForm.hidden = false;
+  setPrivatePanelsVisible(false);
   approvalList.textContent = "Sign in to view the owner queue.";
   resetYoutubePanel("Sign in as the owner to check the YouTube connection.");
   setApprovalMessage("Signed out. Your session token has been cleared from this page.");
@@ -646,6 +676,8 @@ if (youtubeResult === "connected") {
   youtubeStatus.textContent = "Google could not complete the connection. Check the Google Cloud OAuth setup and try again.";
 }
 
-// Restore the owner session after a page refresh without asking for the password again.
+// Private controls stay hidden until Supabase verifies the owner session.
+setPrivatePanelsVisible(false);
+approvalMessage.textContent="Sign in to open owner-only approvals and connected accounts.";
 restoreApprovalSession();
 
