@@ -552,7 +552,27 @@ async function createBrainPlan(task) {
   }
 
   if (validTasks.length === 0) {
-    throw new Error("No suitable specialist selected.");
+    // A planner can return valid JSON but still omit or misspell every agent.
+    // Recover with deterministic routing instead of failing the entire brain.
+    const fallbackIds = fallbackAgentSelection(task, specialistAgents);
+    const fallbackTasks = fallbackIds.map(agentId => ({
+      agentId,
+      task
+    }));
+
+    if (fallbackTasks.length === 0) {
+      throw new Error("No specialist could be selected for this task.");
+    }
+
+    console.warn(
+      "AI planner returned no valid specialists; deterministic routing selected:",
+      fallbackIds.join(", ")
+    );
+
+    return {
+      tasks: fallbackTasks,
+      provider: response.provider + " + deterministic routing"
+    };
   }
 
   return {
