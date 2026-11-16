@@ -81,3 +81,29 @@ test("recognizes the numbered report headings required by specialist prompts", (
   assert.equal(result.status, "passed");
   assert.equal(result.missingSections.length, 0);
 });
+
+
+test("flags numerical business and performance claims for human verification", () => {
+  const report = [
+    "## Executive summary",
+    "Proposed campaign targets 10k subscribers and $200/month.",
+    "## Audience and assumptions",
+    "Assumption: these are planning estimates, not verified results.",
+    "## Research and evidence",
+    "All current figures require verification.",
+    "## Recommended strategy",
+    "Build and test the campaign.",
+    "## Concrete deliverables",
+    "Create a content plan.",
+    "## Measurement and KPIs",
+    "Measure results after launch.",
+    "## Risks and quality checks",
+    "Review all figures before relying on them.",
+    "## Next three actions",
+    "1. Verify. 2. Build. 3. Review."
+  ].join("\\n");
+  const result = reviewSpecialistReport(report);
+  assert.equal(result.status, "needs_review");
+  assert.ok(result.score <= 70);
+  assert.ok(result.warnings.some(item => item.includes("numerical")));
+});
