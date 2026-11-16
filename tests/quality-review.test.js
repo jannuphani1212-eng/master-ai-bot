@@ -107,3 +107,31 @@ test("flags numerical business and performance claims for human verification", (
   assert.ok(result.score <= 70);
   assert.ok(result.warnings.some(item => item.includes("numerical")));
 });
+
+
+test("recognizes bold numbered specialist report headings", () => {
+  const report = [
+    "**1. Executive Summary**",
+    "A clear summary for the intended audience.",
+    "**2. Audience, Goal, and Assumptions**",
+    "Assumption: no analytics were supplied.",
+    "**3. Research and Evidence**",
+    "Current facts require verification.",
+    "**4. Recommended Strategy**",
+    "Build and test the proposed plan.",
+    "**5. Concrete Deliverables**",
+    "Create a draft and checklist.",
+    "**6. Measurement Plan**",
+    "Measure outcomes after launch.",
+    "**7. Risks, Policy Checks, and Quality-Control Steps**",
+    "Review all risks before publishing.",
+    "**8. Next Three Actions**",
+    "1. Research. 2. Draft. 3. Review."
+  ].join("\\n");
+
+  const result = reviewSpecialistReport(report);
+  assert.equal(result.passedSections.length, 8);
+  assert.equal(result.missingSections.length, 0);
+  assert.equal(result.score, 100);
+  assert.equal(result.status, "passed");
+});
