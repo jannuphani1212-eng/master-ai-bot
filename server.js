@@ -484,12 +484,29 @@ async function createBrainPlan(task) {
     .join("\n");
 
   if (requireAllSpecialists) {
+    // Deterministic role-specific assignments prevent five agents from
+    // receiving the same generic prompt and returning overlapping reports.
+    const specialistBriefs = {
+      affiliate: "Create a practical affiliate campaign proposal: define an audience, product-selection criteria, a compliant content funnel, a zero-budget starting route, and what must be verified before recommending any offer. Do not invent commission rates or revenue.",
+      youtube: "Create a YouTube channel growth proposal: define the viewer, content pillars, three differentiated video concepts, one sample hook, retention structure, and copyright/policy checks. Do not invent channel analytics.",
+      blogging: "Create an editorial proposal: choose one focused article idea, define search intent and reader value, provide an H2/H3 outline, internal-link ideas, an original-value angle, and a fact-check plan. Do not invent traffic or keyword metrics.",
+      "app-development": "Create a mobile-first app MVP specification: state the user problem, core features, user flow, recommended low-cost stack, acceptance criteria, security/privacy checks, and test cases. Do not assume a budget or claim code has been built.",
+      seo: "Create an SEO audit and content-discovery proposal: identify what evidence is needed, propose topic clusters and on-page checks, prioritize fixes by impact/effort, and define Search Console measurements. Mark search volumes and rankings as unverified unless supplied."
+    };
+
     return {
       tasks: specialistAgents.map(agent => ({
         agentId: agent.id,
-        task
+        task:
+          "MASTER AI BOT SPECIALIST EVALUATION.\n" +
+          "OWNER'S ORIGINAL GOAL:\n" + task + "\n\n" +
+          "YOUR DISTINCT ASSIGNMENT:\n" + specialistBriefs[agent.id] + "\n\n" +
+          "Return only your own specialist report. Do not describe or score other bots. " +
+          "Do not claim an AI provider/model name, internal test evidence, or a self-awarded quality score. " +
+          "The server attaches provider identity and structural review from execution metadata. " +
+          "No publishing, spending, account changes, or external actions are permitted."
       })),
-      provider: "Fallback selection"
+      provider: "Deterministic specialist assignment"
     };
   }
 
