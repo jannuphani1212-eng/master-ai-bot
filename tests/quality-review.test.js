@@ -101,7 +101,7 @@ test("flags numerical business and performance claims for human verification", (
     "Review all figures before relying on them.",
     "## Next three actions",
     "1. Verify. 2. Build. 3. Review."
-  ].join("\\n");
+  ].join("\n");
   const result = reviewSpecialistReport(report);
   assert.equal(result.status, "needs_review");
   assert.ok(result.score <= 70);
