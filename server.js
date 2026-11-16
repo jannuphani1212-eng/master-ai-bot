@@ -243,7 +243,11 @@ async function callGroq(task, instructions, maxTokens = 900) {
       const details = await response.text();
 
       if (response.status === 429) {
-        setCooldown("groq", getRetrySeconds(details));
+        // Groq TPM exhaustion affects the whole minute window, not just this
+        // one request. Keep Groq out of the remaining specialist calls so
+        // they can use OpenRouter instead of repeatedly hitting the same limit.
+        const tokenLimitHit = /tokens? per minute|\bTPM\b|rate limit reached/i.test(details);
+        setCooldown("groq", tokenLimitHit ? 60 : getRetrySeconds(details));
       }
 
       console.error(
