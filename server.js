@@ -1,6 +1,5 @@
 import express from "express";
 import "dotenv/config";
-import { GoogleGenAI } from "@google/genai";
 import { fallbackAgentSelection, requestsAllSpecialists } from "./lib/routing.js";
 import { runProviderFallback } from "./lib/provider-fallback.js";
 import { extractCompletionText } from "./lib/completion-text.js";
@@ -68,9 +67,9 @@ app.use(express.static("public"));
 // =====================================
 
 const cooldowns = {
-  gemini: 0,
   groq: 0,
-  openrouter: 0
+  openrouter: 0,
+  mistral: 0
 };
 
 function isCoolingDown(provider) {
@@ -154,39 +153,6 @@ const agentInstructions = {
   "app-development": getSpecialistInstructions("app-development"),
   seo: getSpecialistInstructions("seo")
 };
-
-// =====================================
-// GEMINI PROVIDER
-// =====================================
-
-async function callGemini(task, instructions, maxTokens = 900) {
-
-  if (!process.env.GEMINI_API_KEY) {
-    throw new Error("Gemini API key not configured.");
-  }
-
-  const ai = new GoogleGenAI({
-    apiKey: process.env.GEMINI_API_KEY
-  });
-
-  const response = await ai.models.generateContent({
-    model: process.env.GEMINI_MODEL || "gemini-3.8-flash",
-    contents: task,
-    config: {
-      systemInstruction: instructions,
-      maxOutputTokens: maxTokens,
-      temperature: 0.4
-    }
-  });
-
-  const result = response.text;
-
-  if (!result) {
-    throw new Error("Gemini returned no text.");
-  }
-
-  return result;
-}
 
 // =====================================
 // GROQ PROVIDER
@@ -359,29 +325,60 @@ async function callOpenRouter(
 }
 
 // =====================================
+// MISTRAL PROVIDER
+// =====================================
+
+async function callMistral(task, instructions, maxTokens = 900) {
+  if (!process.env.MISTRAL_API_KEY) {
+    throw new Error("Mistral API key not configured.");
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 45000);
+
+  try {
+    const response = await fetch("https://api.mistral.ai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${process.env.MISTRAL_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: process.env.MISTRAL_MODEL || "mistral-small-latest",
+        messages: [
+          { role: "system", content: instructions },
+          { role: "user", content: task }
+        ],
+        temperature: 0.4,
+        max_tokens: maxTokens
+      }),
+      signal: controller.signal
+    });
+
+    if (!response.ok) {
+      const details = await response.text();
+      console.error("Mistral API error:", response.status, details);
+      throw new Error(`Mistral HTTP ${response.status}: ${details}`);
+    }
+
+    const data = await response.json();
+    const result = extractCompletionText(data, "Mistral");
+    console.log("Mistral AI response successful.");
+    return result;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// =====================================
 // THREE-PROVIDER AUTOMATIC SWITCHING
 // =====================================
 
 async function generateAI(task, instructions, maxTokens = 900) {
   const providers = [
-    {
-      id: "gemini",
-      name: "Gemini",
-      key: "GEMINI_API_KEY",
-      call: callGemini
-    },
-    {
-      id: "groq",
-      name: "Groq",
-      key: "GROQ_API_KEY",
-      call: callGroq
-    },
-    {
-      id: "openrouter",
-      name: "OpenRouter",
-      key: "OPENROUTER_API_KEY",
-      call: callOpenRouter
-    }
+    { id: "groq", name: "Groq", key: "GROQ_API_KEY", call: callGroq },
+    { id: "openrouter", name: "OpenRouter", key: "OPENROUTER_API_KEY", call: callOpenRouter },
+    { id: "mistral", name: "Mistral", key: "MISTRAL_API_KEY", call: callMistral }
   ].map((provider) => ({
     ...provider,
     available: Boolean(process.env[provider.key]),
@@ -401,13 +398,10 @@ async function generateAI(task, instructions, maxTokens = 900) {
     },
     onFailure(provider, error) {
       console.error(provider.name + " failed:", error.message);
-
-      if (provider.id === "gemini") {
-        if (/429|RESOURCE_EXHAUSTED/i.test(error.message)) {
-          setCooldown("gemini", 3600);
-        } else if (/503|UNAVAILABLE|timeout|fetch failed/i.test(error.message)) {
-          setCooldown("gemini", getRetrySeconds(error.message));
-        }
+      if (/429|rate.?limit|quota/i.test(error.message)) {
+        setCooldown(provider.id, getRetrySeconds(error.message));
+      } else if (/5\d\d|timeout|fetch failed|UNAVAILABLE|ECONNRESET/i.test(error.message)) {
+        setCooldown(provider.id, 30);
       }
     }
   });
@@ -666,7 +660,7 @@ async function runCentralBrain(task, ownerUserId) {
         agentInstructions[item.agentId] +
         "Avoid stating or guessing the name of the AI model or provider. " +
         "The server adds verified provider information separately. " +
-        "Never label your report as GPT-4, Gemini, or another model unless " +
+        "Never label your report with an AI model name unless " +
         "the user explicitly asks for a comparison of models. " +
         "Use the required professional report format from your role instructions. " +
         "Prioritise important findings and actionable recommendations. " +
@@ -935,12 +929,6 @@ app.get("/api/status", (req, res) => {
   }
 
   const providers = {
-    gemini: {
-      configured: Boolean(process.env.GEMINI_API_KEY),
-      coolingDown: isCoolingDown("gemini"),
-      cooldownRemainingSeconds: remaining("gemini")
-    },
-
     groq: {
       configured: Boolean(process.env.GROQ_API_KEY),
       coolingDown: isCoolingDown("groq"),
@@ -951,6 +939,11 @@ app.get("/api/status", (req, res) => {
       configured: Boolean(process.env.OPENROUTER_API_KEY),
       coolingDown: isCoolingDown("openrouter"),
       cooldownRemainingSeconds: remaining("openrouter")
+    },
+    mistral: {
+      configured: Boolean(process.env.MISTRAL_API_KEY),
+      coolingDown: isCoolingDown("mistral"),
+      cooldownRemainingSeconds: remaining("mistral")
     }
   };
 
@@ -960,11 +953,11 @@ app.get("/api/status", (req, res) => {
     centralBrain: true,
     providers,
     models: {
-      gemini: process.env.GEMINI_MODEL || "gemini-3.8-flash",
       groq: process.env.GROQ_MODEL || "openai/gpt-oss-20b",
-      openrouter: process.env.OPENROUTER_MODEL || "openrouter/free"
+      openrouter: process.env.OPENROUTER_MODEL || "openrouter/free",
+      mistral: process.env.MISTRAL_MODEL || "mistral-small-latest"
     },
-    providerOrder: ["Gemini", "Groq", "OpenRouter"],
+    providerOrder: ["Groq", "OpenRouter", "Mistral"],
     approvalPolicy: "Proposal only: external actions require explicit user approval.",
     supabaseApprovalStorage: {
       configured: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY && process.env.SUPABASE_OWNER_USER_ID),
@@ -1021,9 +1014,9 @@ app.post("/api/brain", async (req, res) => {
   }
 
   if (
-    !process.env.GEMINI_API_KEY &&
     !process.env.GROQ_API_KEY &&
-    !process.env.OPENROUTER_API_KEY
+    !process.env.OPENROUTER_API_KEY &&
+    !process.env.MISTRAL_API_KEY
   ) {
 
     return res.status(503).json({
@@ -1100,7 +1093,6 @@ app.post("/api/task", async (req, res) => {
   }
 
   if (
-    !process.env.GEMINI_API_KEY &&
     !process.env.GROQ_API_KEY &&
     !process.env.OPENROUTER_API_KEY
   ) {
@@ -1108,7 +1100,7 @@ app.post("/api/task", async (req, res) => {
     return res.status(500).json({
   success: false,
   error: "No AI provider API key configured.",
-  message: "Please configure GEMINI_API_KEY, GROQ_API_KEY or OPENROUTER_API_KEY."
+  message: "Please configure GROQ_API_KEY, OPENROUTER_API_KEY or MISTRAL_API_KEY."
 });
   }
   try {

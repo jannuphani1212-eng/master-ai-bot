@@ -15,11 +15,11 @@ A mobile-friendly AI command center with one Master AI Brain and five specialist
 
 The backend tries providers in this order:
 
-1. Gemini
-2. Groq
-3. OpenRouter
+1. Groq
+2. OpenRouter
+3. Mistral
 
-Configure keys only as server-side environment variables. Optional model overrides are GEMINI_MODEL, GROQ_MODEL, and OPENROUTER_MODEL.
+Configure keys only as server-side environment variables. Optional model overrides are GROQ_MODEL, OPENROUTER_MODEL, and MISTRAL_MODEL.
 
 The fallback layer skips providers without configured keys or providers currently in cooldown. A successful provider response is required; empty responses count as failures. Cooldowns are process-local and reset when the server restarts.
 
@@ -74,7 +74,7 @@ The dashboard includes an owner sign-in and approval queue. The Supabase anon ke
 See [the five specialist income workflows](docs/income-workflows.md) for the India-first planning steps and approval checkpoints.\n\n## Tests\n
 Run npm test for routing and provider-fallback unit tests. GitHub Actions also checks JavaScript syntax, runs the tests, and validates package.json on the feature branch and pull requests to main.
 
-These tests validate the routing and fallback orchestration logic. They do not prove that live Gemini, Groq, or OpenRouter credentials are valid or that all live provider APIs are available.
+These tests validate the routing and fallback orchestration logic. They do not prove that live Groq, OpenRouter, or Mistral credentials are valid or that all live provider APIs are available.
 
 ## Deployment status
 

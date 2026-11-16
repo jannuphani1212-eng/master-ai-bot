@@ -47,8 +47,8 @@ before(async () => {
     env: {
       ...process.env,
       PORT: String(port),
-      GEMINI_API_KEY: "",
       GROQ_API_KEY: "",
+      MISTRAL_API_KEY: "",
       OPENROUTER_API_KEY: "",
       SUPABASE_URL: authUrl,
       SUPABASE_ANON_KEY: "public-anon-key",
@@ -98,9 +98,10 @@ test("status endpoint reports the Central Brain and five specialists", async () 
     data.agents.filter((agent) => agent.id !== "master").map((agent) => agent.id),
     ["affiliate", "youtube", "blogging", "app-development", "seo"]
   );
-  assert.equal(data.providers.gemini.configured, false);
   assert.equal(data.providers.groq.configured, false);
   assert.equal(data.providers.openrouter.configured, false);
+  assert.equal(data.providers.mistral.configured, false);
+  assert.deepEqual(data.providerOrder, ["Groq", "OpenRouter", "Mistral"]);
 });
 
 test("Central Brain rejects an empty task with HTTP 400", async () => {
