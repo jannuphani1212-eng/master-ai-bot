@@ -46,3 +46,31 @@ test("master instructions require independent quality review and honest reportin
   assert.match(prompt, /Do not blindly trust specialist output/);
   assert.match(prompt, /proposal-only/);
 });
+
+
+test("affiliate prompt uses relevant fashion and watches context and ASCI disclosure", () => {
+  const prompt = getSpecialistInstructions("affiliate");
+  assert.ok(prompt.includes("fashion and watches"));
+  assert.ok(prompt.includes("ASCI"));
+  assert.ok(prompt.includes("unrelated health"));
+});
+
+test("YouTube prompt requires exact-count concepts and Global Rhymes 4U context", () => {
+  const prompt = getSpecialistInstructions("youtube");
+  assert.ok(prompt.includes("exactly that number"));
+  assert.ok(prompt.includes("Global Rhymes 4U"));
+  assert.ok(prompt.includes("scene-by-scene visual direction"));
+  assert.ok(prompt.includes("Made for Kids"));
+});
+
+test("blogging prompt prevents incorrect ASCI spelling and unsupported tax advice", () => {
+  const prompt = getSpecialistInstructions("blogging");
+  assert.ok(prompt.includes("ASCI (Advertising Standards Council of India)"));
+  assert.ok(prompt.includes("specific ITR form"));
+});
+
+test("master checks requested deliverables beyond report structure", () => {
+  const prompt = getMasterInstructions();
+  assert.ok(prompt.includes("requested deliverable counts"));
+  assert.ok(prompt.includes("structurally complete report is not automatically high quality"));
+});
