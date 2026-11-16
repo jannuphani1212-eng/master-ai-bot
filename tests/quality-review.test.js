@@ -127,7 +127,7 @@ test("recognizes bold numbered specialist report headings", () => {
     "Review all risks before publishing.",
     "**8. Next Three Actions**",
     "1. Research. 2. Draft. 3. Review."
-  ].join("\\n");
+  ].join("\n");
 
   const result = reviewSpecialistReport(report);
   assert.equal(result.passedSections.length, 8);
