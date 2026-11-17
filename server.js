@@ -6,6 +6,7 @@ import { runProviderFallback } from "./lib/provider-fallback.js";
 import { extractCompletionText } from "./lib/completion-text.js";
 import { getMasterInstructions, getSpecialistInstructions } from "./lib/specialist-prompts.js";
 import { createSelfHealingMonitor } from "./lib/self-healing.js";
+import { buildAgentReadinessChecks, HEALTH_CHECK_INTERVAL_MS } from "./lib/agent-health-checks.js";
 import { reviewSpecialistReport } from "./lib/quality-review.js";
 import { createSupabaseApprovalHandlers } from "./lib/supabase-approvals.js";
 import { createOwnerAuthMiddleware } from "./lib/owner-auth.js";
@@ -156,6 +157,38 @@ const agentInstructions = {
   "app-development": getSpecialistInstructions("app-development"),
   seo: getSpecialistInstructions("seo")
 };
+
+// Automatic local readiness checks: no AI API calls or quota consumption.
+let healthCheckLastRunAt = null;
+let healthCheckRunning = false;
+
+function runAgentHealthChecks() {
+  if (healthCheckRunning) return;
+  healthCheckRunning = true;
+  try {
+    const providers = [
+      { id: "gemini", configured: Boolean(process.env.GEMINI_API_KEY), coolingDown: isCoolingDown("gemini") },
+      { id: "groq", configured: Boolean(process.env.GROQ_API_KEY), coolingDown: isCoolingDown("groq") },
+      { id: "openrouter", configured: Boolean(process.env.OPENROUTER_API_KEY), coolingDown: isCoolingDown("openrouter") }
+    ];
+    const checks = buildAgentReadinessChecks({ agents, specialistAgents, agentInstructions, providers });
+    for (const check of checks) {
+      selfHealingMonitor.record(check.agentId, { success: check.success, error: check.error || undefined });
+    }
+    healthCheckLastRunAt = new Date().toISOString();
+    console.log("Automatic agent readiness checks completed:", checks.filter(item => item.success).length + "/" + checks.length + " ready.");
+  } catch (error) {
+    console.error("Automatic agent readiness checks failed:", error.message);
+  } finally {
+    healthCheckRunning = false;
+  }
+}
+
+void selfHealingMonitor.ready.then(() => {
+  runAgentHealthChecks();
+  const healthTimer = setInterval(runAgentHealthChecks, HEALTH_CHECK_INTERVAL_MS);
+  if (typeof healthTimer.unref === "function") healthTimer.unref();
+});
 
 // =====================================
 // GEMINI PROVIDER
@@ -957,6 +990,12 @@ app.get("/api/health", (req, res) => {
       degraded: monitor.degraded,
       unknown: monitor.unknown,
       monitoredAgents: monitor.monitoredAgents
+    },
+    healthCheck: {
+      mode: "local_readiness",
+      intervalSeconds: HEALTH_CHECK_INTERVAL_MS / 1000,
+      lastRunAt: healthCheckLastRunAt,
+      checksExternalProviders: false
     }
   });
 
@@ -1009,6 +1048,12 @@ app.get("/api/status", (req, res) => {
     },
     providerOrder: ["Gemini", "Groq", "OpenRouter"],
     specialistHealth: selfHealingMonitor.snapshot(),
+    healthCheck: {
+      mode: "local_readiness",
+      intervalSeconds: HEALTH_CHECK_INTERVAL_MS / 1000,
+      lastRunAt: healthCheckLastRunAt,
+      checksExternalProviders: false
+    },
     approvalPolicy: "Proposal only: external actions require explicit user approval.",
     supabaseApprovalStorage: {
       configured: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY && process.env.SUPABASE_OWNER_USER_ID),
