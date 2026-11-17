@@ -23,7 +23,7 @@ test("reports truncation when a provider reaches its output-token limit", () => 
       }],
       usage: { completion_tokens: 700 }
     }, "Groq"),
-    /Groq returned no usable text \(finish_reason=length.*reasoning_chars=18.*completion_tokens=700/
+    /Groq response was truncated by its output-token limit \(finish_reason=length, partial_chars=0\)/
   );
 });
 
