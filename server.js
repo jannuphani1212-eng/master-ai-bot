@@ -175,7 +175,8 @@ async function callGemini(task, instructions, maxTokens = 900) {
     config: {
       systemInstruction: instructions,
       maxOutputTokens: maxTokens,
-      temperature: 0.4
+      temperature: 0.4,
+      httpOptions: { timeout: 45000 }
     }
   });
 
