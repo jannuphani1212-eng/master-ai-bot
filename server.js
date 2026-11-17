@@ -6,6 +6,7 @@ import { runProviderFallback } from "./lib/provider-fallback.js";
 import { extractCompletionText } from "./lib/completion-text.js";
 import { getMasterInstructions, getSpecialistInstructions } from "./lib/specialist-prompts.js";
 import { createSelfHealingMonitor } from "./lib/self-healing.js";
+import { buildRepairProposals } from "./lib/repair-proposals.js";
 import { buildAgentReadinessChecks, HEALTH_CHECK_INTERVAL_MS } from "./lib/agent-health-checks.js";
 import { reviewSpecialistReport } from "./lib/quality-review.js";
 import { createSupabaseApprovalHandlers } from "./lib/supabase-approvals.js";
@@ -62,7 +63,7 @@ function limitApiRequests(req, res, next) {
 
 app.use(express.json({ limit: "1mb" }));
 const requireOwner = createOwnerAuthMiddleware();
-app.use(["/api/task", "/api/brain"], requireOwner);
+app.use(["/api/task", "/api/brain", "/api/repair-proposals"], requireOwner);
 app.use(["/api/task", "/api/brain"], limitApiRequests);
 app.use(express.static("public"));
 
@@ -173,6 +174,10 @@ function runAgentHealthChecks() {
     ];
     const checks = buildAgentReadinessChecks({ agents, specialistAgents, agentInstructions, providers });
     for (const check of checks) {
+      const current = selfHealingMonitor.getAgent(check.agentId);
+      // A passing configuration check must not erase a real task failure.
+      // A degraded agent recovers only after a real successful task execution.
+      if (check.success && current?.status === "degraded") continue;
       selfHealingMonitor.record(check.agentId, { success: check.success, error: check.error || undefined });
     }
     healthCheckLastRunAt = new Date().toISOString();
@@ -979,6 +984,18 @@ app.get("/api/approvals", approvalHandlers.list);
 app.post("/api/approvals", approvalHandlers.create);
 app.patch("/api/approvals/:id/decision", approvalHandlers.decide);
 
+app.get("/api/repair-proposals", (req, res) => {
+  const proposals = buildRepairProposals(selfHealingMonitor.snapshot());
+  return res.json({
+    success: true,
+    generatedAt: new Date().toISOString(),
+    activeProposals: proposals.length,
+    approvalRequired: true,
+    executionEnabled: false,
+    proposals
+  });
+});
+
 app.get("/api/health", (req, res) => {
 
   const monitor = selfHealingMonitor.snapshot();
@@ -1222,6 +1239,7 @@ app.post("/api/task", async (req, res) => {
       agentInstructions[agentId],
       1200
     );
+    selfHealingMonitor.record(agentId, { success: true });
 
     return res.json({
       success: true,
@@ -1237,6 +1255,9 @@ app.post("/api/task", async (req, res) => {
   } catch (error) {
 
     console.error("Task API failed:", error.message);
+    if (agentId !== "master") {
+      selfHealingMonitor.record(agentId, { success: false, error: error.message });
+    }
 
     return res.status(502).json({
       success: false,
