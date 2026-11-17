@@ -5,6 +5,7 @@ import { fallbackAgentSelection, requestsAllSpecialists } from "./lib/routing.js
 import { runProviderFallback } from "./lib/provider-fallback.js";
 import { extractCompletionText } from "./lib/completion-text.js";
 import { getMasterInstructions, getSpecialistInstructions } from "./lib/specialist-prompts.js";
+import { createSelfHealingMonitor } from "./lib/self-healing.js";
 import { reviewSpecialistReport } from "./lib/quality-review.js";
 import { createSupabaseApprovalHandlers } from "./lib/supabase-approvals.js";
 import { createOwnerAuthMiddleware } from "./lib/owner-auth.js";
@@ -12,6 +13,7 @@ import { createYoutubeIntegrationHandlers, getYoutubeAgentContext } from "./lib/
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const selfHealingMonitor = createSelfHealingMonitor();
 
 // Render runs behind a trusted reverse proxy. This allows req.ip to identify
 // the originating client for the lightweight API request limit below.
@@ -756,6 +758,7 @@ async function runCentralBrain(task, ownerUserId) {
       }
 
       providersUsed.add(response.provider);
+      selfHealingMonitor.record(item.agentId, { success: true });
 
       specialistResults.push({
         agentId: item.agentId,
@@ -773,6 +776,7 @@ async function runCentralBrain(task, ownerUserId) {
         `${agent.name} failed:`,
         error.message
       );
+      selfHealingMonitor.record(item.agentId, { success: false, error: error.message });
 
       specialistResults.push({
         agentId: item.agentId,
@@ -944,9 +948,16 @@ app.patch("/api/approvals/:id/decision", approvalHandlers.decide);
 
 app.get("/api/health", (req, res) => {
 
+  const monitor = selfHealingMonitor.snapshot();
   res.json({
     success: true,
-    status: "healthy"
+    status: monitor.degraded > 0 ? "degraded" : "healthy",
+    specialistHealth: {
+      healthy: monitor.healthy,
+      degraded: monitor.degraded,
+      unknown: monitor.unknown,
+      monitoredAgents: monitor.monitoredAgents
+    }
   });
 
 });
@@ -997,6 +1008,7 @@ app.get("/api/status", (req, res) => {
       openrouter: process.env.OPENROUTER_MODEL || "openrouter/free"
     },
     providerOrder: ["Gemini", "Groq", "OpenRouter"],
+    specialistHealth: selfHealingMonitor.snapshot(),
     approvalPolicy: "Proposal only: external actions require explicit user approval.",
     supabaseApprovalStorage: {
       configured: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY && process.env.SUPABASE_OWNER_USER_ID),
