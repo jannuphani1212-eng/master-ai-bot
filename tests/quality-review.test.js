@@ -38,6 +38,28 @@ test("flags incomplete reports for human review", () => {
   assert.ok(result.warnings.length > 0);
 });
 
+test("marks reports with missing sections for review even when their numeric score is 80", () => {
+  const report = [
+    "## Executive summary",
+    "Recommended plan.",
+    "## Audience and assumptions",
+    "Assumption: target audience is not yet verified.",
+    "## Research and evidence",
+    "Needs live verification against current sources.",
+    "## Recommended strategy",
+    "Create a focused plan.",
+    "## Concrete deliverables",
+    "Build a checklist.",
+    "## Measurement and KPIs",
+    "Measure clicks and conversions."
+  ].join("\n");
+  const result = reviewSpecialistReport(report);
+  assert.equal(result.score, 80);
+  assert.equal(result.status, "needs_review");
+  assert.ok(result.missingSections.includes("Risks and quality checks"));
+  assert.ok(result.missingSections.includes("Next three actions"));
+});
+
 test("flags guaranteed income claims", () => {
   const result = reviewSpecialistReport(
     "## Executive summary\nGuaranteed income from this strategy."
