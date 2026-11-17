@@ -174,6 +174,10 @@ function runAgentHealthChecks() {
     ];
     const checks = buildAgentReadinessChecks({ agents, specialistAgents, agentInstructions, providers });
     for (const check of checks) {
+      const current = selfHealingMonitor.getAgent(check.agentId);
+      // A passing configuration check must not erase a real task failure.
+      // A degraded agent recovers only after a real successful task execution.
+      if (check.success && current?.status === "degraded") continue;
       selfHealingMonitor.record(check.agentId, { success: check.success, error: check.error || undefined });
     }
     healthCheckLastRunAt = new Date().toISOString();
