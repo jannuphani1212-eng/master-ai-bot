@@ -97,7 +97,7 @@ test("marks reports with missing sections for review even when their numeric sco
     "Build a checklist.",
     "## Measurement and KPIs",
     "Measure clicks and conversions."
-  ].join("\\n");
+  ].join("\n");
   const result = reviewSpecialistReport(report);
   assert.equal(result.score, 80);
   assert.equal(result.status, "needs_review");
