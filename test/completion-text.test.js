@@ -14,7 +14,7 @@ test("extracts text from multipart content", () => {
   }, "OpenRouter"), "first\nsecond");
 });
 
-test("reports useful diagnostics when a provider returns empty content", () => {
+test("reports truncation when a provider reaches its output-token limit", () => {
   assert.throws(
     () => extractCompletionText({
       choices: [{
@@ -23,7 +23,7 @@ test("reports useful diagnostics when a provider returns empty content", () => {
       }],
       usage: { completion_tokens: 700 }
     }, "Groq"),
-    /Groq returned no usable text \(finish_reason=length.*reasoning_chars=18.*completion_tokens=700/
+    /Groq response was truncated by its output-token limit \(finish_reason=length, partial_chars=0\)/
   );
 });
 

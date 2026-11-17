@@ -43,3 +43,32 @@ test("tracks repeated failures and keeps bounded history", () => {
   assert.equal(report.degraded, 1);
   assert.equal(report.recentHistory.length, 2);
 });
+
+
+test("classifies the historical OpenRouter no-usable-text truncation as invalid output", () => {
+  const error = "OpenRouter returned no usable text (finish_reason=length, message_fields=role, content, refusal, reasoning_chars=0, completion_tokens=2000).";
+  assert.equal(classifyFailure(error), "invalid_output");
+});
+
+test("classifies explicit output-token truncation as invalid output", () => {
+  assert.equal(
+    classifyFailure("Response was truncated by its output-token limit (finish_reason=length, partial_chars=1200)"),
+    "invalid_output"
+  );
+});
+
+test("recommends constrained regeneration for truncated provider output", () => {
+  const monitor = createSelfHealingMonitor({
+    agentIds: ["blogging"],
+    now: () => Date.parse("2026-11-17T18:00:00.000Z"),
+    persistence: { configured: false }
+  });
+  const result = monitor.record("blogging", {
+    success: false,
+    error: "OpenRouter returned no usable text (finish_reason=length)"
+  });
+
+  assert.equal(result.status, "degraded");
+  assert.equal(result.lastErrorCategory, "invalid_output");
+  assert.match(result.recoveryAction, /constrained regeneration/i);
+});

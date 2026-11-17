@@ -59,10 +59,10 @@ test("completion extraction handles string and multipart response content", () =
   assert.equal(extractCompletionText({ choices: [{ message: { content: [{ text: "Hello" }, { content: "world" }] } }] }, "Test"), "Hello\nworld");
 });
 
-test("completion extraction reports unusable provider output", () => {
+test("completion extraction reports truncated provider output", () => {
   assert.throws(
     () => extractCompletionText({ choices: [{ finish_reason: "length", message: { reasoning: "hidden" } }] }, "Test"),
-    /returned no usable text/
+    /truncated by its output-token limit/
   );
 });
 
