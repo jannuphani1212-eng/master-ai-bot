@@ -671,7 +671,7 @@ async function runCentralBrain(task, ownerUserId, youtubeChannelId) {
 
       // Automatically repair incomplete reports once before showing them to the user.
       // The repair prompt forbids inventing evidence, metrics, research or completed actions.
-      if (qualityReview.score < 70) {
+      if (qualityReview.missingSections.length > 0 || qualityReview.riskyClaims?.length > 0 || !qualityReview.evidenceAware || !qualityReview.actionable) {
         try {
           const repairInstructions = [
             "You are a strict specialist report editor.",
