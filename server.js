@@ -647,7 +647,7 @@ async function createBrainPlan(task) {
 // LIMIT SPECIALIST REPORT SIZE
 // =====================================
 
-function compactReport(text, maxLength = 1800) {
+function compactReport(text, maxLength = 2600) {
 
   const cleaned = String(text || "").trim();
 
@@ -844,7 +844,7 @@ async function runCentralBrain(task, ownerUserId) {
       (item.qualityReview?.warnings?.length
         ? `QUALITY WARNINGS: ${item.qualityReview.warnings.join("; ")}\n`
         : "") +
-      compactReport(item.result, 1800)
+      compactReport(item.result, 2600)
     )
     .join("\n\n--------------------\n\n");
 
@@ -859,7 +859,13 @@ async function runCentralBrain(task, ownerUserId) {
     "Preserve important facts. Never invent information. " +
     "Do not guess or invent AI provider names. Provider identity is supplied separately by verified server metadata; do not claim a provider unless that exact name appears in the metadata. " +
     "Do not mark a missing or failed specialist as successful. " +
-    "Keep the final answer clear, concise and useful to the owner.";
+    "Keep the final answer clear, concise and useful to the owner. " +
+    "When the original task requests a 7-day plan, provide exactly Day 1 through Day 7, with no more than the owner's stated daily time limit. " +
+    "Make the plan realistic for the stated device, skill level, country and budget; do not assign desktop-only work to a phone-only owner. " +
+    "Do not assume the owner has social accounts, a website, a blog, an app, a product catalogue or analytics unless explicitly stated. " +
+    "For every specialist, identify meaningful strengths and any material weakness, unsupported assumption or unverified claim. " +
+    "If a recommendation cannot be carried out under the owner's constraints, reject it or provide a genuinely feasible alternative. " +
+    "Do not turn proposed KPI examples into targets or forecasts; define what to measure first and establish a baseline.";
 
   let finalResult;
 
@@ -871,7 +877,7 @@ async function runCentralBrain(task, ownerUserId) {
       "\n\nSPECIALIST REPORTS:\n" +
       specialistSummary,
       synthesisInstructions,
-      1200
+      2000
     );
 
     providersUsed.add(synthesis.provider);
