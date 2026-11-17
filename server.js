@@ -4,6 +4,7 @@ import { GoogleGenAI } from "@google/genai";
 import { fallbackAgentSelection, requestsAllSpecialists } from "./lib/routing.js";
 import { runProviderFallback } from "./lib/provider-fallback.js";
 import { extractCompletionText } from "./lib/completion-text.js";
+import { getRetrySeconds as getProviderRetrySeconds } from "./lib/retry-after.js";
 import { getMasterInstructions, getSpecialistInstructions } from "./lib/specialist-prompts.js";
 import { createSelfHealingMonitor } from "./lib/self-healing.js";
 import { buildRepairProposals } from "./lib/repair-proposals.js";
@@ -90,19 +91,8 @@ function setCooldown(provider, seconds = 60) {
   console.log(`${provider} cooldown: ${seconds} seconds.`);
 }
 
-function getRetrySeconds(message) {
-  const match = String(message).match(
-    /try again in ([\d.]+)\s*s/i
-  );
-
-  if (match) {
-    return Math.min(
-      120,
-      Math.max(10, Math.ceil(Number(match[1])))
-    );
-  }
-
-  return 60;
+function getRetrySeconds(message, retryAfterHeader) {
+  return getProviderRetrySeconds(message, retryAfterHeader);
 }
 
 // =====================================
@@ -288,7 +278,7 @@ async function callGroq(task, instructions, maxTokens = 900) {
         // one request. Keep Groq out of the remaining specialist calls so
         // they can use OpenRouter instead of repeatedly hitting the same limit.
         const tokenLimitHit = /tokens? per minute|\bTPM\b|rate limit reached/i.test(details);
-        setCooldown("groq", tokenLimitHit ? 60 : getRetrySeconds(details));
+        setCooldown("groq", getRetrySeconds(details, response.headers.get("retry-after")) || (tokenLimitHit ? 60 : 60));
       }
 
       console.error(
@@ -377,7 +367,7 @@ async function callOpenRouter(
       const details = await response.text();
 
       if (response.status === 429) {
-        setCooldown("openrouter", getRetrySeconds(details));
+        setCooldown("openrouter", getRetrySeconds(details, response.headers.get("retry-after")));
       }
 
       console.error(
