@@ -707,7 +707,16 @@ async function runCentralBrain(task, ownerUserId) {
 
       // Automatically repair incomplete reports once before showing them to the user.
       // The repair prompt forbids inventing evidence, metrics, research or completed actions.
-      if (qualityReview.score < 70) {
+      // Repair structural and evidence-label gaps, not merely low numeric scores.
+      // A report can score exactly 70 while still missing required sections;
+      // the previous strict "< 70" check allowed those reports through unchanged.
+      const needsStructuralRepair =
+        qualityReview.missingSections.length > 0 ||
+        !qualityReview.evidenceAware ||
+        !qualityReview.actionable ||
+        qualityReview.score < 70;
+
+      if (needsStructuralRepair) {
         try {
           const repairInstructions = [
             "You are a strict specialist report editor.",
@@ -800,14 +809,15 @@ async function runCentralBrain(task, ownerUserId) {
   const synthesisInstructions =
     "You are the Master AI Bot. Combine the specialist " +
     "reports into one useful final answer. " +
-    "Remove repetition. Compare recommendations. " +
-    "Identify the best strategy. Provide practical next steps. " +
+    "Remove repetition. Compare recommendations and explicitly identify contradictions, unsupported claims, stale advice, and missing evidence. " +
+    "Identify the best strategy using the user's stated country, budget, skill level, device constraints, existing projects and preferences when those details are available in the task or specialist context. " +
+    "Do not recommend tools or platforms that are unavailable or unsuitable in the user's country/device context; flag availability for verification when uncertain. " +
+    "Separate verified facts, assumptions, estimates, proposals and unknowns. Numerical targets are not evidence. Never convert a specialist's unsupported claim into a verified fact. " +
+    "Provide a prioritized decision, dependencies, risks, measurable KPIs without invented baselines, and exactly three immediate next actions when appropriate. " +
     "Preserve important facts. Never invent information. " +
-    "Do not guess or invent AI provider names. Provider identity is supplied " +
-    "separately by verified server metadata; do not claim a provider unless " +
-    "that exact name appears in the metadata. " +
+    "Do not guess or invent AI provider names. Provider identity is supplied separately by verified server metadata; do not claim a provider unless that exact name appears in the metadata. " +
     "Do not mark a missing or failed specialist as successful. " +
-    "Keep the final answer clear and concise.";
+    "Keep the final answer clear, concise and useful to the owner.";
 
   let finalResult;
 
