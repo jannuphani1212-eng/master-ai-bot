@@ -57,7 +57,7 @@ test("persistence restores the latest state per specialist and recent history", 
   assert.equal(restored.agents[0].status, "degraded");
   assert.equal(restored.agents[0].consecutiveFailures, 2);
   assert.equal(restored.recentHistory.length, 2);
-  assert.match(calls[0].url, /owner_user_id=eq\\./);
+  assert.ok(calls[0].url.includes("owner_user_id=eq."));
   assert.equal(calls[0].options.headers.Authorization, "Bearer server-only-test-key");
   assert.equal(store.status().connected, true);
 });
