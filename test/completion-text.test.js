@@ -14,7 +14,7 @@ test("extracts text from multipart content", () => {
   }, "OpenRouter"), "first\nsecond");
 });
 
-test("reports useful diagnostics when a provider returns empty content", () => {
+test("reports truncation when a provider reaches its output-token limit", () => {
   assert.throws(
     () => extractCompletionText({
       choices: [{
