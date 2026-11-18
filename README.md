@@ -69,7 +69,7 @@ Example request:
 
 For a Master request, the response includes each specialist's status and report, the combined response, provider information, and an approval notice. Partial results are returned with partialSuccess: true when at least one specialist succeeds and another fails.
 
-The dashboard includes an owner sign-in and approval queue. The Supabase anon key is public by design; access is restricted by Auth verification, the server-side owner allowlist, and database RLS. The access token is kept in page memory and cleared on refresh/sign-out.
+The dashboard includes an owner sign-in and approval queue. The Supabase anon key is public by design; access is restricted by Auth verification, the server-side owner allowlist, and database RLS. The short-lived access token is kept in page memory. A rotating Supabase refresh token is stored in browser localStorage so the owner session can be restored after a page refresh; signing out clears it. Browser storage restrictions or an expired/revoked refresh token can still require the owner to sign in again.
 
 See [the five specialist income workflows](docs/income-workflows.md) for the India-first planning steps and approval checkpoints.\n\n## Tests\n
 Run npm test for routing and provider-fallback unit tests. GitHub Actions also checks JavaScript syntax, runs the tests, and validates package.json on the feature branch and pull requests to main.
