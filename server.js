@@ -821,7 +821,7 @@ async function runCentralBrain(task, ownerUserId) {
         name: agent.name,
         success: false,
         provider: null,
-        error: String(error.message || "Unknown provider error").slice(0, 300),
+        error: String(error.message || "Unknown provider error").slice(0, 1200),
         result: "This specialist could not complete the task."
       });
     }
@@ -1245,15 +1245,28 @@ app.post("/api/task", async (req, res) => {
     const response = await generateAI(
       specialistTask,
       agentInstructions[agentId],
-      1200
+      2600
     );
-    selfHealingMonitor.record(agentId, { success: true });
+    const qualityReview = reviewSpecialistReport(response.result);
+    const qualityPassed = qualityReview.status === "passed";
+    const qualityFailure = qualityPassed
+      ? undefined
+      : "Report requires attention: " + [
+          ...qualityReview.missingSections.map(section => "Missing section: " + section),
+          ...qualityReview.warnings
+        ].join("; ");
+    selfHealingMonitor.record(agentId, {
+      success: qualityPassed,
+      error: qualityFailure
+    });
 
     return res.json({
-      success: true,
+      success: qualityPassed,
+      needsAttention: !qualityPassed,
+      ...(qualityFailure ? { error: qualityFailure } : {}),
       agent: agentId,
       provider: response.provider,
-      qualityReview: reviewSpecialistReport(response.result),
+      qualityReview,
       requiresHumanApproval: true,
       executionMode: "proposal_only",
       approvalNotice: "This is a draft. Review it before publishing, spending, sending, deleting, or deploying anything.",
