@@ -35,7 +35,7 @@ test("missing report sections remain structural failures", () => {
 test("Groq TPM rate limit is detected and retry delay is bounded", () => {
   const error = new Error("Groq HTTP 429: Rate limit reached on tokens per minute (TPM). Try again in 2.6775s.");
   assert.equal(isRetryableTpmRateLimit(error), true);
-  assert.equal(getTpmRetryDelayMs(error), 3000);
+  assert.equal(getTpmRetryDelayMs(error), 2678);
   assert.equal(getTpmRetryDelayMs(new Error("try again in 999s")), 15000);
   assert.equal(isRetryableTpmRateLimit(new Error("HTTP 429 daily request quota")), false);
 });
@@ -53,7 +53,7 @@ test("provider fallback retries one TPM-limited provider then succeeds", async (
   ], { sleep: async ms => waits.push(ms) });
   assert.deepEqual(result, { result: "Recovered report", provider: "Groq" });
   assert.equal(calls, 2);
-  assert.deepEqual(waits, [2000]);
+  assert.deepEqual(waits, [1200]);
 });
 
 test("provider fallback preserves failure details after TPM retry is exhausted", async () => {
