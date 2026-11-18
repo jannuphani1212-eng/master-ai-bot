@@ -1300,7 +1300,7 @@ app.post("/api/task", async (req, res) => {
         qualityReview = reviewSpecialistReport(specialistReport);
         reportRepaired = true;
       } catch (repairError) {
-        console.error(agentInstructions[agentId] ? agentId + " missing-section repair failed:" : "Specialist repair failed:", repairError.message);
+        console.error(agentId + " missing-section repair failed:", repairError.message);
         break;
       }
     }
