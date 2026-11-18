@@ -902,7 +902,10 @@ async function runCentralBrain(task, ownerUserId) {
       specialistSummary;
   }
 
-  const failedResults = specialistResults.filter(item => !item.success);
+  const needsAttentionResults = specialistResults.filter(item => item.needsAttention);
+  const failedResults = specialistResults.filter(item => !item.success && !item.needsAttention);
+  const nonPassingResults = [...needsAttentionResults, ...failedResults];
+  const scoredResults = specialistResults.filter(item => item.qualityReview);
 
   // Build the audit from actual server results, not model-generated claims.
   const executionAudit = [
@@ -914,23 +917,24 @@ async function runCentralBrain(task, ownerUserId) {
       `| ${item.name} | ${item.success ? "Passed" : item.needsAttention ? "Needs attention" : "Failed"} | ${item.provider || "No successful provider"} | ${item.qualityReview ? item.qualityReview.score + "/100 (" + item.qualityReview.status + ")" : "Not scored"} |`
     ),
     "",
-    `**Verified totals:** ${successfulResults.length}/${specialistResults.length} requested specialists succeeded; ${failedResults.length} failed.`,
-    `**Average structural quality:** ${successfulResults.length ? Math.round(successfulResults.reduce((sum, item) => sum + (item.qualityReview?.score || 0), 0) / successfulResults.length) + "/100" : "Not available"} (structure-only; factual accuracy is not independently verified).`,
-    failedResults.length
+    `**Verified totals:** ${successfulResults.length} passed, ${needsAttentionResults.length} need attention, ${failedResults.length} failed.`,
+    `**Average structural quality:** ${scoredResults.length ? Math.round(scoredResults.reduce((sum, item) => sum + (item.qualityReview?.score || 0), 0) / scoredResults.length) + "/100" : "Not available"} (structure-only; factual accuracy is not independently verified).`,
+    nonPassingResults.length
       ? "**Overall status:** Partial completion / needs attention. Do not treat this task as fully completed."
-      : "**Overall status:** All requested specialists completed successfully."
+      : "**Overall status:** All requested specialists passed execution and structural quality checks."
   ].join("\n");
 
   finalResult = finalResult + "\n\n" + executionAudit;
 
   return {
-    success: failedResults.length === 0 && specialistResults.length > 0,
-    partialSuccess: successfulResults.length > 0 && failedResults.length > 0,
+    success: nonPassingResults.length === 0 && specialistResults.length > 0,
+    partialSuccess: successfulResults.length > 0 && nonPassingResults.length > 0,
     agent: "master",
     provider: [...providersUsed].join(" + ") || "Unknown",
     totalSpecialists: specialistResults.length,
     successfulSpecialists: successfulResults.length,
     failedSpecialists: failedResults.length,
+    needsAttentionSpecialists: needsAttentionResults.length,
     requiresHumanApproval: true,
     executionMode: "proposal_only",
     approvalNotice: "This response is a proposal. Review it before publishing, spending, sending, deleting, or deploying anything.",
