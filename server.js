@@ -745,7 +745,6 @@ async function runCentralBrain(task, ownerUserId) {
       // Repair only absent sections. Use at most two bounded passes so a
       // short or partially truncated repair cannot leave easy omissions behind.
       // Each pass recalculates missing sections and preserves the original draft.
-      let reportRepaired = false;
       for (let repairRound = 0; repairRound < 2 && qualityReview.missingSections.length > 0; repairRound += 1) {
         const missingSections = qualityReview.missingSections;
         try {
