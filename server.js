@@ -1268,7 +1268,43 @@ app.post("/api/task", async (req, res) => {
       agentInstructions[agentId],
       2600
     );
-    const qualityReview = reviewSpecialistReport(response.result);
+    let specialistReport = response.result;
+    let specialistProvider = response.provider;
+    let qualityReview = reviewSpecialistReport(specialistReport);
+    let reportRepaired = false;
+
+    // Keep single-specialist mode consistent with Master Brain mode: make up
+    // to two bounded attempts to fill missing required sections before review.
+    for (let repairRound = 0; repairRound < 2 && qualityReview.missingSections.length > 0; repairRound += 1) {
+      const missingSections = qualityReview.missingSections;
+      try {
+        const repairInstructions = [
+          "You are a specialist report completion editor.",
+          "Do NOT rewrite, summarize, or repeat the original report.",
+          "Generate ONLY the missing sections listed in the task, using the exact requested headings.",
+          "Preserve the specialist role, original task, country, budget, device and skill constraints.",
+          "Do not invent research, sources, prices, commissions, metrics, test results, or completed actions.",
+          "When evidence is unavailable, state 'Needs live verification' and identify the source or measurement required.",
+          "Return only the missing sections, with no introduction or conclusion."
+        ].join("\n");
+        const repairTask =
+          "ORIGINAL SPECIALIST TASK:\n" + specialistTask.slice(0, 2500) +
+          "\n\nMISSING SECTIONS TO GENERATE (ONLY THESE):\n" +
+          missingSections.map(section => "## " + section).join("\n") +
+          "\n\nORIGINAL REPORT — PRESERVE IT, DO NOT REWRITE:\n" +
+          compactReport(specialistReport, 5200);
+        const repair = await generateAI(repairTask, repairInstructions, 1500);
+        if (!repair.result || !repair.result.trim()) break;
+        specialistReport = mergeMissingReportSections(specialistReport, repair.result);
+        specialistProvider = [...new Set([specialistProvider, repair.provider])].join(" + ");
+        qualityReview = reviewSpecialistReport(specialistReport);
+        reportRepaired = true;
+      } catch (repairError) {
+        console.error(agentInstructions[agentId] ? agentId + " missing-section repair failed:" : "Specialist repair failed:", repairError.message);
+        break;
+      }
+    }
+
     const qualityPassed = qualityReview.status === "passed";
     const qualityFailure = qualityPassed
       ? undefined
@@ -1286,12 +1322,13 @@ app.post("/api/task", async (req, res) => {
       needsAttention: !qualityPassed,
       ...(qualityFailure ? { error: qualityFailure } : {}),
       agent: agentId,
-      provider: response.provider,
+      provider: specialistProvider,
+      reportRepaired,
       qualityReview,
       requiresHumanApproval: true,
       executionMode: "proposal_only",
       approvalNotice: "This is a draft. Review it before publishing, spending, sending, deleting, or deploying anything.",
-      result: response.result
+      result: specialistReport
     });
 
   } catch (error) {
