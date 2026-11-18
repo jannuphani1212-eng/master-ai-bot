@@ -4,6 +4,7 @@ import { GoogleGenAI } from "@google/genai";
 import { fallbackAgentSelection, requestsAllSpecialists } from "./lib/routing.js";
 import { runProviderFallback } from "./lib/provider-fallback.js";
 import { extractCompletionText } from "./lib/completion-text.js";
+import { mergeMissingReportSections } from "./lib/report-repair.js";
 import { getRetrySeconds as getProviderRetrySeconds } from "./lib/retry-after.js";
 import { getMasterInstructions, getSpecialistInstructions } from "./lib/specialist-prompts.js";
 import { createSelfHealingMonitor } from "./lib/self-healing.js";
@@ -521,7 +522,7 @@ async function createBrainPlan(task) {
     // receiving the same generic prompt and returning overlapping reports.
     const specialistBriefs = {
       affiliate: "Create a practical affiliate campaign proposal: define an audience, product-selection criteria, a compliant content funnel, a zero-budget starting route, and what must be verified before recommending any offer. Do not invent commission rates or revenue.",
-      youtube: "Create a YouTube channel growth proposal: define the viewer, content pillars, three differentiated video concepts, one sample hook, retention structure, and copyright/policy checks. Do not invent channel analytics.",
+      youtube: "Create a complete YouTube specialist report using all eight required report sections. Define the viewer and channel positioning; deliver exactly three differentiated, fully developed video concepts, each with a title, opening hook, story beats, scene-by-scene visual direction, runtime rationale, thumbnail concept and viewer payoff; include one sample script opening, retention plan, packaging, analytics measurement, copyright/children's-content policy checks where relevant, and exactly three next actions. Use Global Rhymes 4U context only if supplied. Do not invent channel analytics.",
       blogging: "Create an editorial proposal: choose one focused article idea, define search intent and reader value, provide an H2/H3 outline, internal-link ideas, an original-value angle, and a fact-check plan. Do not invent traffic or keyword metrics.",
       "app-development": "Create a mobile-first app MVP specification: state the user problem, core features, user flow, recommended low-cost stack, acceptance criteria, security/privacy checks, and test cases. Do not assume a budget or claim code has been built.",
       seo: "Create an SEO audit and content-discovery proposal: identify what evidence is needed, propose topic clusters and on-page checks, prioritize fixes by impact/effort, and define Search Console measurements. Mark search volumes and rankings as unverified unless supplied."
@@ -692,6 +693,12 @@ async function runCentralBrain(task, ownerUserId) {
   // Execute specialists sequentially.
   for (const item of plan.tasks) {
 
+    // Small spacing between sequential calls reduces burst pressure on shared
+    // provider TPM windows; explicit 429 guidance is handled by fallback retry.
+    if (specialistResults.length > 0) {
+      await new Promise(resolve => setTimeout(resolve, 1500));
+    }
+
     const agent = specialistAgents.find(
       a => a.id === item.agentId
     );
@@ -733,53 +740,40 @@ async function runCentralBrain(task, ownerUserId) {
       let qualityReview = reviewSpecialistReport(specialistReport);
       let reportRepaired = false;
 
-      // Automatically repair incomplete reports once before showing them to the user.
-      // The repair prompt forbids inventing evidence, metrics, research or completed actions.
-      // Repair structural and evidence-label gaps, not merely low numeric scores.
-      // A report can score exactly 70 while still missing required sections;
-      // the previous strict "< 70" check allowed those reports through unchanged.
-      const needsStructuralRepair =
-        qualityReview.missingSections.length > 0 ||
-        !qualityReview.evidenceAware ||
-        !qualityReview.actionable ||
-        qualityReview.score < 70;
-
-      if (needsStructuralRepair) {
+      // Repair only absent sections. Preserve the original report verbatim and
+      // append generated sections; never replace useful specialist work.
+      const missingSections = qualityReview.missingSections;
+      if (missingSections.length > 0) {
         try {
           const repairInstructions = [
-            "You are a strict specialist report editor.",
-            "Rewrite the supplied specialist draft into the exact eight-section report format below.",
-            "Keep the original task and specialist role. Do not invent facts, research, sources, prices, commissions, metrics, test results or completed actions.",
-            "If information is missing, explicitly write 'Not provided' or 'Needs live verification' and state a reasonable assumption only when clearly labelled.",
-            "Make the report useful and specific. Include concrete deliverables and exactly three next actions.",
-            "Use these exact Markdown headings, each on its own line:",
-            "## 1. Executive summary",
-            "## 2. Audience and assumptions",
-            "## 3. Research and evidence",
-            "## 4. Recommended strategy",
-            "## 5. Concrete deliverables",
-            "## 6. Measurement and KPIs",
-            "## 7. Risks and quality checks",
-            "## 8. Next three actions",
-            "Return only the completed report."
-          ].join("\n");
+            "You are a specialist report completion editor.",
+            "Do NOT rewrite, summarize, or repeat the original report.",
+            "Generate ONLY the missing sections listed in the task, using the exact requested headings.",
+            "Preserve the specialist's original role, task context, and constraints.",
+            "Do not invent research, sources, prices, commissions, metrics, test results, or completed actions.",
+            "When evidence is unavailable, state 'Needs live verification' and specify exactly what source or measurement is required.",
+            "When a KPI baseline is unavailable, describe how to measure it first; do not invent a target.",
+            "Return only the missing sections, with enough detail to be useful."
+          ].join("\\n");
 
-          const repair = await generateAI(
-            "ORIGINAL TASK:\\n" + item.task.slice(0, 2500) +
-            "\\n\\nSPECIALIST DRAFT TO IMPROVE:\\n" + compactReport(specialistReport, 3500),
-            repairInstructions,
-            2200
-          );
+          const repairTask =
+            "ORIGINAL SPECIALIST TASK:\\n" + item.task.slice(0, 2500) +
+            "\\n\\nMISSING SECTIONS TO GENERATE (ONLY THESE):\\n" +
+            missingSections.map((section, index) => "## " + section).join("\\n") +
+            "\\n\\nORIGINAL REPORT — PRESERVE IT, DO NOT REWRITE:\\n" +
+            compactReport(specialistReport, 5200);
+
+          const repair = await generateAI(repairTask, repairInstructions, 1800);
 
           if (repair.result && repair.result.trim()) {
-            specialistReport = repair.result.trim();
+            specialistReport = mergeMissingReportSections(specialistReport, repair.result);
             specialistProvider = [...new Set([response.provider, repair.provider])].join(" + ");
             qualityReview = reviewSpecialistReport(specialistReport);
             reportRepaired = true;
             providersUsed.add(repair.provider);
           }
         } catch (repairError) {
-          console.error(agent.name + " report repair failed:", repairError.message);
+          console.error(agent.name + " missing-section repair failed:", repairError.message);
         }
       }
 
