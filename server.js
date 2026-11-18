@@ -742,10 +742,12 @@ async function runCentralBrain(task, ownerUserId) {
       let qualityReview = reviewSpecialistReport(specialistReport);
       let reportRepaired = false;
 
-      // Repair only absent sections. Preserve the original report verbatim and
-      // append generated sections; never replace useful specialist work.
-      const missingSections = qualityReview.missingSections;
-      if (missingSections.length > 0) {
+      // Repair only absent sections. Use at most two bounded passes so a
+      // short or partially truncated repair cannot leave easy omissions behind.
+      // Each pass recalculates missing sections and preserves the original draft.
+      let reportRepaired = false;
+      for (let repairRound = 0; repairRound < 2 && qualityReview.missingSections.length > 0; repairRound += 1) {
+        const missingSections = qualityReview.missingSections;
         try {
           const repairInstructions = [
             "You are a specialist report completion editor.",
@@ -755,38 +757,47 @@ async function runCentralBrain(task, ownerUserId) {
             "Do not invent research, sources, prices, commissions, metrics, test results, or completed actions.",
             "When evidence is unavailable, state 'Needs live verification' and specify exactly what source or measurement is required.",
             "When a KPI baseline is unavailable, describe how to measure it first; do not invent a target.",
-            "Return only the missing sections, with enough detail to be useful."
+            "Complete every listed section in this response. Keep each section concise but useful.",
+            "Return only the missing sections, with no introduction or conclusion."
           ].join("\\n");
 
           const repairTask =
             "ORIGINAL SPECIALIST TASK:\\n" + item.task.slice(0, 2500) +
             "\\n\\nMISSING SECTIONS TO GENERATE (ONLY THESE):\\n" +
-            missingSections.map((section, index) => "## " + section).join("\\n") +
+            missingSections.map(section => "## " + section).join("\\n") +
             "\\n\\nORIGINAL REPORT — PRESERVE IT, DO NOT REWRITE:\\n" +
             compactReport(specialistReport, 5200);
 
-          const repair = await generateAI(repairTask, repairInstructions, 1800);
+          const repair = await generateAI(repairTask, repairInstructions, 1500);
+          if (!repair.result || !repair.result.trim()) break;
 
-          if (repair.result && repair.result.trim()) {
-            specialistReport = mergeMissingReportSections(specialistReport, repair.result);
-            specialistProvider = [...new Set([response.provider, repair.provider])].join(" + ");
-            qualityReview = reviewSpecialistReport(specialistReport);
-            reportRepaired = true;
-            providersUsed.add(repair.provider);
-          }
+          specialistReport = mergeMissingReportSections(specialistReport, repair.result);
+          specialistProvider = [...new Set([specialistProvider, repair.provider])].join(" + ");
+          providersUsed.add(repair.provider);
+          qualityReview = reviewSpecialistReport(specialistReport);
+          reportRepaired = true;
         } catch (repairError) {
-          console.error(agent.name + " missing-section repair failed:", repairError.message);
+          console.error(agent.name + " missing-section repair pass " + (repairRound + 1) + " failed:", repairError.message);
+          break;
         }
       }
 
       providersUsed.add(response.provider);
       const qualityPassed = qualityReview.status === "passed";
+      const structuralIssues = [
+        ...qualityReview.missingSections.map(section => "Missing section: " + section),
+        ...qualityReview.warnings.filter(warning =>
+          !/numerical budget, revenue, audience or performance claims/i.test(warning) &&
+          !/provider or quality-score claims/i.test(warning)
+        )
+      ];
+      const evidenceWarnings = qualityReview.warnings.filter(warning =>
+        /numerical budget, revenue, audience or performance claims|provider or quality-score claims/i.test(warning)
+      );
       const qualityFailure = qualityPassed
         ? undefined
-        : "Report requires attention: " + [
-            ...qualityReview.missingSections.map(section => "Missing section: " + section),
-            ...qualityReview.warnings
-          ].join("; ");
+        : "Structural report requires attention: " + structuralIssues.join("; ") +
+          (evidenceWarnings.length ? ". Separate evidence warnings (not structural failures): " + evidenceWarnings.join("; ") : "");
       selfHealingMonitor.record(item.agentId, {
         success: qualityPassed,
         error: qualityFailure
@@ -800,6 +811,8 @@ async function runCentralBrain(task, ownerUserId) {
         error: qualityFailure,
         provider: specialistProvider,
         reportRepaired,
+        structuralStatus: qualityReview.status,
+        evidenceReview: qualityReview.evidenceReview,
         qualityReview,
         result: specialistReport
       });
