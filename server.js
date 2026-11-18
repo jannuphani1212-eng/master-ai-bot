@@ -7,7 +7,7 @@ import { extractCompletionText } from "./lib/completion-text.js";
 import { mergeMissingReportSections } from "./lib/report-repair.js";
 import { getRetrySeconds as getProviderRetrySeconds } from "./lib/retry-after.js";
 import { getMasterInstructions, getSpecialistInstructions } from "./lib/specialist-prompts.js";
-import { createSelfHealingMonitor } from "./lib/self-healing.js";
+import { createSelfHealingMonitor, inferFailureType } from "./lib/self-healing.js";
 import { buildRepairProposals } from "./lib/repair-proposals.js";
 import { buildAgentReadinessChecks, HEALTH_CHECK_INTERVAL_MS } from "./lib/agent-health-checks.js";
 import { reviewSpecialistReport } from "./lib/quality-review.js";
@@ -808,6 +808,7 @@ async function runCentralBrain(task, ownerUserId) {
           (evidenceWarnings.length ? ". Separate evidence warnings (not structural failures): " + evidenceWarnings.join("; ") : "");
       selfHealingMonitor.record(item.agentId, {
         success: qualityPassed,
+        failureType: "report_quality",
         error: qualityFailure
       });
 
@@ -831,7 +832,11 @@ async function runCentralBrain(task, ownerUserId) {
         `${agent.name} failed:`,
         error.message
       );
-      selfHealingMonitor.record(item.agentId, { success: false, error: error.message });
+      selfHealingMonitor.record(item.agentId, {
+        success: false,
+        failureType: inferFailureType(error.message),
+        error: error.message
+      });
 
       specialistResults.push({
         agentId: item.agentId,
@@ -1314,6 +1319,7 @@ app.post("/api/task", async (req, res) => {
         ].join("; ");
     selfHealingMonitor.record(agentId, {
       success: qualityPassed,
+      failureType: "report_quality",
       error: qualityFailure
     });
 
@@ -1335,7 +1341,11 @@ app.post("/api/task", async (req, res) => {
 
     console.error("Task API failed:", error.message);
     if (agentId !== "master") {
-      selfHealingMonitor.record(agentId, { success: false, error: error.message });
+      selfHealingMonitor.record(agentId, {
+        success: false,
+        failureType: inferFailureType(error.message),
+        error: error.message
+      });
     }
 
     return res.status(502).json({
