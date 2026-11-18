@@ -206,7 +206,7 @@ async function callGemini(task, instructions, maxTokens = 900) {
       systemInstruction: instructions,
       maxOutputTokens: maxTokens,
       temperature: 0.4,
-      httpOptions: { timeout: 45000 }
+      httpOptions: { timeout: 90000 }
     }
   });
 
@@ -233,7 +233,7 @@ async function callGroq(task, instructions, maxTokens = 900) {
 
   const timeout = setTimeout(
     () => controller.abort(),
-    45000
+    90000
   );
 
   try {
@@ -320,7 +320,7 @@ async function callOpenRouter(
 
   const timeout = setTimeout(
     () => controller.abort(),
-    45000
+    90000
   );
 
   try {
@@ -725,7 +725,7 @@ async function runCentralBrain(task, ownerUserId) {
       const response = await generateAI(
         specialistTask,
         conciseInstructions,
-        700
+        2600
       );
 
       let specialistReport = response.result;
@@ -768,7 +768,7 @@ async function runCentralBrain(task, ownerUserId) {
             "ORIGINAL TASK:\\n" + item.task.slice(0, 2500) +
             "\\n\\nSPECIALIST DRAFT TO IMPROVE:\\n" + compactReport(specialistReport, 3500),
             repairInstructions,
-            1100
+            2200
           );
 
           if (repair.result && repair.result.trim()) {
@@ -784,12 +784,24 @@ async function runCentralBrain(task, ownerUserId) {
       }
 
       providersUsed.add(response.provider);
-      selfHealingMonitor.record(item.agentId, { success: true });
+      const qualityPassed = qualityReview.status === "passed";
+      const qualityFailure = qualityPassed
+        ? undefined
+        : "Report requires attention: " + [
+            ...qualityReview.missingSections.map(section => "Missing section: " + section),
+            ...qualityReview.warnings
+          ].join("; ");
+      selfHealingMonitor.record(item.agentId, {
+        success: qualityPassed,
+        error: qualityFailure
+      });
 
       specialistResults.push({
         agentId: item.agentId,
         name: agent.name,
-        success: true,
+        success: qualityPassed,
+        needsAttention: !qualityPassed,
+        error: qualityFailure,
         provider: specialistProvider,
         reportRepaired,
         qualityReview,
@@ -818,16 +830,18 @@ async function runCentralBrain(task, ownerUserId) {
   const successfulResults =
     specialistResults.filter(item => item.success);
 
-  if (successfulResults.length === 0) {
+  if (specialistResults.length === 0) {
     throw new Error(
-      "The specialist bots could not complete the task."
+      "The specialist bots could not complete this task."
     );
   }
 
-  const specialistSummary = successfulResults
+  const specialistSummary = specialistResults
     .map(item =>
       `SPECIALIST: ${item.name}\n` +
+      `EXECUTION STATUS: ${item.success ? "Passed" : item.needsAttention ? "Needs attention" : "Failed"}\n` +
       `VERIFIED PROVIDER: ${item.provider || "Not available"}\n` +
+      (item.error ? `EXECUTION / QUALITY DETAIL: ${item.error}\n` : "") +
       `STRUCTURAL QUALITY REVIEW: ${item.qualityReview?.score ?? "Not scored"}/100 (${item.qualityReview?.status || "not available"})\n` +
       (item.qualityReview?.warnings?.length
         ? `QUALITY WARNINGS: ${item.qualityReview.warnings.join("; ")}\n`
@@ -897,13 +911,13 @@ async function runCentralBrain(task, ownerUserId) {
     "| Specialist | Result | Actual provider | Structural quality |",
     "|---|---|---|---|",
     ...specialistResults.map(item =>
-      `| ${item.name} | ${item.success ? "Success" : "Failed"} | ${item.provider || "No successful provider"} | ${item.qualityReview ? item.qualityReview.score + "/100 (" + item.qualityReview.status + ")" : "Not scored"} |`
+      `| ${item.name} | ${item.success ? "Passed" : item.needsAttention ? "Needs attention" : "Failed"} | ${item.provider || "No successful provider"} | ${item.qualityReview ? item.qualityReview.score + "/100 (" + item.qualityReview.status + ")" : "Not scored"} |`
     ),
     "",
     `**Verified totals:** ${successfulResults.length}/${specialistResults.length} requested specialists succeeded; ${failedResults.length} failed.`,
     `**Average structural quality:** ${successfulResults.length ? Math.round(successfulResults.reduce((sum, item) => sum + (item.qualityReview?.score || 0), 0) / successfulResults.length) + "/100" : "Not available"} (structure-only; factual accuracy is not independently verified).`,
     failedResults.length
-      ? "**Overall status:** Partial completion. Do not treat this task as fully completed."
+      ? "**Overall status:** Partial completion / needs attention. Do not treat this task as fully completed."
       : "**Overall status:** All requested specialists completed successfully."
   ].join("\n");
 
