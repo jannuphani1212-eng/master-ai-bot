@@ -294,6 +294,8 @@ async function callGroq(task, instructions, maxTokens = 900) {
     const data = await response.json();
     const result = extractCompletionText(data, "Groq");
 
+    // A successful retry proves the short TPM window has cleared.
+    cooldowns.groq = 0;
     console.log("Groq AI response successful.");
 
     return result;
