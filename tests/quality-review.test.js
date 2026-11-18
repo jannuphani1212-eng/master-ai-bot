@@ -125,8 +125,10 @@ test("flags numerical business and performance claims for human verification", (
     "1. Verify. 2. Build. 3. Review."
   ].join("\n");
   const result = reviewSpecialistReport(report);
-  assert.equal(result.status, "needs_review");
-  assert.ok(result.score <= 70);
+  assert.equal(result.status, "passed");
+  assert.equal(result.score, 100);
+  assert.equal(result.evidenceReview, "needs_verification");
+  assert.equal(result.factualAccuracyScore, null);
   assert.ok(result.warnings.some(item => item.includes("numerical")));
 });
 
