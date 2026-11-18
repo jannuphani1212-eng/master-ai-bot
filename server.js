@@ -688,8 +688,17 @@ async function runCentralBrain(task, ownerUserId) {
   const specialistResults = [];
   const providersUsed = new Set();
 
-  if (planningProvider !== "Fallback selection") {
-    providersUsed.add(planningProvider);
+  // Deterministic assignment is internal orchestration, not an AI provider.
+  // When an AI planner needed deterministic routing, retain its real provider.
+  const actualPlanningProvider = planningProvider
+    .replace(/\s*\+\s*deterministic routing$/i, "")
+    .trim();
+  if (
+    actualPlanningProvider &&
+    actualPlanningProvider !== "Fallback selection" &&
+    actualPlanningProvider !== "Deterministic specialist assignment"
+  ) {
+    providersUsed.add(actualPlanningProvider);
   }
 
   // Execute specialists sequentially.
