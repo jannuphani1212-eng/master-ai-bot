@@ -87,15 +87,21 @@ test("does not award section points for headings mentioned only in prose", () =>
 test("recognizes the numbered report headings required by specialist prompts", () => {
   const report = [
     "1. Executive summary",
+    "A concise recommendation is provided for the stated objective.",
     "2. Audience, goal and assumptions",
+    "The audience and key assumptions are clearly described.",
     "3. Research and evidence",
+    "Current evidence is separated from items needing verification.",
     "4. Recommended strategy",
+    "Implement the recommended plan in prioritized stages.",
     "5. Concrete deliverables",
+    "Create the required drafts and practical checklists.",
     "6. Measurement plan",
+    "Measure results and establish a baseline.",
     "7. Risks, policy checks and quality-control steps",
+    "Review policy and factual risks before acting.",
     "8. Next three actions",
-    "Assumption: current metrics have not been supplied.",
-    "Next action: verify the official platform requirements."
+    "Assumption: current metrics have not been supplied. Next action: verify official platform requirements."
   ].join("\n");
 
   const result = reviewSpecialistReport(report);
