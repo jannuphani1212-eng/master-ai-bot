@@ -39,7 +39,7 @@ test("Blogging report headings and unverified numerical proposals pass structura
     "Proposed target: 10 visits per day, unverified."
   ].join("\\n");
   const review = reviewSpecialistReport(bloggingReport);
-  assert.equal(review.status, "passed");
+  assert.equal(review.status, "passed", JSON.stringify(review));
   assert.equal(review.score, 100);
   assert.equal(review.evidenceReview, "needs_verification");
   assert.equal(review.factualAccuracyScore, null);
