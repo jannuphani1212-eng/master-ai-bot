@@ -37,7 +37,7 @@ test("Blogging report headings and unverified numerical proposals pass structura
     "## 7. Risks, policy checks and quality-control steps", "Review sources and licensing.",
     "## 8. Next three actions", "1. Research. 2. Draft. 3. Review.",
     "Proposed target: 10 visits per day, unverified."
-  ].join("\\n");
+  ].join("\n");
   const review = reviewSpecialistReport(bloggingReport);
   assert.equal(review.status, "passed", JSON.stringify(review));
   assert.equal(review.score, 100);
