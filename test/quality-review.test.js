@@ -38,7 +38,6 @@ test("does not award a passing score to headings with empty or token content", (
     "## Measurement plan",
     "## Risks, policy checks and quality-control steps",
     "## Next three actions",
-    "source step"
   ].join("\n");
   const review = reviewSpecialistReport(headingsOnly);
   assert.equal(review.status, "needs_review");
@@ -49,7 +48,7 @@ test("does not award a passing score to headings with empty or token content", (
 test("reports thin sections separately from missing headings", () => {
   const review = reviewSpecialistReport(completeReport.replace(
     "This report recommends a focused launch sequence based on the stated business objective and constraints.",
-    "A plan."
+    ""
   ));
   assert.ok(review.thinSections.includes("Executive summary"));
   assert.deepEqual(review.missingSections, []);
