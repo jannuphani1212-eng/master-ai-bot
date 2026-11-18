@@ -26,6 +26,25 @@ test("unverified numeric claims warn separately without lowering structural scor
   assert.ok(review.warnings.some(item => /numerical.*claims/i.test(item)));
 });
 
+test("Blogging report headings and unverified numerical proposals pass structural review", () => {
+  const bloggingReport = [
+    "## 1. Executive summary", "A focused editorial proposal.",
+    "## 2. Audience and assumptions", "Assumption: analytics are not supplied.",
+    "## 3. Research and evidence", "Keyword demand needs live verification.",
+    "## 4. Recommended strategy", "Build the article outline.",
+    "## 5. Concrete deliverables", "Create an outline and fact-check list.",
+    "## 6. Measurement plan", "Measure impressions and clicks after publication.",
+    "## 7. Risks, policy checks and quality-control steps", "Review sources and licensing.",
+    "## 8. Next three actions", "1. Research. 2. Draft. 3. Review.",
+    "Proposed target: 10 visits per day, unverified."
+  ].join("\\n");
+  const review = reviewSpecialistReport(bloggingReport);
+  assert.equal(review.status, "passed");
+  assert.equal(review.score, 100);
+  assert.equal(review.evidenceReview, "needs_verification");
+  assert.equal(review.factualAccuracyScore, null);
+});
+
 test("missing report sections remain structural failures", () => {
   const review = reviewSpecialistReport("## 1. Executive summary\nAssumptions need verification. Build a draft.");
   assert.equal(review.status, "needs_review");
@@ -54,6 +73,21 @@ test("provider fallback retries one TPM-limited provider then succeeds", async (
   assert.deepEqual(result, { result: "Recovered report", provider: "Groq" });
   assert.equal(calls, 2);
   assert.deepEqual(waits, [1200]);
+});
+
+test("TPM retry uses capped exponential backoff", async () => {
+  let calls = 0;
+  const waits = [];
+  const result = await runProviderFallback([
+    { id: "groq", name: "Groq", available: true, call: async () => {
+      calls += 1;
+      if (calls < 3) throw new Error("HTTP 429 tokens per minute (TPM), try again in 1s");
+      return "Recovered after backoff";
+    }}
+  ], { sleep: async ms => waits.push(ms) });
+  assert.equal(result.result, "Recovered after backoff");
+  assert.equal(calls, 3);
+  assert.deepEqual(waits, [1000, 2000]);
 });
 
 test("provider fallback preserves failure details after TPM retry is exhausted", async () => {
