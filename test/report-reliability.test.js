@@ -101,7 +101,7 @@ test("provider fallback preserves failure details after TPM retry is exhausted",
     ], { sleep: async () => {} }),
     /Groq: HTTP 429 tokens per minute/
   );
-  assert.equal(calls, 2);
+  assert.equal(calls, 3);
 });
 
 test("OpenRouter empty response diagnostics include finish reason and provider error metadata", () => {
