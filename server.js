@@ -843,7 +843,7 @@ async function runCentralBrain(task, ownerUserId) {
             "When evidence is unavailable, state 'Needs live verification' and specify exactly what source or measurement is required.",
             "When a KPI baseline is unavailable, describe how to measure it first; do not invent a target.",
             "Complete every listed section in this response. Keep each section concise but useful.",
-            "Return only the missing sections, with no introduction or conclusion."
+            "Return only the requested sections, with no introduction or conclusion."
           ].join("\\n");
 
           const repairTask =
