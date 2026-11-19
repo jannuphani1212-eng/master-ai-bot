@@ -54,3 +54,30 @@ test("reports thin sections separately from missing headings", () => {
   assert.deepEqual(review.missingSections, []);
   assert.equal(review.status, "needs_review");
 });
+
+
+test("classifies verified facts, assumptions, estimates and recommendations separately", () => {
+  const report = completeReport + [
+    "",
+    "Verified facts: The owner supplied the Android-only constraint.",
+    "Assumptions: The first test niche is fashion and watches.",
+    "Estimates: No earnings estimate is available; any scenario requires owner inputs.",
+    "Recommendations: Start with one free publishing channel and measure baseline clicks."
+  ].join("\n");
+  const review = reviewSpecialistReport(report);
+  assert.deepEqual(review.missingEvidenceLabels, []);
+  assert.deepEqual(review.evidenceClassification, {
+    verifiedFacts: true,
+    assumptions: true,
+    estimates: true,
+    recommendations: true
+  });
+  assert.notEqual(review.factualAccuracyScore, 100);
+});
+
+test("flags missing evidence labels without misrepresenting factual accuracy as verified", () => {
+  const review = reviewSpecialistReport(completeReport);
+  assert.ok(review.missingEvidenceLabels.includes("verifiedFacts"));
+  assert.equal(review.evidenceReview, "needs_verification");
+  assert.equal(review.factualAccuracyScore, null);
+});
