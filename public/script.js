@@ -340,6 +340,15 @@ taskForm.addEventListener("submit", async (event) => {
     if (currentWorkspaceAgent) openAgentWorkspace(currentWorkspaceAgent);
     displayTaskResult(data, agentId);
   } catch (error) {
+    saveAgentHistory(agentId, {
+      timestamp: new Date().toISOString(),
+      task,
+      status: "Failed",
+      provider: "Not confirmed",
+      quality: null,
+      report: error.message
+    });
+    if (currentWorkspaceAgent === agentId) openAgentWorkspace(agentId);
     taskResult.textContent =
       "Task not completed.\n\n" +
       error.message +
