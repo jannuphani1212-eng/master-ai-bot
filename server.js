@@ -15,6 +15,7 @@ import { createSupabaseApprovalHandlers } from "./lib/supabase-approvals.js";
 import { createOwnerAuthMiddleware } from "./lib/owner-auth.js";
 import { createYoutubeIntegrationHandlers, getYoutubeAgentContext } from "./lib/youtube-integration.js";
 import { createAgentHistoryHandlers } from "./lib/supabase-task-history.js";
+import { parseSynthesisReuseRequest, validateSavedSpecialistReports } from "./lib/synthesis-reuse.js";
 import { createAgentPortfolioHandlers } from "./lib/agent-portfolio.js";
 import { createAuditMiddleware } from "./lib/audit-log.js";
 
@@ -88,9 +89,10 @@ const auditOwnerRequests = createAuditMiddleware();
 async function persistTaskHistory(ownerId, agentId, task, data, failure) {
   if (!ownerId) return;
   try {
-    if (agentId === "master" && Array.isArray(data?.specialistResults)) {
+    const specialistReportIds = [];
+    if (agentId === "master" && Array.isArray(data?.specialistResults) && !data?.reusedReports) {
       for (const item of data.specialistResults) {
-        await agentHistoryHandlers.record(ownerId, {
+        const savedId = await agentHistoryHandlers.record(ownerId, {
           agentId: item.agentId,
           task,
           status: item.success ? "completed" : item.needsAttention ? "needs_attention" : "failed",
@@ -100,9 +102,16 @@ async function persistTaskHistory(ownerId, agentId, task, data, failure) {
           error: item.error,
           metadata: { qualityReview: item.qualityReview || null }
         });
+        if (typeof savedId === "string") specialistReportIds.push(savedId);
       }
     }
-    await agentHistoryHandlers.record(ownerId, {
+    if (agentId === "master" && data) {
+      data.history = {
+        specialistReportIds: data.reusedReports ? data.reusedReportIds : specialistReportIds,
+        reusedExistingReports: Boolean(data.reusedReports)
+      };
+    }
+    const masterHistoryId = await agentHistoryHandlers.record(ownerId, {
       agentId,
       task,
       status: failure ? "failed" : data?.success === false ? "needs_attention" : "completed",
@@ -110,10 +119,18 @@ async function persistTaskHistory(ownerId, agentId, task, data, failure) {
       qualityScore: data?.qualityReview?.score,
       report: data?.result,
       error: failure?.message || data?.error,
-      metadata: { partialSuccess: Boolean(data?.partialSuccess), totalSpecialists: data?.totalSpecialists ?? null }
+      metadata: {
+        partialSuccess: Boolean(data?.partialSuccess),
+        totalSpecialists: data?.totalSpecialists ?? null,
+        reusedExistingReports: Boolean(data?.reusedReports),
+        reusedReportIds: data?.reusedReportIds || [],
+        specialistReportIds: data?.reusedReports ? data.reusedReportIds : specialistReportIds
+      }
     });
+    if (data?.history && typeof masterHistoryId === "string") data.history.masterHistoryId = masterHistoryId;
   } catch (historyError) {
     console.error("Persistent agent history could not be saved:", historyError.message);
+    if (data) data.history = { verified: false, error: historyError.message };
   }
 }
 // Apply IP limits before authentication so invalid-token floods are throttled too.
@@ -1028,6 +1045,47 @@ async function runCentralBrain(task, ownerUserId) {
   };
 }
 
+// Synthesis-only recovery retrieves owner-scoped saved reports and never runs specialists.
+async function runSynthesisFromSavedReports(task, ownerUserId, reportIds) {
+  if (!ownerUserId) throw new Error("Owner authentication is required to reuse saved reports.");
+  const rows = await agentHistoryHandlers.getByIds(ownerUserId, reportIds);
+  const reports = validateSavedSpecialistReports(rows, reportIds);
+  const specialistResults = reports.map(row => ({
+    agentId: row.agent_id,
+    name: agents.find(agent => agent.id === row.agent_id)?.name || row.agent_id,
+    success: true,
+    needsAttention: false,
+    provider: row.provider || "Not recorded",
+    result: row.report,
+    qualityReview: row.metadata?.qualityReview || null,
+    savedReportId: row.id,
+    createdAt: row.created_at
+  }));
+  const reportContext = specialistResults.map(item =>
+    "SAVED REPORT ID: " + item.savedReportId + "\n" +
+    "SPECIALIST: " + item.name + "\n" +
+    "ORIGINAL PROVIDER: " + item.provider + "\n" +
+    "ORIGINAL REPORT:\n" + compactReport(item.result, 5200)
+  ).join("\n\n--------------------\n\n");
+  const synthesis = await generateAI(
+    "SYNTHESIS ONLY. Do not execute, plan, or rerun specialists.\n" +
+    "Owner synthesis request:\n" + task.replace(/^\s*SYNTHESIS_ONLY_REPORT_IDS\s*:.*$/im, "").slice(0, 3000) +
+    "\n\nEXACTLY FIVE OWNER-VERIFIED SAVED REPORTS:\n" + reportContext,
+    "Synthesize only the five supplied saved reports. Do not invent sources or claim research not present in them. Resolve conflicts, prioritize India and zero-investment constraints where stated, separate verified facts from assumptions, and identify unsupported claims. Do not claim any specialist was executed. Return a useful unified plan.",
+    2600
+  );
+  if (!synthesis.result || !String(synthesis.result).trim()) throw new Error("Synthesis provider returned no usable text. Saved reports were not rerun.");
+  return {
+    success: true, reusedReports: true, reusedReportIds: reports.map(row => row.id),
+    agent: "master", provider: synthesis.provider, totalSpecialists: 5,
+    successfulSpecialists: 5, failedSpecialists: 0, needsAttentionSpecialists: 0,
+    specialistResults, requiresHumanApproval: true, executionMode: "proposal_only",
+    result: synthesis.result + "\n\n## Saved report reuse audit\n" +
+      reports.map(row => "- " + row.agent_id + ": " + row.id + " (saved " + row.created_at + ")").join("\n") +
+      "\n\n**Execution mode:** synthesis-only; no specialist execution was performed."
+  };
+}
+
 // =====================================
 // OWNER-ONLY YOUTUBE CHANNEL INTEGRATION
 // =====================================
@@ -1254,7 +1312,10 @@ app.post("/api/brain", async (req, res) => {
 
   try {
 
-    const result = await runCentralBrain(task, req.ownerUser?.id);
+    const reuseReportIds = parseSynthesisReuseRequest(task);
+    const result = reuseReportIds
+      ? await runSynthesisFromSavedReports(task, req.ownerUser?.id, reuseReportIds)
+      : await runCentralBrain(task, req.ownerUser?.id);
     await persistTaskHistory(req.ownerUser?.id, "master", task, result);
 
     return res.json(result);
