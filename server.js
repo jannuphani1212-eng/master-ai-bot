@@ -67,8 +67,6 @@ function limitApiRequests(req, res, next) {
 app.use(express.json({ limit: "1mb" }));
 const requireOwner = createOwnerAuthMiddleware();
 const agentHistoryHandlers = createAgentHistoryHandlers();
-app.get("/api/agent-history", agentHistoryHandlers.list);
-
 async function persistTaskHistory(ownerId, agentId, task, data, failure) {
   if (!ownerId) return;
   try {
@@ -101,6 +99,7 @@ async function persistTaskHistory(ownerId, agentId, task, data, failure) {
   }
 }
 app.use(["/api/task", "/api/brain", "/api/repair-proposals", "/api/agent-history"], requireOwner);
+app.get("/api/agent-history", agentHistoryHandlers.list);
 app.use(["/api/task", "/api/brain"], limitApiRequests);
 app.use(express.static("public"));
 
@@ -1290,6 +1289,7 @@ app.post("/api/task", async (req, res) => {
 
     if (agentId === "master") {
       const result = await runCentralBrain(task, req.ownerUser?.id);
+      await persistTaskHistory(req.ownerUser?.id, agentId, task, result);
       return res.json(result);
     }
 
@@ -1358,7 +1358,7 @@ app.post("/api/task", async (req, res) => {
       error: qualityFailure
     });
 
-    return res.json({
+    const taskResponse = {
       success: qualityPassed,
       needsAttention: !qualityPassed,
       ...(qualityFailure ? { error: qualityFailure } : {}),
@@ -1370,7 +1370,9 @@ app.post("/api/task", async (req, res) => {
       executionMode: "proposal_only",
       approvalNotice: "This is a draft. Review it before publishing, spending, sending, deleting, or deploying anything.",
       result: specialistReport
-    });
+    };
+    await persistTaskHistory(req.ownerUser?.id, agentId, task, taskResponse);
+    return res.json(taskResponse);
 
   } catch (error) {
 
@@ -1383,6 +1385,7 @@ app.post("/api/task", async (req, res) => {
       });
     }
 
+    await persistTaskHistory(req.ownerUser?.id, agentId, task, null, error);
     return res.status(502).json({
       success: false,
       error: "The selected AI agent could not complete this task.",
