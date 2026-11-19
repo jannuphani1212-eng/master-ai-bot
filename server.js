@@ -1028,7 +1028,7 @@ async function runCentralBrain(task, ownerUserId) {
     ),
     "",
     `**Verified totals:** ${successfulResults.length} passed, ${needsAttentionResults.length} need attention, ${failedResults.length} failed.`,
-    `**Master Brain synthesis:** ${synthesisSucceeded ? "Completed" : "Needs attention — " + (synthesisError || "no usable synthesis text")}.`
+    `**Master Brain synthesis:** ${synthesisSucceeded ? "Completed" : "Needs attention — " + (synthesisError || "no usable synthesis text")}.`,
     `**Average structural quality:** ${scoredResults.length ? Math.round(scoredResults.reduce((sum, item) => sum + (item.qualityReview?.score || 0), 0) / scoredResults.length) + "/100" : "Not available"} (structure-only; factual accuracy is not independently verified).`,
     nonPassingResults.length
       ? "**Overall status:** Partial completion / needs attention. Do not treat this task as fully completed."
