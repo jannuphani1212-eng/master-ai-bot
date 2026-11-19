@@ -16,6 +16,7 @@ import { createOwnerAuthMiddleware } from "./lib/owner-auth.js";
 import { createYoutubeIntegrationHandlers, getYoutubeAgentContext } from "./lib/youtube-integration.js";
 import { createAgentHistoryHandlers } from "./lib/supabase-task-history.js";
 import { createAgentPortfolioHandlers } from "./lib/agent-portfolio.js";
+import { createAuditMiddleware } from "./lib/audit-log.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -83,6 +84,7 @@ app.use(express.json({ limit: "1mb" }));
 const requireOwner = createOwnerAuthMiddleware();
 const agentHistoryHandlers = createAgentHistoryHandlers();
 const agentPortfolioHandlers = createAgentPortfolioHandlers();
+const auditOwnerRequests = createAuditMiddleware();
 async function persistTaskHistory(ownerId, agentId, task, data, failure) {
   if (!ownerId) return;
   try {
@@ -119,6 +121,7 @@ app.use(["/api/task", "/api/brain", "/api/agent-history", "/api/agent-portfolio"
 // Protect approval and diagnostic endpoints from repeated requests as well.
 // Approval handlers still perform their own Supabase owner-token verification.
 app.use(["/api/approvals", "/api/repair-proposals"], limitApiRequests);
+app.use(["/api/task", "/api/brain", "/api/repair-proposals", "/api/agent-history", "/api/agent-portfolio", "/api/youtube"], auditOwnerRequests);
 app.get("/api/agent-history", agentHistoryHandlers.list);
 app.get("/api/agent-portfolio", agentPortfolioHandlers.get);
 app.use(express.static("public"));
