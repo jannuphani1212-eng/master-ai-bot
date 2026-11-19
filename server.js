@@ -1441,8 +1441,8 @@ app.post("/api/task", async (req, res) => {
         ].join("\n");
         const repairTask =
           "ORIGINAL SPECIALIST TASK:\n" + specialistTask.slice(0, 2500) +
-          "\n\nMISSING SECTIONS TO GENERATE (ONLY THESE):\n" +
-          missingSections.map(section => "## " + section).join("\n") +
+          "\n\nSECTIONS TO COMPLETE (ONLY THESE):\n" +
+          repairSections.map(section => "## " + section).join("\n") +
           "\n\nORIGINAL REPORT — PRESERVE IT, DO NOT REWRITE:\n" +
           compactReport(specialistReport, 5200);
         const repair = await generateAI(repairTask, repairInstructions, 1500);
