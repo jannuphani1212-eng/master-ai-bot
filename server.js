@@ -1073,6 +1073,10 @@ app.get("/api/approvals/config", (req, res) => {
 
 const approvalHandlers = createSupabaseApprovalHandlers();
 
+// Approval records and decisions are owner-only. Keep /config public because
+// it exposes only the Supabase URL and anon key needed to render sign-in.
+app.use("/api/approvals", requireOwner);
+app.use("/api/approvals", auditOwnerRequests);
 app.get("/api/approvals", approvalHandlers.list);
 app.post("/api/approvals", approvalHandlers.create);
 app.patch("/api/approvals/:id/decision", approvalHandlers.decide);
