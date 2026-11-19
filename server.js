@@ -1148,6 +1148,22 @@ app.get("/api/status", (req, res) => {
       authentication: "Supabase user access token + owner allowlist",
       executionEnabled: false
     },
+    agentHistoryStorage: {
+      configured: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY),
+      provider: "Supabase Postgres",
+      table: "agent_task_history",
+      ownerScoped: true
+    },
+    integrations: {
+      youtube: {
+        oauthConfigured: Boolean(process.env.YOUTUBE_CLIENT_ID && process.env.YOUTUBE_CLIENT_SECRET && process.env.YOUTUBE_REDIRECT_URI && process.env.YOUTUBE_TOKEN_ENCRYPTION_KEY && process.env.SUPABASE_SERVICE_ROLE_KEY),
+        mode: "read_only"
+      },
+      affiliate: { campaignTrackingStorage: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY), externalProgramApi: false },
+      blogging: { draftStorage: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY), cmsOAuth: false },
+      seo: { searchConsoleOAuth: false },
+      "app-development": { repositoryAutomation: false }
+    },
     agents
   });
 
@@ -1213,6 +1229,7 @@ app.post("/api/brain", async (req, res) => {
   try {
 
     const result = await runCentralBrain(task, req.ownerUser?.id);
+    await persistTaskHistory(req.ownerUser?.id, "master", task, result);
 
     return res.json(result);
 
@@ -1222,6 +1239,7 @@ app.post("/api/brain", async (req, res) => {
       "Central Brain failed:",
       error.message
     );
+    await persistTaskHistory(req.ownerUser?.id, "master", task, null, error);
 
     return res.status(502).json({
       success: false,
