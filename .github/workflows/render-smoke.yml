@@ -26,7 +26,7 @@ jobs:
                   process.stdin.on("end", () => {
                     try {
                       const data = JSON.parse(input);
-                      const expected = ["Gemini", "Groq", "OpenRouter"];
+                      const expected = ["Groq", "OpenRouter", "Gemini"];
                       const agents = (data.agents || []).map(agent => agent.id);
                       const requiredAgents = ["master", "affiliate", "youtube", "blogging", "app-development", "seo"];
                       if (!Array.isArray(data.providerOrder) ||
@@ -41,7 +41,7 @@ jobs:
                       }
                       console.log("Production smoke test passed.");
                       console.log("All six agents are registered.");
-                      console.log("Gemini → Groq → OpenRouter order is live.");
+                      console.log("Groq → OpenRouter → Gemini order is live.");
                       console.log("Approval policy is live.");
                     } catch (error) {
                       console.error(error.message);
