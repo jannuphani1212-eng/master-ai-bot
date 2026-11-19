@@ -436,13 +436,9 @@ async function callOpenRouter(
 // =====================================
 
 async function generateAI(task, instructions, maxTokens = 900) {
+  // Reliability-first provider order: Groq primary, OpenRouter fallback,
+  // Gemini final fallback. Keep all configured keys and models unchanged.
   const providers = [
-    {
-      id: "gemini",
-      name: "Gemini",
-      key: "GEMINI_API_KEY",
-      call: callGemini
-    },
     {
       id: "groq",
       name: "Groq",
@@ -454,6 +450,12 @@ async function generateAI(task, instructions, maxTokens = 900) {
       name: "OpenRouter",
       key: "OPENROUTER_API_KEY",
       call: callOpenRouter
+    },
+    {
+      id: "gemini",
+      name: "Gemini",
+      key: "GEMINI_API_KEY",
+      call: callGemini
     }
   ].map((provider) => ({
     ...provider,
