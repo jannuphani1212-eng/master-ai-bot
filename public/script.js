@@ -166,7 +166,8 @@ function openAgentWorkspace(agentId) {
   showWorkspaceMetric(metrics,"Readiness",health?.status||"Registered",health?.rootCause||"Local readiness only; external provider tests are separate.");
   const sourceLabel=document.getElementById("workspaceHistorySource");
   if(sourceLabel) sourceLabel.textContent=approvalAccessToken?"Loading your saved history…":"Browser-local history";
-  if(approvalAccessToken) void loadPersistentAgentHistory(agentId);\n  if(agentId==="youtube") loadWorkspaceYoutube();
+  if(approvalAccessToken) void loadPersistentAgentHistory(agentId);
+  if(agentId==="youtube") loadWorkspaceYoutube();
   panel.scrollIntoView({behavior:"smooth",block:"start"});
 }
 async function loadPersistentAgentHistory(agentId) {
