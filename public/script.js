@@ -37,6 +37,7 @@ async function loadSystemStatus() {
     if (!response.ok) throw new Error("Backend status request failed.");
 
     const data = await response.json();
+    latestStatusData = data;
     const providers = data.providers || {};
     const providerLines = Object.entries(providers).map(([name, info]) => {
       const state = !info.configured
@@ -69,12 +70,120 @@ async function loadSystemStatus() {
   }
 }
 
+const agentProfiles = {
+  master: {name:"Master AI Brain",role:"Coordinates all five specialists, compares results and identifies gaps.",icon:"✦",tag:"ORCHESTRATOR",capabilities:["Breaks a goal into specialist tasks","Routes work and combines specialist reports","Compares results, flags missing evidence and failures","Creates safe repair proposals for owner review"],assets:["Five specialist agents are registered in the backend.","Provider order: Gemini → Groq → OpenRouter."],recommendations:["Use the Master Brain for goals requiring multiple disciplines.","Review each specialist report and its evidence warnings before acting."]},
+  youtube: {name:"YouTube",role:"Plans channel strategy, video ideas, scripts, packaging and audience growth.",icon:"▶",tag:"VIDEO",capabilities:["Create original video ideas, scripts and storyboards","Plan titles, descriptions, thumbnails and publishing calendars","Review connected channel statistics and recent uploads","Flag copyright, Made for Kids and monetization checks for verification"],assets:["Planned channel: Global Rhymes 4U (@GlobalRhymes4u). Live connection status is checked from Google OAuth."],recommendations:["Connect the dedicated Global Rhymes 4U Google account to display real subscribers, views, uploads and analytics.","Start with a short, focused video task if a long report times out."]},
+  affiliate: {name:"Affiliate Marketing",role:"Plans ethical product research, campaigns, content and conversion tracking.",icon:"↗",tag:"REVENUE",capabilities:["Compare affiliate programs and product opportunities","Draft product reviews, Shorts and promotional content","Plan disclosures and campaign tracking","Separate verified commission terms from assumptions"],assets:["No affiliate program or campaign connection is currently verified by the app."],recommendations:["Connect or record each affiliate program only after its account is actually authorized.","Verify current commission rates, cookie windows and program rules from official sources."]},
+  blogging: {name:"Blogging",role:"Builds editorial plans, article outlines and useful drafts.",icon:"✎",tag:"CONTENT",capabilities:["Research reader intent and article topics","Create outlines, drafts, FAQs and editorial calendars","Prepare internal-link and update recommendations","Track draft and publishing work in the task history"],assets:["No blog or CMS connection is currently verified by the app."],recommendations:["Add a Blogger or WordPress connection before treating any site or published article as a live asset.","Use the first article to establish a content and traffic baseline."]},
+  "app-development": {name:"App Development",role:"Plans, builds and troubleshoots application projects.",icon:"▣",tag:"PRODUCT & CODE",capabilities:["Turn ideas into app requirements and user flows","Generate implementation plans and code drafts","Review bugs, tests, architecture and release readiness","Explain Android-first steps in beginner-friendly language"],assets:["No app repository, build pipeline or Play Store connection is currently verified by the app."],recommendations:["Register each app project or repository before showing it as a connected asset.","Keep builds and releases owner-approved."]},
+  seo: {name:"SEO",role:"Improves discoverability through research, audits and content optimisation.",icon:"⌕",tag:"DISCOVERY",capabilities:["Build keyword clusters and search-intent maps","Prepare technical and on-page SEO audits","Create content briefs and internal-link plans","Interpret Search Console data when connected"],assets:["No website or Search Console property is currently verified by the app."],recommendations:["Connect a verified website and Search Console property to show real clicks, impressions and positions.","Avoid claiming keyword rankings without current measurement data."]}
+};
+const AGENT_HISTORY_KEY = "masterAiBot.agentWorkHistory.v1";
+function readAgentHistory() {
+  try { const value=JSON.parse(localStorage.getItem(AGENT_HISTORY_KEY)||"{}"); return value&&typeof value==="object"?value:{}; }
+  catch { return {}; }
+}
+function saveAgentHistory(agentId,item) {
+  const history=readAgentHistory();
+  history[agentId]=[item,...(Array.isArray(history[agentId])?history[agentId]:[])].slice(0,30);
+  try { localStorage.setItem(AGENT_HISTORY_KEY,JSON.stringify(history)); } catch {}
+}
+function recordTaskHistory(data,selectedAgent,task) {
+  const timestamp=new Date().toISOString();
+  if(selectedAgent==="master" && Array.isArray(data.specialistResults)) {
+    data.specialistResults.forEach(item=>saveAgentHistory(item.agentId,{timestamp,task,status:item.success?"Completed":"Needs attention",provider:item.provider||"Not reported",quality:item.qualityReview?.score??null,report:item.result||item.error||""}));
+  }
+  saveAgentHistory(selectedAgent,{timestamp,task,status:data.success===false?"Needs attention":"Completed",provider:data.provider||"Not reported",quality:data.qualityReview?.score??null,report:data.result||""});
+}
+let currentWorkspaceAgent = null;
+let latestStatusData = null;
 function displayAgents(agents) {
   agentList.replaceChildren();
-  const team=[["master","Master AI Brain","Plans, delegates and combines reports.","✦","ORCHESTRATOR"],["youtube","YouTube","Video ideas, channel strategy and growth.","▶","VIDEO"],["app-development","App Development","App architecture and implementation plans.","▣","PRODUCT & CODE"],["affiliate","Affiliate Marketing","Product research and conversion strategy.","↗","REVENUE"],["blogging","Blogging","Articles and editorial planning.","✎","CONTENT"],["seo","SEO","Keywords and search strategy.","⌕","DISCOVERY"]];
   const byId=new Map(agents.map(agent=>[agent.id,agent]));
-  team.forEach(([id,name,role,icon,tag])=>{const source=byId.get(id)||{};const card=document.createElement("article");card.className="agent-card"+(id==="master"?" master-agent":"");addText(card,"span",icon,"agent-icon");const body=document.createElement("div");addText(body,"h3",source.name||name);addText(body,"p",source.role||role);addText(body,"span",tag,"agent-role");card.appendChild(body);addText(card,"span","● Configured","agent-state");agentList.appendChild(card);});
+  Object.entries(agentProfiles).forEach(([id,profile])=>{
+    const source=byId.get(id)||{};
+    const card=document.createElement("article");
+    card.className="agent-card"+(id==="master"?" master-agent":"");
+    card.tabIndex=0; card.setAttribute("role","button");
+    card.setAttribute("aria-label","Open "+profile.name+" workspace");
+    card.dataset.agentId=id;
+    addText(card,"span",profile.icon,"agent-icon");
+    const body=document.createElement("div");
+    addText(body,"h3",source.name||profile.name);
+    addText(body,"p",source.role||profile.role);
+    addText(body,"span",profile.tag,"agent-role");
+    card.appendChild(body);
+    const health=latestStatusData?.specialistHealth?.agents?.find(item=>item.agentId===id);
+    const state=health?.status||"registered";
+    addText(card,"span","● "+(state==="healthy"?"Ready":state==="degraded"?"Needs attention":"Registered"),"agent-state");
+    addText(card,"span","Open workspace →","agent-open-label");
+    const open=()=>openAgentWorkspace(id);
+    card.addEventListener("click",open);
+    card.addEventListener("keydown",event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();open();}});
+    agentList.appendChild(card);
+  });
 }
+function showWorkspaceMetric(parent,label,value,detail="") {
+  const card=document.createElement("article");card.className="workspace-metric";
+  addText(card,"span",label,"muted");addText(card,"strong",String(value));
+  if(detail)addText(card,"small",detail,"muted");parent.appendChild(card);
+}
+function openAgentWorkspace(agentId) {
+  const profile=agentProfiles[agentId];if(!profile)return;
+  currentWorkspaceAgent=agentId;
+  const panel=document.getElementById("agentWorkspace");
+  document.querySelector(".agents-panel").hidden=true;
+  panel.hidden=false;
+  document.getElementById("workspaceEyebrow").textContent=profile.tag+" WORKSPACE";
+  document.getElementById("workspaceTitle").textContent=profile.name;
+  document.getElementById("workspaceDescription").textContent=profile.role;
+  document.getElementById("workspaceHealth").textContent=(latestStatusData?.specialistHealth?.agents?.find(item=>item.agentId===agentId)?.status||"registered").replace("-"," ");
+  const capabilities=document.getElementById("workspaceCapabilities");capabilities.replaceChildren();
+  profile.capabilities.forEach(value=>addText(capabilities,"li",value));
+  const assets=document.getElementById("workspaceAssets");assets.replaceChildren();
+  profile.assets.forEach(value=>addText(assets,"p",value,"muted"));
+  const rec=document.getElementById("workspaceRecommendations");rec.replaceChildren();
+  profile.recommendations.forEach(value=>addText(rec,"p","• "+value,"muted"));
+  const history=readAgentHistory()[agentId]||[];
+  const historyNode=document.getElementById("workspaceHistory");historyNode.replaceChildren();
+  if(!history.length)addText(historyNode,"p","No task history recorded for this agent in this browser yet.","muted");
+  history.forEach(item=>{
+    const row=document.createElement("article");row.className="workspace-history-item";
+    addText(row,"strong",item.task||"Untitled task");
+    addText(row,"p",(item.status||"Unknown")+" · "+(item.provider||"Provider not reported")+(item.quality!==null&&item.quality!==undefined?" · Structural score "+item.quality+"/100":""),"muted");
+    addText(row,"small",new Date(item.timestamp).toLocaleString(),"muted");
+    if(item.report){const details=document.createElement("details");const summary=document.createElement("summary");summary.textContent="View report";details.appendChild(summary);addText(details,"p",item.report);row.appendChild(details);}
+    historyNode.appendChild(row);
+  });
+  const metrics=document.getElementById("workspaceMetrics");metrics.replaceChildren();
+  showWorkspaceMetric(metrics,"Tasks saved",history.length,"Browser-local history");
+  showWorkspaceMetric(metrics,"Capabilities",profile.capabilities.length,"Defined agent functions");
+  const health=latestStatusData?.specialistHealth?.agents?.find(item=>item.agentId===agentId);
+  showWorkspaceMetric(metrics,"Readiness",health?.status||"Registered",health?.rootCause||"Local readiness only; external provider tests are separate.");
+  if(agentId==="youtube") loadWorkspaceYoutube();
+  panel.scrollIntoView({behavior:"smooth",block:"start"});
+}
+async function loadWorkspaceYoutube() {
+  const assets=document.getElementById("workspaceAssets");
+  if(!approvalAccessToken){addText(assets,"p","Sign in as owner to verify the Global Rhymes 4U channel connection and view live channel data.","muted");return;}
+  try {
+    const status=await youtubeApi("/api/youtube/status");
+    if(!status.connected){addText(assets,"p","Live YouTube channels connected: 0. Global Rhymes 4U is planned but not yet authorized.","warning-text");return;}
+    const response=await youtubeApi("/api/youtube/channel");
+    const channel=response.channel;
+    addText(assets,"p","Live connected channel: "+channel.title,"quality-passed");
+    const metrics=document.createElement("div");metrics.className="workspace-metrics";
+    showWorkspaceMetric(metrics,"Subscribers",channel.subscribers===null?"Hidden":Number(channel.subscribers).toLocaleString(),"YouTube Data API");
+    showWorkspaceMetric(metrics,"Channel views",Number(channel.views).toLocaleString(),"YouTube Data API");
+    showWorkspaceMetric(metrics,"Videos",Number(channel.videoCount).toLocaleString(),"YouTube Data API");
+    assets.appendChild(metrics);
+    const recent=await youtubeApi("/api/youtube/videos");
+    addText(assets,"p","Recent uploads returned: "+(recent.videos||[]).length,"muted");
+  } catch(error){addText(assets,"p","YouTube live data unavailable: "+error.message,"warning-text");}
+}
+document.getElementById("workspaceBackButton").addEventListener("click",()=>{document.getElementById("agentWorkspace").hidden=true;document.querySelector(".agents-panel").hidden=false;document.querySelector(".agents-panel").scrollIntoView({behavior:"smooth",block:"start"});});
+document.getElementById("workspaceRunButton").addEventListener("click",()=>{agentSelect.value=currentWorkspaceAgent;document.getElementById("agentWorkspace").hidden=true;document.querySelector(".agents-panel").hidden=false;taskForm.scrollIntoView({behavior:"smooth",block:"start"});taskInput.focus();});
+document.getElementById("workspaceRefreshButton").addEventListener("click",()=>{if(currentWorkspaceAgent)openAgentWorkspace(currentWorkspaceAgent);});
 
 function displayTaskResult(data, selectedAgent) {
   taskResult.replaceChildren();
@@ -223,6 +332,8 @@ taskForm.addEventListener("submit", async (event) => {
     } else {
       addFeedStep("Response received from " + (data.agent || agentId) + (data.provider ? " · " + data.provider : ""), true);
     }
+    recordTaskHistory(data, agentId, task);
+    if (currentWorkspaceAgent) openAgentWorkspace(currentWorkspaceAgent);
     displayTaskResult(data, agentId);
   } catch (error) {
     taskResult.textContent =
@@ -344,6 +455,7 @@ async function restoreApprovalSession() {
     setApprovalMessage("Owner session restored. Loading your approval queue...");
     await loadApprovalQueue();
     await loadYoutubeStatus();
+    if (currentWorkspaceAgent === "youtube") openAgentWorkspace("youtube");
   } catch (error) {
     setApprovalMessage("Could not restore your owner session: " + error.message, true);
   }
