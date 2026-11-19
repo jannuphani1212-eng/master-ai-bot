@@ -63,7 +63,7 @@ test("classifies verified facts, assumptions, estimates and recommendations sepa
     "Assumptions: The first test niche is fashion and watches.",
     "Estimates: No earnings estimate is available; any scenario requires owner inputs.",
     "Recommendations: Start with one free publishing channel and measure baseline clicks."
-  ].join("\\n");
+  ].join("\n");
   const review = reviewSpecialistReport(report);
   assert.deepEqual(review.missingEvidenceLabels, []);
   assert.deepEqual(review.evidenceClassification, {
