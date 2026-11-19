@@ -1136,7 +1136,7 @@ app.get("/api/status", (req, res) => {
       groq: process.env.GROQ_MODEL || "openai/gpt-oss-20b",
       openrouter: process.env.OPENROUTER_MODEL || "openrouter/free"
     },
-    providerOrder: ["Gemini", "Groq", "OpenRouter"],
+    providerOrder: ["Groq", "OpenRouter", "Gemini"],
     specialistHealth: selfHealingMonitor.snapshot(),
     healthCheck: {
       mode: "local_readiness",
