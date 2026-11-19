@@ -101,9 +101,9 @@ async function persistTaskHistory(ownerId, agentId, task, data, failure) {
   }
 }
 app.use(["/api/task", "/api/brain", "/api/repair-proposals", "/api/agent-history", "/api/agent-portfolio"], requireOwner);
+app.use(["/api/task", "/api/brain", "/api/agent-history", "/api/agent-portfolio"], limitApiRequests);
 app.get("/api/agent-history", agentHistoryHandlers.list);
 app.get("/api/agent-portfolio", agentPortfolioHandlers.get);
-app.use(["/api/task", "/api/brain", "/api/agent-history", "/api/agent-portfolio"], limitApiRequests);
 app.use(express.static("public"));
 
 // =====================================
