@@ -1062,15 +1062,15 @@ async function runSynthesisFromSavedReports(task, ownerUserId, reportIds) {
     createdAt: row.created_at
   }));
   const reportContext = specialistResults.map(item =>
-    "SAVED REPORT ID: " + item.savedReportId + "\\n" +
-    "SPECIALIST: " + item.name + "\\n" +
-    "ORIGINAL PROVIDER: " + item.provider + "\\n" +
-    "ORIGINAL REPORT:\\n" + compactReport(item.result, 5200)
-  ).join("\\n\\n--------------------\\n\\n");
+    "SAVED REPORT ID: " + item.savedReportId + "\n" +
+    "SPECIALIST: " + item.name + "\n" +
+    "ORIGINAL PROVIDER: " + item.provider + "\n" +
+    "ORIGINAL REPORT:\n" + compactReport(item.result, 5200)
+  ).join("\n\n--------------------\n\n");
   const synthesis = await generateAI(
-    "SYNTHESIS ONLY. Do not execute, plan, or rerun specialists.\\n" +
-    "Owner synthesis request:\\n" + task.replace(/^\\s*SYNTHESIS_ONLY_REPORT_IDS\\s*:.*$/im, "").slice(0, 3000) +
-    "\\n\\nEXACTLY FIVE OWNER-VERIFIED SAVED REPORTS:\\n" + reportContext,
+    "SYNTHESIS ONLY. Do not execute, plan, or rerun specialists.\n" +
+    "Owner synthesis request:\n" + task.replace(/^\s*SYNTHESIS_ONLY_REPORT_IDS\s*:.*$/im, "").slice(0, 3000) +
+    "\n\nEXACTLY FIVE OWNER-VERIFIED SAVED REPORTS:\n" + reportContext,
     "Synthesize only the five supplied saved reports. Do not invent sources or claim research not present in them. Resolve conflicts, prioritize India and zero-investment constraints where stated, separate verified facts from assumptions, and identify unsupported claims. Do not claim any specialist was executed. Return a useful unified plan.",
     2600
   );
@@ -1080,9 +1080,9 @@ async function runSynthesisFromSavedReports(task, ownerUserId, reportIds) {
     agent: "master", provider: synthesis.provider, totalSpecialists: 5,
     successfulSpecialists: 5, failedSpecialists: 0, needsAttentionSpecialists: 0,
     specialistResults, requiresHumanApproval: true, executionMode: "proposal_only",
-    result: synthesis.result + "\\n\\n## Saved report reuse audit\\n" +
-      reports.map(row => "- " + row.agent_id + ": " + row.id + " (saved " + row.created_at + ")").join("\\n") +
-      "\\n\\n**Execution mode:** synthesis-only; no specialist execution was performed."
+    result: synthesis.result + "\n\n## Saved report reuse audit\n" +
+      reports.map(row => "- " + row.agent_id + ": " + row.id + " (saved " + row.created_at + ")").join("\n") +
+      "\n\n**Execution mode:** synthesis-only; no specialist execution was performed."
   };
 }
 
