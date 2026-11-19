@@ -14,6 +14,7 @@ import { reviewSpecialistReport } from "./lib/quality-review.js";
 import { createSupabaseApprovalHandlers } from "./lib/supabase-approvals.js";
 import { createOwnerAuthMiddleware } from "./lib/owner-auth.js";
 import { createYoutubeIntegrationHandlers, getYoutubeAgentContext } from "./lib/youtube-integration.js";
+import { createAgentHistoryHandlers } from "./lib/supabase-task-history.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -65,7 +66,41 @@ function limitApiRequests(req, res, next) {
 
 app.use(express.json({ limit: "1mb" }));
 const requireOwner = createOwnerAuthMiddleware();
-app.use(["/api/task", "/api/brain", "/api/repair-proposals"], requireOwner);
+const agentHistoryHandlers = createAgentHistoryHandlers();
+app.get("/api/agent-history", agentHistoryHandlers.list);
+
+async function persistTaskHistory(ownerId, agentId, task, data, failure) {
+  if (!ownerId) return;
+  try {
+    if (agentId === "master" && Array.isArray(data?.specialistResults)) {
+      for (const item of data.specialistResults) {
+        await agentHistoryHandlers.record(ownerId, {
+          agentId: item.agentId,
+          task,
+          status: item.success ? "completed" : item.needsAttention ? "needs_attention" : "failed",
+          provider: item.provider,
+          qualityScore: item.qualityReview?.score,
+          report: item.result,
+          error: item.error,
+          metadata: { qualityReview: item.qualityReview || null }
+        });
+      }
+    }
+    await agentHistoryHandlers.record(ownerId, {
+      agentId,
+      task,
+      status: failure ? "failed" : data?.success === false ? "needs_attention" : "completed",
+      provider: data?.provider,
+      qualityScore: data?.qualityReview?.score,
+      report: data?.result,
+      error: failure?.message || data?.error,
+      metadata: { partialSuccess: Boolean(data?.partialSuccess), totalSpecialists: data?.totalSpecialists ?? null }
+    });
+  } catch (historyError) {
+    console.error("Persistent agent history could not be saved:", historyError.message);
+  }
+}
+app.use(["/api/task", "/api/brain", "/api/repair-proposals", "/api/agent-history"], requireOwner);
 app.use(["/api/task", "/api/brain"], limitApiRequests);
 app.use(express.static("public"));
 
