@@ -969,14 +969,22 @@ async function runCentralBrain(task, ownerUserId) {
     "Do not turn proposed KPI examples into targets or forecasts; define what to measure first and establish a baseline.";
 
   let finalResult;
+  let synthesisSucceeded = false;
+  let synthesisError = null;
 
   try {
 
     const synthesis = await generateAI(
       "ORIGINAL USER TASK:\n" +
       task.slice(0, 2500) +
-      "\n\nSPECIALIST REPORTS:\n" +
-      specialistSummary,
+      "\n\nSPECIALIST REPORTS (compact decision briefs, one per specialist):\n" +
+      specialistResults.map(item => [
+        "SPECIALIST: " + item.name,
+        "STATUS: " + (item.success ? "Passed" : item.needsAttention ? "Needs attention" : "Failed"),
+        "PROVIDER: " + (item.provider || "Not available"),
+        "EVIDENCE REVIEW: " + (item.evidenceReview || "not classified"),
+        "REPORT EXCERPT:\n" + compactReport(item.result, 1150)
+      ].join("\n")).join("\n\n---\n\n"),
       synthesisInstructions,
       2000
     );
@@ -984,14 +992,17 @@ async function runCentralBrain(task, ownerUserId) {
     providersUsed.add(synthesis.provider);
 
     finalResult = synthesis.result;
+    synthesisSucceeded = Boolean(String(finalResult || "").trim());
+    if (!synthesisSucceeded) throw new Error("Synthesis provider returned no usable text.");
 
     console.log("Final AI synthesis successful.");
 
   } catch (error) {
 
+    synthesisError = String(error.message || "Unknown synthesis failure").slice(0, 1200);
     console.error(
       "Final synthesis failed:",
-      error.message
+      synthesisError
     );
 
     finalResult =
@@ -1017,6 +1028,7 @@ async function runCentralBrain(task, ownerUserId) {
     ),
     "",
     `**Verified totals:** ${successfulResults.length} passed, ${needsAttentionResults.length} need attention, ${failedResults.length} failed.`,
+    `**Master Brain synthesis:** ${synthesisSucceeded ? "Completed" : "Needs attention — " + (synthesisError || "no usable synthesis text")}.`
     `**Average structural quality:** ${scoredResults.length ? Math.round(scoredResults.reduce((sum, item) => sum + (item.qualityReview?.score || 0), 0) / scoredResults.length) + "/100" : "Not available"} (structure-only; factual accuracy is not independently verified).`,
     nonPassingResults.length
       ? "**Overall status:** Partial completion / needs attention. Do not treat this task as fully completed."
@@ -1026,8 +1038,10 @@ async function runCentralBrain(task, ownerUserId) {
   finalResult = finalResult + "\n\n" + executionAudit;
 
   return {
-    success: nonPassingResults.length === 0 && specialistResults.length > 0,
-    partialSuccess: successfulResults.length > 0 && nonPassingResults.length > 0,
+    success: nonPassingResults.length === 0 && specialistResults.length > 0 && synthesisSucceeded,
+    partialSuccess: successfulResults.length > 0 && (nonPassingResults.length > 0 || !synthesisSucceeded),
+    synthesisStatus: synthesisSucceeded ? "completed" : "needs_attention",
+    synthesisError,
     agent: "master",
     provider: [...providersUsed].join(" + ") || "Unknown",
     totalSpecialists: specialistResults.length,
@@ -1067,13 +1081,13 @@ async function runSynthesisFromSavedReports(task, ownerUserId, reportIds) {
     "SAVED REPORT ID: " + item.savedReportId + "\n" +
     "SPECIALIST: " + item.name + "\n" +
     "ORIGINAL PROVIDER: " + item.provider + "\n" +
-    "ORIGINAL REPORT:\n" + compactReport(item.result, 5200)
+    "ORIGINAL REPORT:\n" + compactReport(item.result, 1200)
   ).join("\n\n--------------------\n\n");
   const synthesis = await generateAI(
     "SYNTHESIS ONLY. Do not execute, plan, or rerun specialists.\n" +
     "Owner synthesis request:\n" + task.replace(/^\s*SYNTHESIS_ONLY_REPORT_IDS\s*:.*$/im, "").slice(0, 3000) +
     "\n\nEXACTLY FIVE OWNER-VERIFIED SAVED REPORTS:\n" + reportContext,
-    "Synthesize only the five supplied saved reports. Do not invent sources or claim research not present in them. Resolve conflicts, prioritize India and zero-investment constraints where stated, separate verified facts from assumptions, and identify unsupported claims. Do not claim any specialist was executed. Return a useful unified plan.",
+    "Synthesize only the five supplied saved reports. Do not invent sources or claim research not present in them. Resolve conflicts, prioritize India, Android-first and ₹0 upfront constraints unless the owner explicitly overrides them, separate verified facts, assumptions, estimates and recommendations, and identify unsupported claims. Produce a ranked action plan with dependencies, risks, realistic sequencing and three immediate actions. Do not claim any specialist was executed. Return a useful unified plan.",
     2600
   );
   if (!synthesis.result || !String(synthesis.result).trim()) throw new Error("Synthesis provider returned no usable text. Saved reports were not rerun.");
