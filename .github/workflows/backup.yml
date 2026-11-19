@@ -1,0 +1,63 @@
+name: Encrypted Supabase backup
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 18 * * 0"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: master-ai-supabase-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      AGE_BACKUP_RECIPIENT: ${{ secrets.AGE_BACKUP_RECIPIENT }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Validate backup secrets
+        shell: bash
+        run: |
+          test -n "$SUPABASE_DB_URL" || { echo "Missing SUPABASE_DB_URL repository secret"; exit 1; }
+          test -n "$AGE_BACKUP_RECIPIENT" || { echo "Missing AGE_BACKUP_RECIPIENT repository secret"; exit 1; }
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Install age encryption
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes age
+
+      - name: Export database roles, schema and data
+        shell: bash
+        run: |
+          supabase db dump --remote="$SUPABASE_DB_URL" --file=roles.sql --role-only
+          supabase db dump --remote="$SUPABASE_DB_URL" --file=schema.sql
+          supabase db dump --remote="$SUPABASE_DB_URL" --file=data.sql --data-only --use-copy -x "storage.buckets_vectors" -x "storage.vector_indexes"
+          tar -czf master-ai-supabase-backup.tar.gz roles.sql schema.sql data.sql
+
+      - name: Encrypt backup before artifact upload
+        shell: bash
+        run: |
+          age --encrypt --recipient "$AGE_BACKUP_RECIPIENT" --output master-ai-supabase-backup.tar.gz.age master-ai-supabase-backup.tar.gz
+          test -s master-ai-supabase-backup.tar.gz.age
+          rm -f roles.sql schema.sql data.sql master-ai-supabase-backup.tar.gz
+
+      - name: Upload encrypted backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: master-ai-supabase-backup-${{ github.run_id }}
+          path: master-ai-supabase-backup.tar.gz.age
+          if-no-files-found: error
+          retention-days: 30
