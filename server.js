@@ -14,6 +14,7 @@ import { reviewSpecialistReport } from "./lib/quality-review.js";
 import { createSupabaseApprovalHandlers } from "./lib/supabase-approvals.js";
 import { createOwnerAuthMiddleware } from "./lib/owner-auth.js";
 import { createYoutubeIntegrationHandlers, getYoutubeAgentContext } from "./lib/youtube-integration.js";
+import { createAgentHistoryHandlers } from "./lib/supabase-task-history.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -65,7 +66,40 @@ function limitApiRequests(req, res, next) {
 
 app.use(express.json({ limit: "1mb" }));
 const requireOwner = createOwnerAuthMiddleware();
-app.use(["/api/task", "/api/brain", "/api/repair-proposals"], requireOwner);
+const agentHistoryHandlers = createAgentHistoryHandlers();
+async function persistTaskHistory(ownerId, agentId, task, data, failure) {
+  if (!ownerId) return;
+  try {
+    if (agentId === "master" && Array.isArray(data?.specialistResults)) {
+      for (const item of data.specialistResults) {
+        await agentHistoryHandlers.record(ownerId, {
+          agentId: item.agentId,
+          task,
+          status: item.success ? "completed" : item.needsAttention ? "needs_attention" : "failed",
+          provider: item.provider,
+          qualityScore: item.qualityReview?.score,
+          report: item.result,
+          error: item.error,
+          metadata: { qualityReview: item.qualityReview || null }
+        });
+      }
+    }
+    await agentHistoryHandlers.record(ownerId, {
+      agentId,
+      task,
+      status: failure ? "failed" : data?.success === false ? "needs_attention" : "completed",
+      provider: data?.provider,
+      qualityScore: data?.qualityReview?.score,
+      report: data?.result,
+      error: failure?.message || data?.error,
+      metadata: { partialSuccess: Boolean(data?.partialSuccess), totalSpecialists: data?.totalSpecialists ?? null }
+    });
+  } catch (historyError) {
+    console.error("Persistent agent history could not be saved:", historyError.message);
+  }
+}
+app.use(["/api/task", "/api/brain", "/api/repair-proposals", "/api/agent-history"], requireOwner);
+app.get("/api/agent-history", agentHistoryHandlers.list);
 app.use(["/api/task", "/api/brain"], limitApiRequests);
 app.use(express.static("public"));
 
@@ -1255,6 +1289,7 @@ app.post("/api/task", async (req, res) => {
 
     if (agentId === "master") {
       const result = await runCentralBrain(task, req.ownerUser?.id);
+      await persistTaskHistory(req.ownerUser?.id, agentId, task, result);
       return res.json(result);
     }
 
@@ -1323,7 +1358,7 @@ app.post("/api/task", async (req, res) => {
       error: qualityFailure
     });
 
-    return res.json({
+    const taskResponse = {
       success: qualityPassed,
       needsAttention: !qualityPassed,
       ...(qualityFailure ? { error: qualityFailure } : {}),
@@ -1335,7 +1370,9 @@ app.post("/api/task", async (req, res) => {
       executionMode: "proposal_only",
       approvalNotice: "This is a draft. Review it before publishing, spending, sending, deleting, or deploying anything.",
       result: specialistReport
-    });
+    };
+    await persistTaskHistory(req.ownerUser?.id, agentId, task, taskResponse);
+    return res.json(taskResponse);
 
   } catch (error) {
 
@@ -1348,6 +1385,7 @@ app.post("/api/task", async (req, res) => {
       });
     }
 
+    await persistTaskHistory(req.ownerUser?.id, agentId, task, null, error);
     return res.status(502).json({
       success: false,
       error: "The selected AI agent could not complete this task.",

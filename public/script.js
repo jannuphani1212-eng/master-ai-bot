@@ -144,6 +144,7 @@ function openAgentWorkspace(agentId) {
   profile.assets.forEach(value=>addText(assets,"p",value,"muted"));
   const rec=document.getElementById("workspaceRecommendations");rec.replaceChildren();
   profile.recommendations.forEach(value=>addText(rec,"p","• "+value,"muted"));
+  const health=latestStatusData?.specialistHealth?.agents?.find(item=>item.agentId===agentId);
   if(health?.status==="degraded") {
     addText(rec,"p","Health diagnosis: "+(health.rootCause||health.lastError||"A previous task needs attention."),"warning-text");
     addText(rec,"p","Suggested recovery: "+(health.recoveryAction||"Retry with a smaller task and review the provider diagnostics."),"warning-text");
@@ -162,10 +163,44 @@ function openAgentWorkspace(agentId) {
   const metrics=document.getElementById("workspaceMetrics");metrics.replaceChildren();
   showWorkspaceMetric(metrics,"Tasks saved",history.length,"Browser-local history");
   showWorkspaceMetric(metrics,"Capabilities",profile.capabilities.length,"Defined agent functions");
-  const health=latestStatusData?.specialistHealth?.agents?.find(item=>item.agentId===agentId);
   showWorkspaceMetric(metrics,"Readiness",health?.status||"Registered",health?.rootCause||"Local readiness only; external provider tests are separate.");
+  const sourceLabel=document.getElementById("workspaceHistorySource");
+  if(sourceLabel) sourceLabel.textContent=approvalAccessToken?"Loading your saved history…":"Browser-local history";
+  if(approvalAccessToken) void loadPersistentAgentHistory(agentId);
   if(agentId==="youtube") loadWorkspaceYoutube();
   panel.scrollIntoView({behavior:"smooth",block:"start"});
+}
+async function loadPersistentAgentHistory(agentId) {
+  if (!approvalAccessToken) return;
+  try {
+    const response = await fetch("/api/agent-history?agentId=" + encodeURIComponent(agentId), {
+      headers: { Authorization: "Bearer " + approvalAccessToken },
+      cache: "no-store"
+    });
+    const data = await response.json();
+    if (!response.ok || !data.success) throw new Error(data.error || "History could not be loaded.");
+    if (currentWorkspaceAgent !== agentId) return;
+    const history = Array.isArray(data.history) ? data.history : [];
+    const historyNode = document.getElementById("workspaceHistory");
+    historyNode.replaceChildren();
+    if (!history.length) addText(historyNode, "p", "No saved tasks for this agent yet. Run a task to start its permanent work history.", "muted");
+    history.forEach(item => {
+      const row = document.createElement("article"); row.className = "workspace-history-item";
+      addText(row, "strong", item.task || "Untitled task");
+      addText(row, "p", (item.status || "Unknown") + " · " + (item.provider || "Provider not reported") + (item.quality !== null && item.quality !== undefined ? " · Structural score " + item.quality + "/100" : ""), "muted");
+      addText(row, "small", new Date(item.timestamp).toLocaleString(), "muted");
+      if (item.report) { const details=document.createElement("details"); const summary=document.createElement("summary"); summary.textContent="View report"; details.appendChild(summary); addText(details,"p",item.report); row.appendChild(details); }
+      historyNode.appendChild(row);
+    });
+    const sourceLabel=document.getElementById("workspaceHistorySource");
+    if(sourceLabel) sourceLabel.textContent="Saved to your owner account";
+    const count=document.querySelector("#workspaceMetrics .workspace-metric:first-child .workspace-metric-value");
+    if(count) count.textContent=String(data.count ?? history.length);
+  } catch (error) {
+    const sourceLabel=document.getElementById("workspaceHistorySource");
+    if(sourceLabel) sourceLabel.textContent="Saved history unavailable";
+    if(currentWorkspaceAgent===agentId) addText(document.getElementById("workspaceHistory"),"p","Could not load account history: "+error.message,"warning-text");
+  }
 }
 async function loadWorkspaceYoutube() {
   const assets=document.getElementById("workspaceAssets");
