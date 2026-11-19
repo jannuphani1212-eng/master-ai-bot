@@ -166,9 +166,62 @@ function openAgentWorkspace(agentId) {
   showWorkspaceMetric(metrics,"Readiness",health?.status||"Registered",health?.rootCause||"Local readiness only; external provider tests are separate.");
   const sourceLabel=document.getElementById("workspaceHistorySource");
   if(sourceLabel) sourceLabel.textContent=approvalAccessToken?"Loading your saved history…":"Browser-local history";
-  if(approvalAccessToken) void loadPersistentAgentHistory(agentId);
+  if(approvalAccessToken) { void loadPersistentAgentHistory(agentId); void loadAgentPortfolio(agentId); }
   if(agentId==="youtube") loadWorkspaceYoutube();
   panel.scrollIntoView({behavior:"smooth",block:"start"});
+}
+async function loadAgentPortfolio(agentId) {
+  if (!approvalAccessToken) return;
+  try {
+    const response = await fetch("/api/agent-portfolio", {
+      headers: { Authorization: "Bearer " + approvalAccessToken },
+      cache: "no-store"
+    });
+    const data = await response.json();
+    if (!response.ok || !data.success) throw new Error(data.error || "Live portfolio data is unavailable.");
+    if (currentWorkspaceAgent !== agentId) return;
+    const item = data.portfolio?.[agentId];
+    if (!item) return;
+    const assets = document.getElementById("workspaceAssets");
+    const metrics = document.getElementById("workspaceMetrics");
+    const addPortfolioMetric = (label, value, detail) => showWorkspaceMetric(metrics, label, value === null || value === undefined ? "Unavailable" : Number(value).toLocaleString(), detail);
+    if (agentId === "master") {
+      addText(assets, "p", "Registered specialist agents: " + item.registeredSpecialists, "quality-passed");
+      addText(assets, "p", "Recorded health events: " + (item.healthEvents ?? "Unavailable"), "muted");
+      addPortfolioMetric("Health events", item.healthEvents, "Supabase health history");
+    } else if (agentId === "youtube") {
+      addText(assets, "p", "Connected channel records: " + item.connectedChannels, item.connectedChannels ? "quality-passed" : "warning-text");
+      (item.channels || []).forEach(channel => addText(assets, "p", channel.title + " · " + channel.id, "muted"));
+      addPortfolioMetric("Connected channels", item.connectedChannels, "Owner-scoped YouTube records");
+    } else if (agentId === "affiliate") {
+      addText(assets, "p", "Affiliate campaigns: " + (item.campaigns ?? "Unavailable"), "muted");
+      addText(assets, "p", "Tracked clicks: " + (item.trackedClicks ?? "Unavailable"), "muted");
+      addText(assets, "p", "Commission records: " + (item.commissionRecords ?? "Unavailable"), "muted");
+      addText(assets, "p", "Instagram accounts: " + (item.instagramAccounts ?? "Unavailable"), "muted");
+      (item.campaignsPreview || []).forEach(campaign => addText(assets, "p", campaign.product + " · " + campaign.status + " · " + campaign.researchStatus, "muted"));
+      addPortfolioMetric("Campaigns", item.campaigns, "Saved campaign records");
+      addPortfolioMetric("Tracked clicks", item.trackedClicks, "First-party campaign tracking");
+      addPortfolioMetric("Commission records", item.commissionRecords, "Imported records; revenue not inferred");
+    } else if (agentId === "blogging") {
+      addText(assets, "p", "Connected CMS sites: " + (item.connectedSites ?? "Unavailable"), "muted");
+      addText(assets, "p", "Saved blog drafts: " + (item.drafts ?? "Unavailable"), "muted");
+      addText(assets, "p", "CMS draft/publication records: " + (item.cmsPublicationRecords ?? "Unavailable"), "muted");
+      (item.sitesPreview || []).forEach(site => addText(assets, "p", site.name + " · " + site.provider + (site.url ? " · " + site.url : ""), "muted"));
+      (item.draftsPreview || []).forEach(draft => addText(assets, "p", "Draft: " + draft.topic + " · " + draft.status, "muted"));
+      addPortfolioMetric("Connected sites", item.connectedSites, "Blogger / WordPress records");
+      addPortfolioMetric("Saved drafts", item.drafts, "Blog draft records");
+    } else if (agentId === "seo") {
+      addText(assets, "p", "Search Console accounts: " + (item.searchConsoleAccounts ?? "Unavailable"), "muted");
+      (item.accountsPreview || []).forEach(account => addText(assets, "p", account.googleEmail, "muted"));
+      addPortfolioMetric("Search Console accounts", item.searchConsoleAccounts, "Read-only connection records");
+    } else if (agentId === "app-development") {
+      addText(assets, "p", item.note, "warning-text");
+    }
+    const sourceLabel = document.getElementById("workspaceHistorySource");
+    if (sourceLabel && currentWorkspaceAgent === agentId) sourceLabel.textContent = "Saved to your owner account · Live portfolio refreshed";
+  } catch (error) {
+    if (currentWorkspaceAgent === agentId) addText(document.getElementById("workspaceAssets"), "p", "Live portfolio data unavailable: " + error.message, "warning-text");
+  }
 }
 async function loadPersistentAgentHistory(agentId) {
   if (!approvalAccessToken) return;
