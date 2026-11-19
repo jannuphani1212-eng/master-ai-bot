@@ -84,3 +84,17 @@ test("affiliate prompt requires usable campaign deliverables rather than generic
   assert.match(prompt, /tracking plan/);
   assert.match(prompt, /first-week checklist/);
 });
+
+
+test("all specialists share India, Android-first, zero-upfront-budget defaults and evidence labels", () => {
+  for (const id of SPECIALIST_IDS) {
+    const prompt = getSpecialistInstructions(id);
+    assert.match(prompt, /Default market: India/);
+    assert.match(prompt, /Android phone first/);
+    assert.match(prompt, /₹0/);
+    assert.match(prompt, /Verified facts/);
+    assert.match(prompt, /Assumptions/);
+    assert.match(prompt, /Estimates/);
+    assert.match(prompt, /Recommendations/);
+  }
+});
