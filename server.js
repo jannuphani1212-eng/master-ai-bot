@@ -829,32 +829,34 @@ async function runCentralBrain(task, ownerUserId) {
       // Repair only absent sections. Use at most two bounded passes so a
       // short or partially truncated repair cannot leave easy omissions behind.
       // Each pass recalculates missing sections and preserves the original draft.
-      for (let repairRound = 0; repairRound < 2 && qualityReview.missingSections.length > 0; repairRound += 1) {
-        const missingSections = qualityReview.missingSections;
+      for (let repairRound = 0; repairRound < 2 && (qualityReview.missingSections.length > 0 || qualityReview.thinSections.length > 0); repairRound += 1) {
+        const repairSections = [...qualityReview.missingSections, ...qualityReview.thinSections.filter(section => !qualityReview.missingSections.includes(section))];
+        const thinSections = [...qualityReview.thinSections];
         try {
           const repairInstructions = [
             "You are a specialist report completion editor.",
             "Do NOT rewrite, summarize, or repeat the original report.",
-            "Generate ONLY the missing sections listed in the task, using the exact requested headings.",
+            "Generate ONLY the requested sections listed in the task, using the exact requested headings.",
+            "For a missing section, add its heading and content. For a thin section, replace the empty or weak content under its existing heading with substantive content; do not duplicate its heading.",
             "Preserve the specialist's original role, task context, and constraints.",
             "Do not invent research, sources, prices, commissions, metrics, test results, or completed actions.",
             "When evidence is unavailable, state 'Needs live verification' and specify exactly what source or measurement is required.",
             "When a KPI baseline is unavailable, describe how to measure it first; do not invent a target.",
             "Complete every listed section in this response. Keep each section concise but useful.",
-            "Return only the missing sections, with no introduction or conclusion."
+            "Return only the requested sections, with no introduction or conclusion."
           ].join("\\n");
 
           const repairTask =
             "ORIGINAL SPECIALIST TASK:\\n" + item.task.slice(0, 2500) +
-            "\\n\\nMISSING SECTIONS TO GENERATE (ONLY THESE):\\n" +
-            missingSections.map(section => "## " + section).join("\\n") +
+            "\\n\\nSECTIONS TO COMPLETE (ONLY THESE):\\n" +
+            repairSections.map(section => "## " + section).join("\\n") +
             "\\n\\nORIGINAL REPORT — PRESERVE IT, DO NOT REWRITE:\\n" +
             compactReport(specialistReport, 5200);
 
           const repair = await generateAI(repairTask, repairInstructions, 1500);
           if (!repair.result || !repair.result.trim()) break;
 
-          specialistReport = mergeMissingReportSections(specialistReport, repair.result);
+          specialistReport = mergeMissingReportSections(specialistReport, repair.result, { replaceSections: thinSections });
           specialistProvider = [...new Set([specialistProvider, repair.provider])].join(" + ");
           providersUsed.add(repair.provider);
           qualityReview = reviewSpecialistReport(specialistReport);
@@ -1423,13 +1425,15 @@ app.post("/api/task", async (req, res) => {
 
     // Keep single-specialist mode consistent with Master Brain mode: make up
     // to two bounded attempts to fill missing required sections before review.
-    for (let repairRound = 0; repairRound < 2 && qualityReview.missingSections.length > 0; repairRound += 1) {
-      const missingSections = qualityReview.missingSections;
+    for (let repairRound = 0; repairRound < 2 && (qualityReview.missingSections.length > 0 || qualityReview.thinSections.length > 0); repairRound += 1) {
+      const repairSections = [...qualityReview.missingSections, ...qualityReview.thinSections.filter(section => !qualityReview.missingSections.includes(section))];
+      const thinSections = [...qualityReview.thinSections];
       try {
         const repairInstructions = [
           "You are a specialist report completion editor.",
           "Do NOT rewrite, summarize, or repeat the original report.",
-          "Generate ONLY the missing sections listed in the task, using the exact requested headings.",
+          "Generate ONLY the requested sections listed in the task, using the exact requested headings.",
+          "For a missing section, add its heading and content. For a thin section, replace the empty or weak content under its existing heading with substantive content; do not duplicate its heading.",
           "Preserve the specialist role, original task, country, budget, device and skill constraints.",
           "Do not invent research, sources, prices, commissions, metrics, test results, or completed actions.",
           "When evidence is unavailable, state 'Needs live verification' and identify the source or measurement required.",
@@ -1437,13 +1441,13 @@ app.post("/api/task", async (req, res) => {
         ].join("\n");
         const repairTask =
           "ORIGINAL SPECIALIST TASK:\n" + specialistTask.slice(0, 2500) +
-          "\n\nMISSING SECTIONS TO GENERATE (ONLY THESE):\n" +
-          missingSections.map(section => "## " + section).join("\n") +
+          "\n\nSECTIONS TO COMPLETE (ONLY THESE):\n" +
+          repairSections.map(section => "## " + section).join("\n") +
           "\n\nORIGINAL REPORT — PRESERVE IT, DO NOT REWRITE:\n" +
           compactReport(specialistReport, 5200);
         const repair = await generateAI(repairTask, repairInstructions, 1500);
         if (!repair.result || !repair.result.trim()) break;
-        specialistReport = mergeMissingReportSections(specialistReport, repair.result);
+        specialistReport = mergeMissingReportSections(specialistReport, repair.result, { replaceSections: thinSections });
         specialistProvider = [...new Set([specialistProvider, repair.provider])].join(" + ");
         qualityReview = reviewSpecialistReport(specialistReport);
         reportRepaired = true;

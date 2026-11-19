@@ -74,3 +74,13 @@ test("master checks requested deliverables beyond report structure", () => {
   assert.ok(prompt.includes("requested deliverable counts"));
   assert.ok(prompt.includes("structurally complete report is not automatically high quality"));
 });
+
+test("affiliate prompt requires usable campaign deliverables rather than generic advice", () => {
+  const prompt = getSpecialistInstructions("affiliate");
+  assert.match(prompt, /product-shortlist template/);
+  assert.match(prompt, /comparison scorecard/);
+  assert.match(prompt, /sample asset/);
+  assert.match(prompt, /affiliate disclosure/);
+  assert.match(prompt, /tracking plan/);
+  assert.match(prompt, /first-week checklist/);
+});
