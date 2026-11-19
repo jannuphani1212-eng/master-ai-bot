@@ -90,7 +90,7 @@ function saveAgentHistory(agentId,item) {
 }
 function recordTaskHistory(data,selectedAgent,task) {
   const timestamp=new Date().toISOString();
-  if(selectedAgent==="master" && Array.isArray(data.specialistResults)) {
+  if(selectedAgent==="master" && !data.reusedReports && Array.isArray(data.specialistResults)) {
     data.specialistResults.forEach(item=>saveAgentHistory(item.agentId,{timestamp,task,status:item.success?"Completed":"Needs attention",provider:item.provider||"Not reported",quality:item.qualityReview?.score??null,report:item.result||item.error||""}));
   }
   saveAgentHistory(selectedAgent,{timestamp,task,status:data.success===false?"Needs attention":"Completed",provider:data.provider||"Not reported",quality:data.qualityReview?.score??null,report:data.result||""});
@@ -416,7 +416,13 @@ taskForm.addEventListener("submit", async (event) => {
       throw new Error(data.error || "The task could not be completed.");
     }
 
-    if (Array.isArray(data.specialistResults) && data.specialistResults.length) {
+    if (data.reusedReports && Array.isArray(data.specialistResults) && data.specialistResults.length) {
+      data.specialistResults.forEach(item => {
+        addFeedStep("Reused saved report: " + (item.name || item.agentId) + " · " + (item.savedReportId || "ID not returned"), Boolean(item.savedReportId));
+      });
+      addFeedStep("Synthesis-only run: no specialist was executed.", true);
+      addFeedStep("Master Brain is synthesizing the five saved reports.", true);
+    } else if (Array.isArray(data.specialistResults) && data.specialistResults.length) {
       data.specialistResults.forEach(item => {
         addFeedStep((item.success ? "Completed: " : "Needs attention: ") + (item.name || item.agentId) + (item.provider ? " · " + item.provider : ""), Boolean(item.success));
       });
