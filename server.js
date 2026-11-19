@@ -24,6 +24,20 @@ const selfHealingMonitor = createSelfHealingMonitor();
 // Render runs behind a trusted reverse proxy. This allows req.ip to identify
 // the originating client for the lightweight API request limit below.
 app.set("trust proxy", 1);
+app.disable("x-powered-by");
+
+// Baseline browser security headers. HSTS is emitted only for HTTPS requests.
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+  if (req.secure || req.get?.("x-forwarded-proto") === "https") {
+    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  }
+  next();
+});
 
 const apiRequestWindows = new Map();
 const API_WINDOW_MS = 60 * 1000;
@@ -102,6 +116,9 @@ async function persistTaskHistory(ownerId, agentId, task, data, failure) {
 }
 app.use(["/api/task", "/api/brain", "/api/repair-proposals", "/api/agent-history", "/api/agent-portfolio"], requireOwner);
 app.use(["/api/task", "/api/brain", "/api/agent-history", "/api/agent-portfolio"], limitApiRequests);
+// Protect approval and diagnostic endpoints from repeated requests as well.
+// Approval handlers still perform their own Supabase owner-token verification.
+app.use(["/api/approvals", "/api/repair-proposals"], limitApiRequests);
 app.get("/api/agent-history", agentHistoryHandlers.list);
 app.get("/api/agent-portfolio", agentPortfolioHandlers.get);
 app.use(express.static("public"));
