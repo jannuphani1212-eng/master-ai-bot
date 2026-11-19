@@ -144,7 +144,8 @@ function openAgentWorkspace(agentId) {
   profile.assets.forEach(value=>addText(assets,"p",value,"muted"));
   const rec=document.getElementById("workspaceRecommendations");rec.replaceChildren();
   profile.recommendations.forEach(value=>addText(rec,"p","• "+value,"muted"));
-  const health=latestStatusData?.specialistHealth?.agents?.find(item=>item.agentId===agentId);\n  if(health?.status==="degraded") {
+  const health=latestStatusData?.specialistHealth?.agents?.find(item=>item.agentId===agentId);
+  if(health?.status==="degraded") {
     addText(rec,"p","Health diagnosis: "+(health.rootCause||health.lastError||"A previous task needs attention."),"warning-text");
     addText(rec,"p","Suggested recovery: "+(health.recoveryAction||"Retry with a smaller task and review the provider diagnostics."),"warning-text");
   }
@@ -162,9 +163,10 @@ function openAgentWorkspace(agentId) {
   const metrics=document.getElementById("workspaceMetrics");metrics.replaceChildren();
   showWorkspaceMetric(metrics,"Tasks saved",history.length,"Browser-local history");
   showWorkspaceMetric(metrics,"Capabilities",profile.capabilities.length,"Defined agent functions");
-  const health=latestStatusData?.specialistHealth?.agents?.find(item=>item.agentId===agentId);
   showWorkspaceMetric(metrics,"Readiness",health?.status||"Registered",health?.rootCause||"Local readiness only; external provider tests are separate.");
-  const sourceLabel=document.getElementById("workspaceHistorySource");\n  if(sourceLabel) sourceLabel.textContent=approvalAccessToken?"Loading your saved history…":"Browser-local history";\n  if(approvalAccessToken) void loadPersistentAgentHistory(agentId);\n  if(agentId==="youtube") loadWorkspaceYoutube();
+  const sourceLabel=document.getElementById("workspaceHistorySource");
+  if(sourceLabel) sourceLabel.textContent=approvalAccessToken?"Loading your saved history…":"Browser-local history";
+  if(approvalAccessToken) void loadPersistentAgentHistory(agentId);\n  if(agentId==="youtube") loadWorkspaceYoutube();
   panel.scrollIntoView({behavior:"smooth",block:"start"});
 }
 async function loadPersistentAgentHistory(agentId) {
