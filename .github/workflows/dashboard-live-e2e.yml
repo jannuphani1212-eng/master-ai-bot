@@ -25,4 +25,4 @@ jobs:
       - name: Test all six live dashboard buttons
         env:
           MASTER_AI_BASE_URL: https://master-ai-bot-iskj.onrender.com
-        run: node test/e2e/dashboard-live-buttons.js
+        run: node scripts/dashboard-live-buttons.js
