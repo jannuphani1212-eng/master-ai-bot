@@ -79,7 +79,7 @@ test("affiliate prompt requires usable campaign deliverables rather than generic
   const prompt = getSpecialistInstructions("affiliate");
   assert.match(prompt, /product-shortlist template/);
   assert.match(prompt, /comparison scorecard/);
-  assert.match(prompt, /sample content asset/);
+  assert.match(prompt, /sample asset/);
   assert.match(prompt, /affiliate disclosure/);
   assert.match(prompt, /tracking plan/);
   assert.match(prompt, /first-week checklist/);
