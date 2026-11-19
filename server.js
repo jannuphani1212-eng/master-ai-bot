@@ -15,6 +15,7 @@ import { createSupabaseApprovalHandlers } from "./lib/supabase-approvals.js";
 import { createOwnerAuthMiddleware } from "./lib/owner-auth.js";
 import { createYoutubeIntegrationHandlers, getYoutubeAgentContext } from "./lib/youtube-integration.js";
 import { createAgentHistoryHandlers } from "./lib/supabase-task-history.js";
+import { createAgentPortfolioHandlers } from "./lib/agent-portfolio.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -67,6 +68,7 @@ function limitApiRequests(req, res, next) {
 app.use(express.json({ limit: "1mb" }));
 const requireOwner = createOwnerAuthMiddleware();
 const agentHistoryHandlers = createAgentHistoryHandlers();
+const agentPortfolioHandlers = createAgentPortfolioHandlers();
 async function persistTaskHistory(ownerId, agentId, task, data, failure) {
   if (!ownerId) return;
   try {
@@ -98,9 +100,10 @@ async function persistTaskHistory(ownerId, agentId, task, data, failure) {
     console.error("Persistent agent history could not be saved:", historyError.message);
   }
 }
-app.use(["/api/task", "/api/brain", "/api/repair-proposals", "/api/agent-history"], requireOwner);
+app.use(["/api/task", "/api/brain", "/api/repair-proposals", "/api/agent-history", "/api/agent-portfolio"], requireOwner);
+app.use(["/api/task", "/api/brain", "/api/agent-history", "/api/agent-portfolio"], limitApiRequests);
 app.get("/api/agent-history", agentHistoryHandlers.list);
-app.use(["/api/task", "/api/brain"], limitApiRequests);
+app.get("/api/agent-portfolio", agentPortfolioHandlers.get);
 app.use(express.static("public"));
 
 // =====================================
