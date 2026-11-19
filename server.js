@@ -119,7 +119,7 @@ async function persistTaskHistory(ownerId, agentId, task, data, failure) {
 // Apply IP limits before authentication so invalid-token floods are throttled too.
 // The app currently runs as one Render instance; this in-memory limit is per instance.
 app.use(["/api/task", "/api/brain", "/api/repair-proposals", "/api/agent-history", "/api/agent-portfolio", "/api/youtube", "/api/approvals"], limitApiRequests);
-app.use(["/api/task", "/api/brain", "/api/repair-proposals", "/api/agent-history", "/api/agent-portfolio"], requireOwner);
+app.use(["/api/task", "/api/brain", "/api/repair-proposals", "/api/agent-history", "/api/agent-portfolio", "/api/youtube"], requireOwner);
 app.use(["/api/task", "/api/brain", "/api/repair-proposals", "/api/agent-history", "/api/agent-portfolio", "/api/youtube"], auditOwnerRequests);
 app.get("/api/agent-history", agentHistoryHandlers.list);
 app.get("/api/agent-portfolio", agentPortfolioHandlers.get);
@@ -1037,8 +1037,6 @@ const youtubeHandlers = createYoutubeIntegrationHandlers();
 // OAuth callback is intentionally public, but accepts only a short-lived,
 // HMAC-signed state created after a verified owner session.
 app.get("/api/youtube/oauth/callback", youtubeHandlers.callback);
-app.use("/api/youtube", requireOwner);
-app.use("/api/youtube", limitApiRequests);
 app.get("/api/youtube/connect-url", youtubeHandlers.connectUrl);
 app.get("/api/youtube/status", youtubeHandlers.status);
 app.get("/api/youtube/channel", youtubeHandlers.channel);
