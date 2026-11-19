@@ -144,6 +144,10 @@ function openAgentWorkspace(agentId) {
   profile.assets.forEach(value=>addText(assets,"p",value,"muted"));
   const rec=document.getElementById("workspaceRecommendations");rec.replaceChildren();
   profile.recommendations.forEach(value=>addText(rec,"p","• "+value,"muted"));
+  if(health?.status==="degraded") {
+    addText(rec,"p","Health diagnosis: "+(health.rootCause||health.lastError||"A previous task needs attention."),"warning-text");
+    addText(rec,"p","Suggested recovery: "+(health.recoveryAction||"Retry with a smaller task and review the provider diagnostics."),"warning-text");
+  }
   const history=readAgentHistory()[agentId]||[];
   const historyNode=document.getElementById("workspaceHistory");historyNode.replaceChildren();
   if(!history.length)addText(historyNode,"p","No task history recorded for this agent in this browser yet.","muted");
