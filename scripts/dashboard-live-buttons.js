@@ -16,6 +16,16 @@ try {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   await page.goto(baseUrl, { waitUntil: "domcontentloaded", timeout: 90000 });
   await page.waitForSelector('.agent-card[data-agent-id="master"]', { timeout: 90000 });
+  const liveStatus = await page.evaluate(async () => {
+    const response = await fetch("/api/status", { cache: "no-store" });
+    return response.json();
+  });
+  console.log("Persistent history storage configured:", Boolean(liveStatus.agentHistoryStorage?.configured));
+  console.log("YouTube OAuth configured:", Boolean(liveStatus.integrations?.youtube?.oauthConfigured));
+  console.log("Affiliate campaign storage configured:", Boolean(liveStatus.integrations?.affiliate?.campaignTrackingStorage));
+  console.log("Blog draft storage configured:", Boolean(liveStatus.integrations?.blogging?.draftStorage));
+  console.log("Search Console OAuth configured:", Boolean(liveStatus.integrations?.seo?.searchConsoleOAuth));
+  console.log("App repository automation configured:", Boolean(liveStatus.integrations?.["app-development"]?.repositoryAutomation));
 
   const cards = page.locator(".agent-card[data-agent-id]");
   assert.equal(await cards.count(), 6, "The live dashboard must show exactly six agent buttons.");
