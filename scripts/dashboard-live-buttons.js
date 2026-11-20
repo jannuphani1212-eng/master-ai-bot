@@ -52,6 +52,17 @@ try {
     console.log("PASS live dashboard button:", id);
   }
   console.log("PASS: all six live dashboard buttons opened their own workspaces.");
+  const incomePanel = page.locator("#incomeCentre");
+  assert.equal(await incomePanel.count(), 1, "Income Centre section should exist.");
+  assert.equal(await incomePanel.isVisible(), true, "Income Centre should be visible on the dashboard.");
+  assert.equal(await page.locator(".income-stream-card").count(), 5, "Income Centre should show all five specialist income pathways.");
+  await page.locator("#incomeCentreNav").click();
+  await page.waitForFunction(() => document.querySelector("#incomeCentre")?.getBoundingClientRect().top < window.innerHeight);
+  for (const agentId of ["affiliate","youtube","blogging","app-development","seo"]) {
+    const button = page.locator('.income-plan-button[data-agent="' + agentId + '"]');
+    assert.equal(await button.isVisible(), true, "Income plan button should exist for " + agentId);
+  }
+  console.log("PASS: Income Centre navigation and five income pathways.");
 } finally {
   await browser.close();
 }
