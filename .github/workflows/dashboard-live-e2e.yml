@@ -3,6 +3,8 @@ name: Live dashboard button browser test
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -22,7 +24,18 @@ jobs:
         run: npm install --no-save playwright
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
-      - name: Test all six live dashboard buttons
+      - name: Start the pull-request app locally
+        run: |
+          node server.js > /tmp/master-ai-bot.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3000/api/status > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/master-ai-bot.log
+          exit 1
+      - name: Test all six agent sections and Income Centre
         env:
-          MASTER_AI_BASE_URL: https://master-ai-bot-iskj.onrender.com
+          MASTER_AI_BASE_URL: http://127.0.0.1:3000
         run: node scripts/dashboard-live-buttons.js
