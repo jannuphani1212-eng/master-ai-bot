@@ -461,6 +461,10 @@ ownerSignInButton.addEventListener("click",()=>{if(approvalAccessToken){approval
 incomeCentreNav.addEventListener("click",()=>{if(!approvalAccessToken){ownerLoginDialog.showModal();return;}incomeCentre.scrollIntoView({behavior:"smooth"});});
 document.getElementById("closeLoginDialog").addEventListener("click",()=>ownerLoginDialog.close());
 document.querySelectorAll(".prompt-chip").forEach(button=>button.addEventListener("click",()=>{taskInput.value=button.dataset.prompt||"";taskInput.focus();}));
+
+// Render the six known workspaces immediately. The dashboard must not depend on
+// /api/status completing before the team appears; live health is layered on later.
+displayAgents(Object.keys(agentProfiles).map(id => ({ id })));
 loadSystemStatus();
 
 
