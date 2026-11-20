@@ -15,9 +15,11 @@ const wakeMessage = document.getElementById("wakeMessage");
 const taskFeed = document.getElementById("taskFeed");
 const approvalPanel = document.getElementById("approvalPanel");
 const youtubePanel = document.getElementById("youtubePanel");
+const incomeCentre = document.getElementById("incomeCentre");
+const incomeCentreNav = document.getElementById("incomeCentreNav");
 function showToast(message){toastElement.textContent=message;toastElement.classList.add("show");setTimeout(()=>toastElement.classList.remove("show"),2600);}
 function updateTaskAuthStatus(){const label=document.getElementById("taskAuthStatus");if(!label)return;const signedIn=Boolean(approvalAccessToken);label.textContent=signedIn?"Owner signed in · Tasks enabled":"Owner sign-in required to run tasks";label.classList.toggle("auth-ready",signedIn);}
-function setPrivatePanelsVisible(visible){approvalPanel.hidden=!visible;youtubePanel.hidden=!visible;ownerSignInButton.textContent=visible?"Owner workspace":"Owner sign in";updateTaskAuthStatus();}
+function setPrivatePanelsVisible(visible){approvalPanel.hidden=!visible;youtubePanel.hidden=!visible;incomeCentre.hidden=!visible;incomeCentreNav.hidden=!visible;incomeCentre.setAttribute("aria-hidden",String(!visible));incomeCentreNav.setAttribute("aria-hidden",String(!visible));ownerSignInButton.textContent=visible?"Owner workspace":"Owner sign in";updateTaskAuthStatus();}
 function addFeedStep(message,done=false){const row=document.createElement("div");row.className="feed-step"+(done?" done":"");const dot=document.createElement("span");dot.className="feed-dot";const label=document.createElement("span");label.textContent=message;row.append(dot,label);taskFeed.appendChild(row);}
 
 function addText(parent, tag, text, className) {
@@ -456,6 +458,7 @@ refreshButton.addEventListener("click", loadSystemStatus);
 connectionStatus.addEventListener("click",()=>{if(!approvalAccessToken){ownerLoginDialog.showModal();return;}diagnosticsDialog.showModal();});
 document.getElementById("closeDiagnosticsDialog").addEventListener("click",()=>diagnosticsDialog.close());
 ownerSignInButton.addEventListener("click",()=>{if(approvalAccessToken){approvalPanel.scrollIntoView({behavior:"smooth"});return;}ownerLoginDialog.showModal();});
+incomeCentreNav.addEventListener("click",()=>{if(!approvalAccessToken){ownerLoginDialog.showModal();return;}incomeCentre.scrollIntoView({behavior:"smooth"});});
 document.getElementById("closeLoginDialog").addEventListener("click",()=>ownerLoginDialog.close());
 document.querySelectorAll(".prompt-chip").forEach(button=>button.addEventListener("click",()=>{taskInput.value=button.dataset.prompt||"";taskInput.focus();}));
 loadSystemStatus();
