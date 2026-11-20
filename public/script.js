@@ -16,7 +16,8 @@ const taskFeed = document.getElementById("taskFeed");
 const approvalPanel = document.getElementById("approvalPanel");
 const youtubePanel = document.getElementById("youtubePanel");
 function showToast(message){toastElement.textContent=message;toastElement.classList.add("show");setTimeout(()=>toastElement.classList.remove("show"),2600);}
-function setPrivatePanelsVisible(visible){approvalPanel.hidden=!visible;youtubePanel.hidden=!visible;ownerSignInButton.textContent=visible?"Owner workspace":"Owner sign in";}
+function updateTaskAuthStatus(){const label=document.getElementById("taskAuthStatus");if(!label)return;const signedIn=Boolean(approvalAccessToken);label.textContent=signedIn?"Owner signed in · Tasks enabled":"Owner sign-in required to run tasks";label.classList.toggle("auth-ready",signedIn);}
+function setPrivatePanelsVisible(visible){approvalPanel.hidden=!visible;youtubePanel.hidden=!visible;ownerSignInButton.textContent=visible?"Owner workspace":"Owner sign in";updateTaskAuthStatus();}
 function addFeedStep(message,done=false){const row=document.createElement("div");row.className="feed-step"+(done?" done":"");const dot=document.createElement("span");dot.className="feed-dot";const label=document.createElement("span");label.textContent=message;row.append(dot,label);taskFeed.appendChild(row);}
 
 function addText(parent, tag, text, className) {
@@ -466,6 +467,7 @@ loadSystemStatus();
 // Keep only the Supabase refresh token between page loads. A fresh access token
 // is requested from Supabase when the dashboard opens; passwords are never stored.
 let approvalAccessToken = "";
+updateTaskAuthStatus();
 let approvalRefreshToken = "";
 let approvalConfig = null;
 const APPROVAL_SESSION_KEY = "masterAiBot.ownerRefreshToken";
@@ -519,6 +521,7 @@ function saveApprovalRefreshToken(token) {
 function clearApprovalSession() {
   approvalAccessToken = "";
   saveApprovalRefreshToken("");
+  updateTaskAuthStatus();
 }
 
 async function refreshApprovalSession() {
@@ -539,6 +542,7 @@ async function refreshApprovalSession() {
   }
   approvalAccessToken = session.access_token;
   saveApprovalRefreshToken(session.refresh_token);
+  updateTaskAuthStatus();
   return true;
 }
 
@@ -559,6 +563,7 @@ async function restoreApprovalSession() {
     approvalWorkspace.hidden = false;
     ownerLoginDialog.close();
     setPrivatePanelsVisible(true);
+    void refreshIncomeCentre();
     setApprovalMessage("Owner session restored. Loading your approval queue...");
     await loadApprovalQueue();
     await loadYoutubeStatus();
@@ -680,11 +685,13 @@ approvalLoginForm.addEventListener("submit", async (event) => {
     }
     approvalAccessToken = session.access_token;
     saveApprovalRefreshToken(session.refresh_token);
+    updateTaskAuthStatus();
     approvalPassword.value = "";
     approvalLoginForm.hidden = true;
     approvalWorkspace.hidden = false;
     ownerLoginDialog.close();
     setPrivatePanelsVisible(true);
+    void refreshIncomeCentre();
     setApprovalMessage("Signed in. Loading your private approval queue...");
     showToast("Owner session verified.");
     await loadApprovalQueue();
@@ -916,3 +923,42 @@ setPrivatePanelsVisible(false);
 approvalMessage.textContent="Sign in to open owner-only approvals and connected accounts.";
 restoreApprovalSession();
 
+
+const incomeCentreNav = document.getElementById("incomeCentreNav");
+if (incomeCentreNav) incomeCentreNav.addEventListener("click", () => {
+  document.getElementById("incomeCentre")?.scrollIntoView({ behavior: "smooth", block: "start" });
+});
+document.querySelectorAll(".income-plan-button").forEach(button => {
+  button.addEventListener("click", () => {
+    const agentId = button.dataset.agent;
+    const prompt = button.dataset.prompt || "";
+    if (!agentId || !prompt) return;
+    agentSelect.value = agentId;
+    taskInput.value = prompt;
+    taskForm.scrollIntoView({ behavior: "smooth", block: "center" });
+    taskInput.focus({ preventScroll: true });
+    showToast("Income plan prepared. Review it, then run when ready.");
+  });
+});
+async function refreshIncomeCentre() {
+  const status = document.getElementById("incomeLiveStatus");
+  if (!status || !approvalAccessToken) return;
+  status.textContent = "Loading owner-scoped income and connected-asset records…";
+  try {
+    const response = await fetch("/api/agent-portfolio", {
+      headers: { Authorization: "Bearer " + approvalAccessToken },
+      cache: "no-store"
+    });
+    const data = await response.json();
+    if (!response.ok || !data.success) throw new Error(data.error || "Income records are unavailable.");
+    const p = data.portfolio || {};
+    const youtube = p.youtube?.connectedChannels ?? "unavailable";
+    const affiliate = p.affiliate?.campaigns ?? "unavailable";
+    const commissions = p.affiliate?.commissionRecords ?? "unavailable";
+    const blogDrafts = p.blogging?.drafts ?? "unavailable";
+    const seoAccounts = p.seo?.searchConsoleAccounts ?? "unavailable";
+    status.textContent = "Live owner records — YouTube channels: " + youtube + "; affiliate campaigns: " + affiliate + "; commission records: " + commissions + "; blog drafts: " + blogDrafts + "; Search Console accounts: " + seoAccounts + ". This workspace does not yet verify payout totals, so recorded earnings remain unverified.";
+  } catch (error) {
+    status.textContent = "Income data could not be loaded: " + error.message + ". Opportunity planning remains available; earnings are not assumed.";
+  }
+}
