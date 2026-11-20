@@ -81,3 +81,27 @@ test("retries provider TPM limits using provider guidance", async () => {
   assert.deepEqual(waits, [2000]);
   assert.equal(result.provider, "Groq");
 });
+
+test("retries a truncated provider response once before switching to the next provider", async () => {
+  const calls = [];
+  const result = await runProviderFallback([
+    { id: "groq", name: "Groq", available: true, call: async () => { calls.push("Groq"); throw new Error("HTTP 429 daily quota exhausted"); } },
+    { id: "openrouter", name: "OpenRouter", available: true, call: async () => { calls.push("OpenRouter"); if (calls.filter(item => item === "OpenRouter").length === 1) throw new Error("OpenRouter response was truncated by its output-token limit (finish_reason=length, partial_chars=0)"); return "recovered response"; } },
+    { id: "gemini", name: "Gemini", available: true, call: async () => { calls.push("Gemini"); return "should not run"; } }
+  ], { sleep: async () => {} });
+  assert.deepEqual(calls, ["Groq", "OpenRouter", "OpenRouter"]);
+  assert.equal(result.provider, "OpenRouter");
+  assert.equal(result.result, "recovered response");
+});
+
+test("falls through Groq and OpenRouter to Gemini after bounded failures", async () => {
+  const calls = [];
+  const result = await runProviderFallback([
+    { id: "groq", name: "Groq", available: true, call: async () => { calls.push("Groq"); throw new Error("HTTP 429 daily quota exhausted"); } },
+    { id: "openrouter", name: "OpenRouter", available: true, call: async () => { calls.push("OpenRouter"); throw new Error("OpenRouter response was truncated by its output-token limit"); } },
+    { id: "gemini", name: "Gemini", available: true, call: async () => { calls.push("Gemini"); return "final fallback answer"; } }
+  ], { sleep: async () => {} });
+  assert.deepEqual(calls, ["Groq", "OpenRouter", "OpenRouter", "Gemini"]);
+  assert.equal(result.provider, "Gemini");
+  assert.equal(result.result, "final fallback answer");
+});
