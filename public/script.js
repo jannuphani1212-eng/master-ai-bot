@@ -173,9 +173,9 @@ function openAgentWorkspace(agentId) {
   panel.scrollIntoView({behavior:"smooth",block:"start"});
 }
 async function loadAgentPortfolio(agentId) {
-  if (!approvalAccessToken) return;
+  if (!(await ensureApprovalSession())) return;
   try {
-    const response = await fetch("/api/agent-portfolio", {
+    const response = await ownerAuthenticatedFetch("/api/agent-portfolio", {
       headers: { Authorization: "Bearer " + approvalAccessToken },
       cache: "no-store"
     });
@@ -226,9 +226,9 @@ async function loadAgentPortfolio(agentId) {
   }
 }
 async function loadPersistentAgentHistory(agentId) {
-  if (!approvalAccessToken) return;
+  if (!(await ensureApprovalSession())) return;
   try {
-    const response = await fetch("/api/agent-history?agentId=" + encodeURIComponent(agentId), {
+    const response = await ownerAuthenticatedFetch("/api/agent-history?agentId=" + encodeURIComponent(agentId), {
       headers: { Authorization: "Bearer " + approvalAccessToken },
       cache: "no-store"
     });
@@ -396,17 +396,14 @@ taskForm.addEventListener("submit", async (event) => {
   addFeedStep("Generating proposal with the AI provider…");
 
   try {
-    if (!approvalAccessToken) {
+    if (!(await ensureApprovalSession())) {
       ownerLoginDialog.showModal();
-      throw new Error("Please sign in with your owner account before running a task.");
+      throw new Error("Your owner session could not be restored. Please sign in with your owner account, then retry.");
     }
 
-    const response = await fetch("/api/task", {
+    const response = await ownerAuthenticatedFetch("/api/task", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: "Bearer " + approvalAccessToken
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ task, agentId })
     });
 
@@ -550,15 +547,16 @@ async function refreshApprovalSession() {
 async function restoreApprovalSession() {
   try {
     const storedToken = localStorage.getItem(APPROVAL_SESSION_KEY);
-    if (!storedToken) return;
+    if (!storedToken) return false;
     approvalRefreshToken = storedToken;
     setApprovalMessage("Restoring your secure owner session...");
     const restored = await refreshApprovalSession();
     if (!restored) {
       approvalLoginForm.hidden = false;
       approvalWorkspace.hidden = true;
+      setPrivatePanelsVisible(false);
       setApprovalMessage("Your saved sign-in has expired. Please sign in again.", true);
-      return;
+      return false;
     }
     approvalLoginForm.hidden = true;
     approvalWorkspace.hidden = false;
@@ -569,20 +567,47 @@ async function restoreApprovalSession() {
     await loadApprovalQueue();
     await loadYoutubeStatus();
     if (currentWorkspaceAgent === "youtube") openAgentWorkspace("youtube");
+    return Boolean(approvalAccessToken);
   } catch (error) {
+    setPrivatePanelsVisible(false);
     setApprovalMessage("Could not restore your owner session: " + error.message, true);
+    return false;
   }
 }
 
-async function approvalApi(path, options = {}) {
-  const response = await fetch(path, {
+async function ensureApprovalSession() {
+  if (approvalAccessToken) return true;
+  try {
+    if (!approvalRefreshToken) {
+      approvalRefreshToken = localStorage.getItem(APPROVAL_SESSION_KEY) || "";
+    }
+  } catch {
+    return false;
+  }
+  if (!approvalRefreshToken) return false;
+  return await refreshApprovalSession();
+}
+
+async function ownerAuthenticatedFetch(path, options = {}) {
+  const send = () => fetch(path, {
     ...options,
     headers: {
       "Content-Type": "application/json",
-      Authorization: "Bearer " + approvalAccessToken,
-      ...(options.headers || {})
+      ...(options.headers || {}),
+      Authorization: "Bearer " + approvalAccessToken
     }
   });
+  let response = await send();
+  if (response.status === 401 && approvalRefreshToken) {
+    const restored = await refreshApprovalSession();
+    if (restored) response = await send();
+  }
+  return response;
+}
+
+async function approvalApi(path, options = {}) {
+  if (!(await ensureApprovalSession())) throw new Error("Your owner session is not available. Please sign in again.");
+  const response = await ownerAuthenticatedFetch(path, options);
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || "Approval request failed.");
   return data;
@@ -775,8 +800,8 @@ function resetYoutubePanel(message) {
 }
 
 async function youtubeApi(path) {
-  if (!approvalAccessToken) throw new Error("Sign in with the owner account first.");
-  const response = await fetch(path, {
+  if (!(await ensureApprovalSession())) throw new Error("Your owner session is unavailable. Please sign in again.");
+  const response = await ownerAuthenticatedFetch(path, {
     cache: "no-store",
     headers: { Authorization: "Bearer " + approvalAccessToken }
   });
@@ -943,10 +968,10 @@ document.querySelectorAll(".income-plan-button").forEach(button => {
 });
 async function refreshIncomeCentre() {
   const status = document.getElementById("incomeLiveStatus");
-  if (!status || !approvalAccessToken) return;
+  if (!status || !(await ensureApprovalSession())) return;
   status.textContent = "Loading owner-scoped income and connected-asset records…";
   try {
-    const response = await fetch("/api/agent-portfolio", {
+    const response = await ownerAuthenticatedFetch("/api/agent-portfolio", {
       headers: { Authorization: "Bearer " + approvalAccessToken },
       cache: "no-store"
     });
@@ -967,11 +992,11 @@ async function refreshIncomeCentre() {
 async function loadRepairProposals() {
   const panel = document.getElementById("workspaceRepairProposals");
   const list = document.getElementById("workspaceRepairProposalList");
-  if (!panel || !list || !approvalAccessToken) return;
+  if (!panel || !list || !(await ensureApprovalSession())) return;
   panel.hidden = false;
   list.textContent = "Checking recorded failures and safe repair proposals…";
   try {
-    const response = await fetch("/api/repair-proposals", {
+    const response = await ownerAuthenticatedFetch("/api/repair-proposals", {
       headers: { Authorization: "Bearer " + approvalAccessToken },
       cache: "no-store"
     });
