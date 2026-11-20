@@ -61,8 +61,11 @@ try {
   for (const agentId of ["affiliate","youtube","blogging","app-development","seo"]) {
     const button = page.locator('.income-plan-button[data-agent="' + agentId + '"]');
     assert.equal(await button.isVisible(), true, "Income plan button should exist for " + agentId);
+    await button.click();
+    assert.equal(await page.locator("#agentSelect").inputValue(), agentId, "Income plan should select " + agentId);
+    assert.ok(await page.locator("#taskInput").inputValue(), "Income plan should prepare a task prompt for " + agentId);
   }
-  console.log("PASS: Income Centre navigation and five income pathways.");
+  console.log("PASS: Income Centre navigation and all five income plan actions.");
 } finally {
   await browser.close();
 }
