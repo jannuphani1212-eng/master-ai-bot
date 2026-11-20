@@ -173,9 +173,9 @@ function openAgentWorkspace(agentId) {
   panel.scrollIntoView({behavior:"smooth",block:"start"});
 }
 async function loadAgentPortfolio(agentId) {
-  if (!approvalAccessToken) return;
+  if (!(await ensureApprovalSession())) return;
   try {
-    const response = await fetch("/api/agent-portfolio", {
+    const response = await ownerAuthenticatedFetch("/api/agent-portfolio", {
       headers: { Authorization: "Bearer " + approvalAccessToken },
       cache: "no-store"
     });
@@ -226,9 +226,9 @@ async function loadAgentPortfolio(agentId) {
   }
 }
 async function loadPersistentAgentHistory(agentId) {
-  if (!approvalAccessToken) return;
+  if (!(await ensureApprovalSession())) return;
   try {
-    const response = await fetch("/api/agent-history?agentId=" + encodeURIComponent(agentId), {
+    const response = await ownerAuthenticatedFetch("/api/agent-history?agentId=" + encodeURIComponent(agentId), {
       headers: { Authorization: "Bearer " + approvalAccessToken },
       cache: "no-store"
     });
@@ -800,8 +800,8 @@ function resetYoutubePanel(message) {
 }
 
 async function youtubeApi(path) {
-  if (!approvalAccessToken) throw new Error("Sign in with the owner account first.");
-  const response = await fetch(path, {
+  if (!(await ensureApprovalSession())) throw new Error("Your owner session is unavailable. Please sign in again.");
+  const response = await ownerAuthenticatedFetch(path, {
     cache: "no-store",
     headers: { Authorization: "Bearer " + approvalAccessToken }
   });
@@ -968,10 +968,10 @@ document.querySelectorAll(".income-plan-button").forEach(button => {
 });
 async function refreshIncomeCentre() {
   const status = document.getElementById("incomeLiveStatus");
-  if (!status || !approvalAccessToken) return;
+  if (!status || !(await ensureApprovalSession())) return;
   status.textContent = "Loading owner-scoped income and connected-asset records…";
   try {
-    const response = await fetch("/api/agent-portfolio", {
+    const response = await ownerAuthenticatedFetch("/api/agent-portfolio", {
       headers: { Authorization: "Bearer " + approvalAccessToken },
       cache: "no-store"
     });
@@ -992,11 +992,11 @@ async function refreshIncomeCentre() {
 async function loadRepairProposals() {
   const panel = document.getElementById("workspaceRepairProposals");
   const list = document.getElementById("workspaceRepairProposalList");
-  if (!panel || !list || !approvalAccessToken) return;
+  if (!panel || !list || !(await ensureApprovalSession())) return;
   panel.hidden = false;
   list.textContent = "Checking recorded failures and safe repair proposals…";
   try {
-    const response = await fetch("/api/repair-proposals", {
+    const response = await ownerAuthenticatedFetch("/api/repair-proposals", {
       headers: { Authorization: "Bearer " + approvalAccessToken },
       cache: "no-store"
     });
