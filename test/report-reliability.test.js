@@ -127,3 +127,13 @@ test("missing-section merge preserves the original report and appends only gener
   assert.ok(merged.includes("## Research and evidence"));
   assert.equal(mergeMissingReportSections(original, ""), original);
 });
+
+test("a report that admits it could not access the requested environment is not marked complete", () => {
+  const report = completeReport +
+    "\n\nI was unable to access the actual environment, credentials, or logs, so the requested diagnostic was not performed.";
+  const review = reviewSpecialistReport(report);
+  assert.equal(review.score, 100);
+  assert.equal(review.status, "needs_review");
+  assert.ok(review.executionLimitations.length > 0);
+  assert.ok(review.warnings.some(item => /could not be accessed or verified/i.test(item)));
+});

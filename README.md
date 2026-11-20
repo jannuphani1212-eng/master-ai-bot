@@ -15,9 +15,9 @@ A mobile-friendly AI command center with one Master AI Brain and five specialist
 
 The backend tries providers in this order:
 
-1. Gemini
-2. Groq
-3. OpenRouter
+1. Groq
+2. OpenRouter
+3. Gemini
 
 Configure keys only as server-side environment variables. Optional model overrides are GEMINI_MODEL, GROQ_MODEL, and OPENROUTER_MODEL.
 
