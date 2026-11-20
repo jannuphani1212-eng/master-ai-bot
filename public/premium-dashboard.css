@@ -287,3 +287,6 @@ footer { border-top: 1px solid rgba(92,174,255,.16); color: #8196bd; }
 .income-disclaimer { margin-top:18px; color:var(--muted,#aab2c4); font-size:.82rem; line-height:1.5; }
 .private-note.auth-ready { color:#72c79a; }
 @media(max-width:640px) { .income-summary { grid-template-columns:1fr; } .income-stream-grid { grid-template-columns:1fr; } .income-stream-meta { grid-template-columns:1fr; gap:4px; } }
+
+.repair-proposal-card { margin-top:12px; padding:14px; border:1px solid rgba(212,175,106,.22); border-radius:12px; background:rgba(255,255,255,.025); }
+.repair-proposal-card ol { padding-left:22px; color:var(--muted,#aab2c4); line-height:1.55; }
