@@ -51,3 +51,16 @@ test("ignores healthy, unknown, and malformed agent entries", () => {
   });
   assert.deepEqual(result, []);
 });
+
+test("rate-limit recovery guidance matches the live Groq to OpenRouter to Gemini order", () => {
+  const [proposal] = buildRepairProposals({
+    agents: [{
+      agentId: "youtube",
+      status: "degraded",
+      lastFailureType: "ai_provider",
+      lastErrorCategory: "rate_limit",
+      lastError: "Groq HTTP 429 TPM limit"
+    }]
+  });
+  assert.ok(proposal.proposedActions.some(action => /Groq → OpenRouter → Gemini/.test(action)));
+});
