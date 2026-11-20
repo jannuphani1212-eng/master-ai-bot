@@ -169,6 +169,7 @@ function openAgentWorkspace(agentId) {
   if(sourceLabel) sourceLabel.textContent=approvalAccessToken?"Loading your saved history…":"Browser-local history";
   if(approvalAccessToken) { void loadPersistentAgentHistory(agentId); void loadAgentPortfolio(agentId); }
   if(agentId==="youtube") loadWorkspaceYoutube();
+  if(agentId==="master" && approvalAccessToken) void loadRepairProposals();
   panel.scrollIntoView({behavior:"smooth",block:"start"});
 }
 async function loadAgentPortfolio(agentId) {
@@ -960,5 +961,41 @@ async function refreshIncomeCentre() {
     status.textContent = "Live owner records — YouTube channels: " + youtube + "; affiliate campaigns: " + affiliate + "; commission records: " + commissions + "; blog drafts: " + blogDrafts + "; Search Console accounts: " + seoAccounts + ". This workspace does not yet verify payout totals, so recorded earnings remain unverified.";
   } catch (error) {
     status.textContent = "Income data could not be loaded: " + error.message + ". Opportunity planning remains available; earnings are not assumed.";
+  }
+}
+
+async function loadRepairProposals() {
+  const panel = document.getElementById("workspaceRepairProposals");
+  const list = document.getElementById("workspaceRepairProposalList");
+  if (!panel || !list || !approvalAccessToken) return;
+  panel.hidden = false;
+  list.textContent = "Checking recorded failures and safe repair proposals…";
+  try {
+    const response = await fetch("/api/repair-proposals", {
+      headers: { Authorization: "Bearer " + approvalAccessToken },
+      cache: "no-store"
+    });
+    const data = await response.json();
+    if (!response.ok || !data.success) throw new Error(data.error || "Repair proposals are unavailable.");
+    list.replaceChildren();
+    if (!Array.isArray(data.proposals) || !data.proposals.length) {
+      addText(list, "p", "No active repair proposals. The health monitor creates proposals when a failure is recorded.", "muted");
+      return;
+    }
+    data.proposals.forEach(proposal => {
+      const card = document.createElement("article");
+      card.className = "repair-proposal-card";
+      addText(card, "strong", proposal.title || "Agent repair proposal");
+      addText(card, "p", (proposal.agentId || "Agent") + " · " + (proposal.priority || "normal") + " priority · " + (proposal.failureType || "failure") + " / " + (proposal.failureCategory || "unknown"), "muted");
+      addText(card, "p", proposal.diagnosis || "Further diagnosis is required.", "warning-text");
+      if (proposal.observedError) addText(card, "p", "Observed: " + proposal.observedError, "muted");
+      const actions = document.createElement("ol");
+      (proposal.proposedActions || []).forEach(action => addText(actions, "li", action));
+      card.appendChild(actions);
+      addText(card, "p", "Owner approval required · Automatic execution disabled", "approval-notice");
+      list.appendChild(card);
+    });
+  } catch (error) {
+    list.textContent = "Repair proposals could not be loaded: " + error.message;
   }
 }
