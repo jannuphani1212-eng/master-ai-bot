@@ -854,7 +854,8 @@ async function loadYoutubeStatus() {
       : (channels.find(item => String(item.title || "").trim().toLowerCase() === "global rhymes 4u")?.id || channels[0]?.id || "");
     youtubeChannelSelect.value = selectedYoutubeChannelId;
     youtubeChannelSelect.disabled = channels.length === 0;
-    youtubeConnectButton.disabled = false;\n    youtubeConnectButton.textContent = channels.length >= 3 ? "Reconnect or update a channel" : "Connect channel";
+    youtubeConnectButton.disabled = false;
+    youtubeConnectButton.textContent = channels.length >= 3 ? "Reconnect or update a channel" : "Connect channel";
     youtubeStatus.textContent = "Connected channels: " + channels.length + "/3. Loading " + (channels.find(item => item.id === selectedYoutubeChannelId)?.title || "selected channel") + "...";
     await loadYoutubeData();
   } catch (error) {
