@@ -966,7 +966,10 @@ youtubeConnectButton.addEventListener("click", async () => {
 
 youtubeChannelSelect.addEventListener("change", () => {
   selectedYoutubeChannelId = youtubeChannelSelect.value;
-  if (selectedYoutubeChannelId) void loadYoutubeData();
+  if (selectedYoutubeChannelId) {
+    void loadYoutubeData();
+    if (currentWorkspaceAgent === "youtube") openAgentWorkspace("youtube");
+  }
 });
 youtubeRefreshButton.addEventListener("click", loadYoutubeStatus);
 
@@ -978,7 +981,7 @@ if (youtubeResult === "connected") {
 } else if (youtubeResult === "error") {
   youtubeStatus.textContent = "Google could not complete the connection. Check the Google Cloud OAuth setup and try again.";
 } else if (youtubeResult === "limit") {
-  youtubeStatus.textContent = "You have reached the 3-channel limit. Disconnect or remove a channel before adding another.";
+  youtubeStatus.textContent = "This owner account already has 3 connected channels. Reconnect an existing channel or remove one before adding another.";
 }
 
 // Private controls stay hidden until Supabase verifies the owner session.
