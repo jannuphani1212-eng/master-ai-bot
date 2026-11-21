@@ -290,3 +290,17 @@ footer { border-top: 1px solid rgba(92,174,255,.16); color: #8196bd; }
 
 .repair-proposal-card { margin-top:12px; padding:14px; border:1px solid rgba(212,175,106,.22); border-radius:12px; background:rgba(255,255,255,.025); }
 .repair-proposal-card ol { padding-left:22px; color:var(--muted,#aab2c4); line-height:1.55; }
+
+/* Agnes video creation panel */
+.agnes-video-panel{margin:1.25rem 0;padding:1rem;border:1px solid rgba(212,175,55,.28);border-radius:16px;background:rgba(10,18,34,.58)}
+.agnes-video-panel h3{margin:.35rem 0}
+.agnes-video-panel textarea{width:100%;min-height:110px;margin:.5rem 0;padding:.85rem;border-radius:10px;border:1px solid var(--border,#334155);background:rgba(3,8,18,.72);color:inherit;font:inherit}
+.agnes-video-controls{display:flex;gap:1rem;flex-wrap:wrap;margin:.65rem 0}
+.agnes-video-controls label{display:grid;gap:.35rem;font-size:.9rem}
+.agnes-video-controls select{padding:.6rem;border-radius:8px;background:#101a2c;color:inherit;border:1px solid #334155}
+#agnesVideoGenerateButton:disabled{opacity:.5;cursor:not-allowed}
+.agnes-video-result{margin-top:.75rem}
+
+.youtube-channel-manager{display:grid;gap:.5rem;margin:1rem 0;padding:1rem;border:1px solid rgba(96,165,250,.22);border-radius:14px;background:rgba(10,18,34,.48)}
+.youtube-channel-manager input,.youtube-channel-manager select{width:100%;padding:.7rem .8rem;border:1px solid #334155;border-radius:9px;background:#101a2c;color:inherit;font:inherit}
+.youtube-channel-manager label{font-weight:600}

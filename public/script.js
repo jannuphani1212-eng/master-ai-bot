@@ -19,7 +19,7 @@ const incomeCentre = document.getElementById("incomeCentre");
 const incomeCentreNav = document.getElementById("incomeCentreNav");
 function showToast(message){toastElement.textContent=message;toastElement.classList.add("show");setTimeout(()=>toastElement.classList.remove("show"),2600);}
 function updateTaskAuthStatus(){const label=document.getElementById("taskAuthStatus");if(!label)return;const signedIn=Boolean(approvalAccessToken);label.textContent=signedIn?"Owner signed in · Tasks enabled":"Owner sign-in required to run tasks";label.classList.toggle("auth-ready",signedIn);}
-function setPrivatePanelsVisible(visible){approvalPanel.hidden=!visible;youtubePanel.hidden=!visible;incomeCentre.hidden=!visible;incomeCentreNav.hidden=!visible;incomeCentre.setAttribute("aria-hidden",String(!visible));incomeCentreNav.setAttribute("aria-hidden",String(!visible));ownerSignInButton.textContent=visible?"Owner workspace":"Owner sign in";updateTaskAuthStatus();}
+function setPrivatePanelsVisible(visible){approvalPanel.hidden=!visible;youtubePanel.hidden=!visible;incomeCentre.hidden=!visible;incomeCentreNav.hidden=!visible;incomeCentre.setAttribute("aria-hidden",String(!visible));incomeCentreNav.setAttribute("aria-hidden",String(!visible));ownerSignInButton.textContent=visible?"Owner workspace":"Owner sign in";updateTaskAuthStatus();if(visible)void refreshAgnesVideoGate();}
 function addFeedStep(message,done=false){const row=document.createElement("div");row.className="feed-step"+(done?" done":"");const dot=document.createElement("span");dot.className="feed-dot";const label=document.createElement("span");label.textContent=message;row.append(dot,label);taskFeed.appendChild(row);}
 
 function addText(parent, tag, text, className) {
@@ -406,7 +406,7 @@ taskForm.addEventListener("submit", async (event) => {
     const response = await ownerAuthenticatedFetch("/api/task", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ task, agentId })
+      body: JSON.stringify({ task, agentId, channelId: selectedYoutubeChannelId || undefined })
     });
 
     const data = await response.json();
@@ -791,6 +791,9 @@ const youtubeVideos = document.getElementById("youtubeVideos");
 const youtubeVideosHeading = document.getElementById("youtubeVideosHeading");
 const youtubeAnalytics = document.getElementById("youtubeAnalytics");
 const youtubeAnalyticsHeading = document.getElementById("youtubeAnalyticsHeading");
+const youtubeChannelNameInput = document.getElementById("youtubeChannelNameInput");
+const youtubeChannelSelect = document.getElementById("youtubeChannelSelect");
+let selectedYoutubeChannelId = "";
 
 function resetYoutubePanel(message) {
   youtubeStatus.textContent = message;
@@ -804,6 +807,12 @@ function resetYoutubePanel(message) {
 
 async function youtubeApi(path) {
   if (!(await ensureApprovalSession())) throw new Error("Your owner session is unavailable. Please sign in again.");
+  if (path.startsWith("/api/youtube/") &&
+      !path.startsWith("/api/youtube/status") &&
+      !path.startsWith("/api/youtube/connect-url") &&
+      selectedYoutubeChannelId) {
+    path += (path.includes("?") ? "&" : "?") + "channel_id=" + encodeURIComponent(selectedYoutubeChannelId);
+  }
   const response = await ownerAuthenticatedFetch(path, {
     cache: "no-store",
     headers: { Authorization: "Bearer " + approvalAccessToken }
@@ -830,10 +839,24 @@ async function loadYoutubeStatus() {
   try {
     const data = await youtubeApi("/api/youtube/status");
     if (!data.connected) {
-      resetYoutubePanel("YouTube is not connected yet. Use Connect YouTube channel to authorize your dedicated Global Rhymes 4U Google account.");
+      selectedYoutubeChannelId = "";
+      youtubeChannelSelect.replaceChildren(new Option("No channels connected", ""));
+      youtubeChannelSelect.disabled = true;
+      resetYoutubePanel("No YouTube channels are connected yet. Enter the exact channel name above, then connect its Google account.");
       return;
     }
-    youtubeStatus.textContent = "Connected securely: " + (data.channel?.title || "YouTube channel") + ". Loading channel information...";
+    const channels = Array.isArray(data.channels) ? data.channels : (data.channel ? [data.channel] : []);
+    const previousSelection = selectedYoutubeChannelId;
+    youtubeChannelSelect.replaceChildren();
+    channels.forEach(item => youtubeChannelSelect.add(new Option(item.title + " · " + item.id, item.id)));
+    selectedYoutubeChannelId = channels.some(item => item.id === previousSelection)
+      ? previousSelection
+      : (channels.find(item => String(item.title || "").trim().toLowerCase() === "global rhymes 4u")?.id || channels[0]?.id || "");
+    youtubeChannelSelect.value = selectedYoutubeChannelId;
+    youtubeChannelSelect.disabled = channels.length === 0;
+    youtubeConnectButton.disabled = false;
+    youtubeConnectButton.textContent = channels.length >= 3 ? "Reconnect or update a channel" : "Connect channel";
+    youtubeStatus.textContent = "Connected channels: " + channels.length + "/3. Loading " + (channels.find(item => item.id === selectedYoutubeChannelId)?.title || "selected channel") + "...";
     await loadYoutubeData();
   } catch (error) {
     youtubeStatus.textContent = error.message;
@@ -917,7 +940,7 @@ async function loadYoutubeData() {
     } else {
       addText(youtubeAnalytics, "p", "YouTube Analytics is unavailable: " + analyticsResult.reason.message);
     }
-    youtubeStatus.textContent = "Global Rhymes 4U is connected. Channel data is live" +
+    youtubeStatus.textContent = channel.title + " is connected. Channel data is live" +
       (analyticsData ? "; analytics cover " + analyticsData.startDate + " to " + analyticsData.endDate + "." : ". Some analytics are unavailable.");
   } catch (error) {
     youtubeStatus.textContent = "Channel connection is active, but some data could not be loaded: " + error.message;
@@ -925,10 +948,15 @@ async function loadYoutubeData() {
 }
 
 youtubeConnectButton.addEventListener("click", async () => {
+  const channelTitle = youtubeChannelNameInput.value.trim();
+  if (!channelTitle || channelTitle.length > 120) {
+    youtubeStatus.textContent = "Enter the exact channel name (up to 120 characters) first.";
+    return;
+  }
   youtubeConnectButton.disabled = true;
-  youtubeStatus.textContent = "Preparing secure Google authorization...";
+  youtubeStatus.textContent = "Preparing secure Google authorization for " + channelTitle + "...";
   try {
-    const data = await youtubeApi("/api/youtube/connect-url");
+    const data = await youtubeApi("/api/youtube/connect-url?channel_title=" + encodeURIComponent(channelTitle));
     window.location.assign(data.authorizationUrl);
   } catch (error) {
     youtubeStatus.textContent = error.message;
@@ -936,15 +964,24 @@ youtubeConnectButton.addEventListener("click", async () => {
   }
 });
 
+youtubeChannelSelect.addEventListener("change", () => {
+  selectedYoutubeChannelId = youtubeChannelSelect.value;
+  if (selectedYoutubeChannelId) {
+    void loadYoutubeData();
+    if (currentWorkspaceAgent === "youtube") openAgentWorkspace("youtube");
+  }
+});
 youtubeRefreshButton.addEventListener("click", loadYoutubeStatus);
 
 const youtubeResult = new URLSearchParams(window.location.search).get("youtube");
 if (youtubeResult === "connected") {
   youtubeStatus.textContent = "Google authorization succeeded. Sign in as the owner to load your channel.";
 } else if (youtubeResult === "channel-mismatch") {
-  youtubeStatus.textContent = "The selected Google account did not return a channel named Global Rhymes 4U. Sign in with the dedicated channel account and try again.";
+  youtubeStatus.textContent = "The selected Google account did not return a channel with that exact name. Check the channel name and Google account, then try again.";
 } else if (youtubeResult === "error") {
   youtubeStatus.textContent = "Google could not complete the connection. Check the Google Cloud OAuth setup and try again.";
+} else if (youtubeResult === "limit") {
+  youtubeStatus.textContent = "This owner account already has 3 connected channels. Reconnect an existing channel or remove one before adding another.";
 }
 
 // Private controls stay hidden until Supabase verifies the owner session.
@@ -1022,3 +1059,92 @@ async function loadRepairProposals() {
     list.textContent = "Repair proposals could not be loaded: " + error.message;
   }
 }
+
+
+// AGNES VIDEO GENERATION — owner-triggered, free-tier gated, never auto-publishes.
+const agnesVideoPrompt = document.getElementById("agnesVideoPrompt");
+const agnesVideoSeconds = document.getElementById("agnesVideoSeconds");
+const agnesVideoRatio = document.getElementById("agnesVideoRatio");
+const agnesVideoGenerateButton = document.getElementById("agnesVideoGenerateButton");
+const agnesVideoSafetyStatus = document.getElementById("agnesVideoSafetyStatus");
+const agnesVideoJobStatus = document.getElementById("agnesVideoJobStatus");
+const agnesVideoResult = document.getElementById("agnesVideoResult");
+let agnesVideoEnabled = false;
+
+async function refreshAgnesVideoGate() {
+  try {
+    const response = await fetch("/api/status", { cache: "no-store" });
+    const status = await response.json();
+    const config = status.integrations?.agnesVideo || {};
+    agnesVideoEnabled = config.enabled === true && config.apiKeyConfigured === true;
+    agnesVideoGenerateButton.disabled = !agnesVideoEnabled || !approvalAccessToken;
+    if (!config.apiKeyConfigured) {
+      agnesVideoSafetyStatus.textContent = "Agnes API key is not configured on the server. Video generation is unavailable.";
+    } else if (!config.enabled) {
+      agnesVideoSafetyStatus.textContent = "LOCKED — API key detected, but free-trial eligibility has not been confirmed and enabled. No video request can be sent.";
+    } else if (!approvalAccessToken) {
+      agnesVideoSafetyStatus.textContent = "Free mode is enabled by the owner. Sign in to create a video.";
+    } else {
+      agnesVideoSafetyStatus.textContent = "Free mode is enabled. Confirm your prompt before generating. Publishing remains disabled.";
+    }
+  } catch {
+    agnesVideoEnabled = false;
+    agnesVideoGenerateButton.disabled = true;
+    agnesVideoSafetyStatus.textContent = "Could not verify Agnes status. Generation remains locked.";
+  }
+}
+
+async function checkAgnesVideoJob(videoId) {
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    const data = await youtubeApi("/api/agnes-video/status?video_id=" + encodeURIComponent(videoId));
+    agnesVideoJobStatus.textContent = "Video status: " + data.status + (data.progress !== null ? " · " + data.progress + "%" : "");
+    if (data.status === "completed" && data.videoUrl) {
+      agnesVideoResult.replaceChildren();
+      const link = document.createElement("a");
+      link.href = data.videoUrl;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = "Open generated video";
+      agnesVideoResult.appendChild(link);
+      return;
+    }
+    if (data.status === "failed") throw new Error(data.error || "Agnes video generation failed.");
+  }
+  agnesVideoJobStatus.textContent = "The job is still processing. Refresh this panel later and check the Agnes job status.";
+}
+
+agnesVideoGenerateButton.addEventListener("click", async () => {
+  const prompt = agnesVideoPrompt.value.trim();
+  if (!agnesVideoEnabled) {
+    agnesVideoSafetyStatus.textContent = "Generation is locked until free eligibility is verified.";
+    return;
+  }
+  if (prompt.length < 20 || prompt.length > 3000) {
+    agnesVideoJobStatus.textContent = "Please enter a prompt between 20 and 3,000 characters.";
+    return;
+  }
+  if (!(await ensureApprovalSession())) {
+    agnesVideoJobStatus.textContent = "Please sign in as owner before generating.";
+    return;
+  }
+  agnesVideoGenerateButton.disabled = true;
+  agnesVideoJobStatus.textContent = "Submitting your video request…";
+  agnesVideoResult.replaceChildren();
+  try {
+    const response = await ownerAuthenticatedFetch("/api/agnes-video", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + approvalAccessToken, "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt, seconds: Number(agnesVideoSeconds.value), aspect_ratio: agnesVideoRatio.value })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.success) throw new Error(data.error || "Agnes video request failed.");
+    agnesVideoJobStatus.textContent = "Video job accepted. Waiting for completion…";
+    await checkAgnesVideoJob(data.videoId);
+  } catch (error) {
+    agnesVideoJobStatus.textContent = error.message;
+  } finally {
+    agnesVideoGenerateButton.disabled = !agnesVideoEnabled || !approvalAccessToken;
+  }
+});
+void refreshAgnesVideoGate();
