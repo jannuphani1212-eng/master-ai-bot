@@ -14,6 +14,7 @@ import { reviewSpecialistReport } from "./lib/quality-review.js";
 import { createSupabaseApprovalHandlers } from "./lib/supabase-approvals.js";
 import { createOwnerAuthMiddleware } from "./lib/owner-auth.js";
 import { createYoutubeIntegrationHandlers, getYoutubeAgentContext } from "./lib/youtube-integration.js";
+import { createAgnesVideoHandlers } from "./lib/agnes-video.js";
 import { createAgentHistoryHandlers } from "./lib/supabase-task-history.js";
 import { parseSynthesisReuseRequest, validateSavedSpecialistReports } from "./lib/synthesis-reuse.js";
 import { createAgentPortfolioHandlers } from "./lib/agent-portfolio.js";
@@ -135,7 +136,7 @@ async function persistTaskHistory(ownerId, agentId, task, data, failure) {
 }
 // Apply IP limits before authentication so invalid-token floods are throttled too.
 // The app currently runs as one Render instance; this in-memory limit is per instance.
-app.use(["/api/task", "/api/brain", "/api/repair-proposals", "/api/agent-history", "/api/agent-portfolio", "/api/youtube", "/api/approvals"], limitApiRequests);
+app.use(["/api/task", "/api/brain", "/api/repair-proposals", "/api/agent-history", "/api/agent-portfolio", "/api/youtube", "/api/agnes-video", "/api/approvals"], limitApiRequests);
 app.use(["/api/task", "/api/brain", "/api/repair-proposals", "/api/agent-history", "/api/agent-portfolio"], requireOwner);
 app.use(["/api/task", "/api/brain", "/api/repair-proposals", "/api/agent-history", "/api/agent-portfolio"], auditOwnerRequests);
 app.get("/api/agent-history", agentHistoryHandlers.list);
@@ -1120,6 +1121,14 @@ app.get("/api/youtube/channel", youtubeHandlers.channel);
 app.get("/api/youtube/videos", youtubeHandlers.videos);
 app.get("/api/youtube/analytics", youtubeHandlers.analytics);
 
+// Agnes video generation is owner-only and remains locked until its free-tier
+// eligibility has been verified in the provider console and explicitly enabled.
+const agnesVideoHandlers = createAgnesVideoHandlers();
+app.use("/api/agnes-video", requireOwner);
+app.use("/api/agnes-video", auditOwnerRequests);
+app.post("/api/agnes-video", agnesVideoHandlers.create);
+app.get("/api/agnes-video/status", agnesVideoHandlers.status);
+
 // =====================================
 // HEALTH API
 // =====================================
@@ -1258,6 +1267,12 @@ app.get("/api/status", (req, res) => {
       youtube: {
         oauthConfigured: Boolean(process.env.YOUTUBE_CLIENT_ID && process.env.YOUTUBE_CLIENT_SECRET && process.env.YOUTUBE_REDIRECT_URI && process.env.YOUTUBE_TOKEN_ENCRYPTION_KEY && process.env.SUPABASE_SERVICE_ROLE_KEY),
         mode: "read_only"
+      },
+      agnesVideo: {
+        apiKeyConfigured: Boolean(process.env.AGNES_API_KEY),
+        enabled: String(process.env.AGNES_VIDEO_FREE_MODE_ENABLED || "").toLowerCase() === "true",
+        model: "agnes-video-2.5-flash",
+        requiresFreeTierVerification: true
       },
       affiliate: { campaignTrackingStorage: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY), externalProgramApi: false },
       blogging: { draftStorage: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY), cmsOAuth: false },
