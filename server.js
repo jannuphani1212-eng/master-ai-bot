@@ -797,7 +797,7 @@ async function runCentralBrain(task, ownerUserId) {
       let specialistTask = item.task;
       if (item.agentId === "youtube" && ownerUserId) {
         try {
-          const channelContext = await getYoutubeAgentContext({ ownerId: ownerUserId });
+          const channelContext = await getYoutubeAgentContext({ ownerId: ownerUserId, channelId: req.body?.channelId });
           if (channelContext) {
             specialistTask = item.task + "\n\n" + channelContext;
           }
@@ -1435,7 +1435,7 @@ app.post("/api/task", async (req, res) => {
     let specialistTask = task;
     if (agentId === "youtube") {
       try {
-        const channelContext = await getYoutubeAgentContext({ ownerId: req.ownerUser?.id });
+        const channelContext = await getYoutubeAgentContext({ ownerId: req.ownerUser?.id, channelId: req.body?.channelId });
         if (channelContext) specialistTask = task + "\n\n" + channelContext;
       } catch (contextError) {
         console.log("YouTube channel context unavailable; continuing with the user request only:", contextError.message);
