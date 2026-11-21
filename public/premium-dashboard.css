@@ -300,3 +300,7 @@ footer { border-top: 1px solid rgba(92,174,255,.16); color: #8196bd; }
 .agnes-video-controls select{padding:.6rem;border-radius:8px;background:#101a2c;color:inherit;border:1px solid #334155}
 #agnesVideoGenerateButton:disabled{opacity:.5;cursor:not-allowed}
 .agnes-video-result{margin-top:.75rem}
+
+.youtube-channel-manager{display:grid;gap:.5rem;margin:1rem 0;padding:1rem;border:1px solid rgba(96,165,250,.22);border-radius:14px;background:rgba(10,18,34,.48)}
+.youtube-channel-manager input,.youtube-channel-manager select{width:100%;padding:.7rem .8rem;border:1px solid #334155;border-radius:9px;background:#101a2c;color:inherit;font:inherit}
+.youtube-channel-manager label{font-weight:600}
