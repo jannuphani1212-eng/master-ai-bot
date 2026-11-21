@@ -1022,3 +1022,92 @@ async function loadRepairProposals() {
     list.textContent = "Repair proposals could not be loaded: " + error.message;
   }
 }
+
+
+// AGNES VIDEO GENERATION — owner-triggered, free-tier gated, never auto-publishes.
+const agnesVideoPrompt = document.getElementById("agnesVideoPrompt");
+const agnesVideoSeconds = document.getElementById("agnesVideoSeconds");
+const agnesVideoRatio = document.getElementById("agnesVideoRatio");
+const agnesVideoGenerateButton = document.getElementById("agnesVideoGenerateButton");
+const agnesVideoSafetyStatus = document.getElementById("agnesVideoSafetyStatus");
+const agnesVideoJobStatus = document.getElementById("agnesVideoJobStatus");
+const agnesVideoResult = document.getElementById("agnesVideoResult");
+let agnesVideoEnabled = false;
+
+async function refreshAgnesVideoGate() {
+  try {
+    const response = await fetch("/api/status", { cache: "no-store" });
+    const status = await response.json();
+    const config = status.integrations?.agnesVideo || {};
+    agnesVideoEnabled = config.enabled === true && config.apiKeyConfigured === true;
+    agnesVideoGenerateButton.disabled = !agnesVideoEnabled || !approvalAccessToken;
+    if (!config.apiKeyConfigured) {
+      agnesVideoSafetyStatus.textContent = "Agnes API key is not configured on the server. Video generation is unavailable.";
+    } else if (!config.enabled) {
+      agnesVideoSafetyStatus.textContent = "LOCKED — API key detected, but free-trial eligibility has not been confirmed and enabled. No video request can be sent.";
+    } else if (!approvalAccessToken) {
+      agnesVideoSafetyStatus.textContent = "Free mode is enabled by the owner. Sign in to create a video.";
+    } else {
+      agnesVideoSafetyStatus.textContent = "Free mode is enabled. Confirm your prompt before generating. Publishing remains disabled.";
+    }
+  } catch {
+    agnesVideoEnabled = false;
+    agnesVideoGenerateButton.disabled = true;
+    agnesVideoSafetyStatus.textContent = "Could not verify Agnes status. Generation remains locked.";
+  }
+}
+
+async function checkAgnesVideoJob(videoId) {
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    const data = await youtubeApi("/api/agnes-video/status?video_id=" + encodeURIComponent(videoId));
+    agnesVideoJobStatus.textContent = "Video status: " + data.status + (data.progress !== null ? " · " + data.progress + "%" : "");
+    if (data.status === "completed" && data.videoUrl) {
+      agnesVideoResult.replaceChildren();
+      const link = document.createElement("a");
+      link.href = data.videoUrl;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = "Open generated video";
+      agnesVideoResult.appendChild(link);
+      return;
+    }
+    if (data.status === "failed") throw new Error(data.error || "Agnes video generation failed.");
+  }
+  agnesVideoJobStatus.textContent = "The job is still processing. Refresh this panel later and check the Agnes job status.";
+}
+
+agnesVideoGenerateButton.addEventListener("click", async () => {
+  const prompt = agnesVideoPrompt.value.trim();
+  if (!agnesVideoEnabled) {
+    agnesVideoSafetyStatus.textContent = "Generation is locked until free eligibility is verified.";
+    return;
+  }
+  if (prompt.length < 20 || prompt.length > 3000) {
+    agnesVideoJobStatus.textContent = "Please enter a prompt between 20 and 3,000 characters.";
+    return;
+  }
+  if (!(await ensureApprovalSession())) {
+    agnesVideoJobStatus.textContent = "Please sign in as owner before generating.";
+    return;
+  }
+  agnesVideoGenerateButton.disabled = true;
+  agnesVideoJobStatus.textContent = "Submitting your video request…";
+  agnesVideoResult.replaceChildren();
+  try {
+    const response = await ownerAuthenticatedFetch("/api/agnes-video", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + approvalAccessToken, "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt, seconds: Number(agnesVideoSeconds.value), aspect_ratio: agnesVideoRatio.value })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.success) throw new Error(data.error || "Agnes video request failed.");
+    agnesVideoJobStatus.textContent = "Video job accepted. Waiting for completion…";
+    await checkAgnesVideoJob(data.videoId);
+  } catch (error) {
+    agnesVideoJobStatus.textContent = error.message;
+  } finally {
+    agnesVideoGenerateButton.disabled = !agnesVideoEnabled || !approvalAccessToken;
+  }
+});
+void refreshAgnesVideoGate();
