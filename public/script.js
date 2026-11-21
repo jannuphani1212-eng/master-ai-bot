@@ -19,7 +19,7 @@ const incomeCentre = document.getElementById("incomeCentre");
 const incomeCentreNav = document.getElementById("incomeCentreNav");
 function showToast(message){toastElement.textContent=message;toastElement.classList.add("show");setTimeout(()=>toastElement.classList.remove("show"),2600);}
 function updateTaskAuthStatus(){const label=document.getElementById("taskAuthStatus");if(!label)return;const signedIn=Boolean(approvalAccessToken);label.textContent=signedIn?"Owner signed in · Tasks enabled":"Owner sign-in required to run tasks";label.classList.toggle("auth-ready",signedIn);}
-function setPrivatePanelsVisible(visible){approvalPanel.hidden=!visible;youtubePanel.hidden=!visible;incomeCentre.hidden=!visible;incomeCentreNav.hidden=!visible;incomeCentre.setAttribute("aria-hidden",String(!visible));incomeCentreNav.setAttribute("aria-hidden",String(!visible));ownerSignInButton.textContent=visible?"Owner workspace":"Owner sign in";updateTaskAuthStatus();}
+function setPrivatePanelsVisible(visible){approvalPanel.hidden=!visible;youtubePanel.hidden=!visible;incomeCentre.hidden=!visible;incomeCentreNav.hidden=!visible;incomeCentre.setAttribute("aria-hidden",String(!visible));incomeCentreNav.setAttribute("aria-hidden",String(!visible));ownerSignInButton.textContent=visible?"Owner workspace":"Owner sign in";updateTaskAuthStatus();if(visible)void refreshAgnesVideoGate();}
 function addFeedStep(message,done=false){const row=document.createElement("div");row.className="feed-step"+(done?" done":"");const dot=document.createElement("span");dot.className="feed-dot";const label=document.createElement("span");label.textContent=message;row.append(dot,label);taskFeed.appendChild(row);}
 
 function addText(parent, tag, text, className) {
