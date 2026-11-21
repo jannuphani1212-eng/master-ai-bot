@@ -406,7 +406,7 @@ taskForm.addEventListener("submit", async (event) => {
     const response = await ownerAuthenticatedFetch("/api/task", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ task, agentId })
+      body: JSON.stringify({ task, agentId, channelId: selectedYoutubeChannelId || undefined })
     });
 
     const data = await response.json();
