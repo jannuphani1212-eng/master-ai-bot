@@ -939,7 +939,7 @@ async function loadYoutubeData() {
     } else {
       addText(youtubeAnalytics, "p", "YouTube Analytics is unavailable: " + analyticsResult.reason.message);
     }
-    youtubeStatus.textContent = "Global Rhymes 4U is connected. Channel data is live" +
+    youtubeStatus.textContent = channel.title + " is connected. Channel data is live" +
       (analyticsData ? "; analytics cover " + analyticsData.startDate + " to " + analyticsData.endDate + "." : ". Some analytics are unavailable.");
   } catch (error) {
     youtubeStatus.textContent = "Channel connection is active, but some data could not be loaded: " + error.message;
@@ -973,7 +973,7 @@ const youtubeResult = new URLSearchParams(window.location.search).get("youtube")
 if (youtubeResult === "connected") {
   youtubeStatus.textContent = "Google authorization succeeded. Sign in as the owner to load your channel.";
 } else if (youtubeResult === "channel-mismatch") {
-  youtubeStatus.textContent = "The selected Google account did not return a channel named Global Rhymes 4U. Sign in with the dedicated channel account and try again.";
+  youtubeStatus.textContent = "The selected Google account did not return a channel with that exact name. Check the channel name and Google account, then try again.";
 } else if (youtubeResult === "error") {
   youtubeStatus.textContent = "Google could not complete the connection. Check the Google Cloud OAuth setup and try again.";
 } else if (youtubeResult === "limit") {
