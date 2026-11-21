@@ -952,11 +952,6 @@ setPrivatePanelsVisible(false);
 approvalMessage.textContent="Sign in to open owner-only approvals and connected accounts.";
 restoreApprovalSession();
 
-
-const incomeCentreNav = document.getElementById("incomeCentreNav");
-if (incomeCentreNav) incomeCentreNav.addEventListener("click", () => {
-  document.getElementById("incomeCentre")?.scrollIntoView({ behavior: "smooth", block: "start" });
-});
 document.querySelectorAll(".income-plan-button").forEach(button => {
   button.addEventListener("click", () => {
     const agentId = button.dataset.agent;
