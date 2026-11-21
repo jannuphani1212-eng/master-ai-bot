@@ -1,6 +1,6 @@
-# Connect Global Rhymes 4U to Master AI Bot
+# Connect multiple YouTube channels to Master AI Bot
 
-This integration uses Google's server-side OAuth 2.0 flow. It does not ask for or store the Google password. The first version is read-only: it can show the connected channel, recent videos, public channel statistics, and the channel's last-28-days YouTube Analytics. It does not upload, edit, delete, or publish videos.
+This integration uses Google's server-side OAuth 2.0 flow. It does not ask for or store the Google password. The current connection layer supports multiple channels under one owner account. It is read-only: it can show each connected channel, recent videos, public channel statistics, and available YouTube Analytics. It does not upload, edit, delete, render or publish videos.
 
 ## 1. Enable the Google APIs
 
@@ -64,13 +64,13 @@ After the environment variables are saved, Render will redeploy the service.
 
 1. Open the deployed Master AI Bot dashboard.
 2. Sign in through the Owner Approval Center with the configured owner account.
-3. Find **Global Rhymes 4U — YouTube Channel**.
-4. Tap **Connect YouTube channel**.
+3. Find **YouTube Channels**.
+4. Tap **Add YouTube channel**. Repeat this same OAuth flow for each additional Google account. If one Google account owns several YouTube channels, the callback saves all channels returned by YouTube for that authorized account.
 5. Choose the dedicated Global Rhymes 4U Google account and review the consent screen.
 6. Return to the dashboard and sign in again if the page asks.
 7. Tap **Refresh channel data**.
 
-The dashboard should then show the authorized channel, recent videos and last-28-days analytics.
+The dashboard should then show all authorized channels. Select a channel to view its channel data, recent videos and available analytics. Tasks must name the intended channel; channel data must never be combined.
 
 ## Security and limits
 
@@ -79,7 +79,7 @@ The dashboard should then show the authorized channel, recent videos and last-28
 - The browser receives only channel and video display data, never OAuth tokens.
 - All data routes require the existing owner-authenticated session.
 - OAuth callback state is signed and expires after 10 minutes.
-- The first release requests read-only channel and analytics scopes. Publishing is deliberately not enabled. A later publishing feature must request the upload scope separately and use a fresh explicit owner approval before each upload.
+- The multi-channel release requests read-only channel and analytics scopes. Video generation, rendering and publishing are separate capabilities and are not included by connecting YouTube. Publishing is deliberately not enabled. A later publishing feature must request the upload scope separately and use a fresh explicit owner approval before each upload.
 - API quota limits and Google OAuth verification/testing restrictions apply. A connected account does not guarantee every analytics report is available immediately.
 
 ## OAuth testing-mode limitation
