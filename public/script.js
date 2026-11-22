@@ -858,6 +858,7 @@ async function loadYoutubeStatus() {
     youtubeConnectButton.textContent = channels.length >= 3 ? "Reconnect or update a channel" : "Connect channel";
     youtubeStatus.textContent = "Connected channels: " + channels.length + "/3. Loading " + (channels.find(item => item.id === selectedYoutubeChannelId)?.title || "selected channel") + "...";
     await loadYoutubeData();
+    await refreshYoutubeRhymeMemory();
   } catch (error) {
     youtubeStatus.textContent = error.message;
   }
@@ -972,6 +973,68 @@ youtubeChannelSelect.addEventListener("change", () => {
   }
 });
 youtubeRefreshButton.addEventListener("click", loadYoutubeStatus);
+
+const youtubeRhymeMemoryStatus = document.getElementById("youtubeRhymeMemoryStatus");
+const youtubeRhymeMemoryList = document.getElementById("youtubeRhymeMemoryList");
+const youtubeRhymeMemoryRefresh = document.getElementById("youtubeRhymeMemoryRefresh");
+
+async function refreshYoutubeRhymeMemory() {
+  if (!youtubeRhymeMemoryStatus || !youtubeRhymeMemoryList) return;
+  if (!(await ensureApprovalSession())) {
+    youtubeRhymeMemoryStatus.textContent = "Sign in as owner to load your saved rhyme progress.";
+    youtubeRhymeMemoryList.replaceChildren();
+    return;
+  }
+  youtubeRhymeMemoryStatus.textContent = "Loading saved rhyme production progress from Supabase...";
+  try {
+    const suffix = selectedYoutubeChannelId ? "?channel_id=" + encodeURIComponent(selectedYoutubeChannelId) : "";
+    const response = await ownerAuthenticatedFetch("/api/youtube/rhyme-projects" + suffix, { cache: "no-store" });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.success) throw new Error(data.error || "Saved rhyme progress is unavailable.");
+    youtubeRhymeMemoryList.replaceChildren();
+    const projects = Array.isArray(data.projects) ? data.projects : [];
+    if (!projects.length) {
+      youtubeRhymeMemoryStatus.textContent = "No rhyme production records saved yet. When the YouTube Specialist creates a full rhyme production plan, it will save its continuity record here.";
+      return;
+    }
+    projects.forEach(project => {
+      const card = document.createElement("article");
+      card.className = "rhyme-memory-card";
+      addText(card, "h4", project.rhyme_title || "Untitled rhyme");
+      const completed = Array.isArray(project.completed_scenes) ? project.completed_scenes : [];
+      const remaining = Array.isArray(project.remaining_scenes) ? project.remaining_scenes : [];
+      const total = Number(project.total_scenes || 0);
+      const percent = total > 0 ? Math.min(100, Math.round(completed.length / total * 100)) : 0;
+      addText(card, "p", completed.length + " completed · " + remaining.length + " remaining · " + total + " total scenes", "muted");
+      const progress = document.createElement("progress");
+      progress.max = 100;
+      progress.value = percent;
+      progress.className = "rhyme-memory-progress";
+      card.appendChild(progress);
+      addText(card, "p", "Next scene: " + (project.next_scene ?? "Not set") + " · Status: " + (project.production_status || "planning"), "muted");
+      addText(card, "p", "Cooldown: " + (project.cooldown_status || "unknown") + (project.retry_at ? " · Retry after " + new Date(project.retry_at).toLocaleString() : ""), "muted");
+      addText(card, "p", "Retry attempts: " + Number(project.retry_attempts || 0) + " · Failed clips: " + (Array.isArray(project.failed_clips) ? project.failed_clips.length : 0), "muted");
+      if (project.script) addText(card, "p", "Saved script: " + project.script.slice(0, 360) + (project.script.length > 360 ? "…" : ""));
+      if (project.last_generated_clip && typeof project.last_generated_clip.url === "string" && /^https:\/\//i.test(project.last_generated_clip.url)) {
+        const link = document.createElement("a");
+        link.href = project.last_generated_clip.url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = "Open last generated clip";
+        card.appendChild(link);
+      }
+      addText(card, "p", "Character continuity: " + JSON.stringify(project.character_continuity || {}), "muted");
+      addText(card, "p", "Background continuity: " + JSON.stringify(project.background_continuity || {}), "muted");
+      youtubeRhymeMemoryList.appendChild(card);
+    });
+    youtubeRhymeMemoryStatus.textContent = projects.length + " saved rhyme project(s) loaded from persistent server-side storage.";
+  } catch (error) {
+    youtubeRhymeMemoryStatus.textContent = "Could not load rhyme memory: " + error.message;
+  }
+}
+
+youtubeRhymeMemoryRefresh?.addEventListener("click", refreshYoutubeRhymeMemory);
+
 
 const youtubeResult = new URLSearchParams(window.location.search).get("youtube");
 if (youtubeResult === "connected") {
