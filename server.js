@@ -1138,7 +1138,7 @@ app.get("/api/youtube/status", youtubeHandlers.status);
 app.get("/api/youtube/channel", youtubeHandlers.channel);
 app.get("/api/youtube/videos", youtubeHandlers.videos);
 app.get("/api/youtube/analytics", youtubeHandlers.analytics);
-const youtubeRhymeMemoryHandlers = createYoutubeRhymeMemory();
+const youtubeRhymeMemoryHandlers = youtubeRhymeMemory;
 app.get("/api/youtube/rhyme-projects", youtubeRhymeMemoryHandlers.listHandler);
 app.post("/api/youtube/rhyme-projects", youtubeRhymeMemoryHandlers.saveHandler);
 app.get("/api/youtube/rhyme-projects/:id", youtubeRhymeMemoryHandlers.getHandler);
