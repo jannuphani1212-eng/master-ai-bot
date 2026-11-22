@@ -16,6 +16,7 @@ import { createOwnerAuthMiddleware } from "./lib/owner-auth.js";
 import { createYoutubeIntegrationHandlers, getYoutubeAgentContext } from "./lib/youtube-integration.js";
 import { createAgnesVideoHandlers } from "./lib/agnes-video.js";
 import { createAgentHistoryHandlers } from "./lib/supabase-task-history.js";
+import { createYoutubeRhymeMemory } from "./lib/youtube-rhyme-memory.js";
 import { parseSynthesisReuseRequest, validateSavedSpecialistReports } from "./lib/synthesis-reuse.js";
 import { createAgentPortfolioHandlers } from "./lib/agent-portfolio.js";
 import { createAuditMiddleware } from "./lib/audit-log.js";
@@ -85,6 +86,7 @@ function limitApiRequests(req, res, next) {
 app.use(express.json({ limit: "1mb" }));
 const requireOwner = createOwnerAuthMiddleware();
 const agentHistoryHandlers = createAgentHistoryHandlers();
+const youtubeRhymeMemory = createYoutubeRhymeMemory();
 const agentPortfolioHandlers = createAgentPortfolioHandlers();
 const auditOwnerRequests = createAuditMiddleware();
 async function persistTaskHistory(ownerId, agentId, task, data, failure) {
@@ -795,6 +797,14 @@ async function runCentralBrain(task, ownerUserId) {
     try {
 
       let specialistTask = item.task;
+      if (item.agentId === "youtube" && ownerUserId && /rhyme|resume|continue|scene|clip/i.test(item.task)) {
+        try {
+          const savedRhymeContext = await youtubeRhymeMemory.context(ownerUserId, req.body?.channelId);
+          if (savedRhymeContext) specialistTask += "\\n\\n" + savedRhymeContext;
+        } catch (memoryError) {
+          console.warn("Saved YouTube rhyme memory unavailable; continuing without resume context:", memoryError.message);
+        }
+      }
       if (item.agentId === "youtube" && ownerUserId) {
         try {
           const channelContext = await getYoutubeAgentContext({ ownerId: ownerUserId, channelId: req.body?.channelId });
@@ -824,6 +834,14 @@ async function runCentralBrain(task, ownerUserId) {
 
       let specialistReport = response.result;
       let specialistProvider = response.provider;
+      if (item.agentId === "youtube" && ownerUserId) {
+        try {
+          const savedRhyme = await youtubeRhymeMemory.persistReport(ownerUserId, req.body?.channelId, specialistReport);
+          if (savedRhyme) console.log("YouTube rhyme production state saved:", savedRhyme.id);
+        } catch (memoryError) {
+          console.warn("YouTube rhyme production state could not be saved:", memoryError.message);
+        }
+      }
       let qualityReview = reviewSpecialistReport(specialistReport);
       let reportRepaired = false;
 
@@ -1120,6 +1138,10 @@ app.get("/api/youtube/status", youtubeHandlers.status);
 app.get("/api/youtube/channel", youtubeHandlers.channel);
 app.get("/api/youtube/videos", youtubeHandlers.videos);
 app.get("/api/youtube/analytics", youtubeHandlers.analytics);
+const youtubeRhymeMemoryHandlers = createYoutubeRhymeMemory();
+app.get("/api/youtube/rhyme-projects", youtubeRhymeMemoryHandlers.listHandler);
+app.post("/api/youtube/rhyme-projects", youtubeRhymeMemoryHandlers.saveHandler);
+app.get("/api/youtube/rhyme-projects/:id", youtubeRhymeMemoryHandlers.getHandler);
 
 // Agnes video generation is owner-only and remains locked until its free-tier
 // eligibility has been verified in the provider console and explicitly enabled.
