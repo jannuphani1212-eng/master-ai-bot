@@ -22,6 +22,8 @@ import { parseSynthesisReuseRequest, validateSavedSpecialistReports } from "./li
 import { createAgentPortfolioHandlers } from "./lib/agent-portfolio.js";
 import { createAuditMiddleware } from "./lib/audit-log.js";
 import { createPersistentQueue } from "./lib/persistent-queue.js";
+import { createBlogCmsHandlers } from "./lib/blog-cms-integration.js";
+import { createInstagramIntegrationHandlers } from "./lib/instagram-integration.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -91,6 +93,8 @@ const agentHistoryHandlers = createAgentHistoryHandlers();
 const youtubeRhymeMemory = createYoutubeRhymeMemory();
 const agentPortfolioHandlers = createAgentPortfolioHandlers();
 const persistentQueue = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY ? createPersistentQueue() : null;
+const blogCmsHandlers = createBlogCmsHandlers();
+const instagramHandlers = createInstagramIntegrationHandlers();
 const auditOwnerRequests = createAuditMiddleware();
 async function persistTaskHistory(ownerId, agentId, task, data, failure) {
   if (!ownerId) return;
@@ -141,9 +145,9 @@ async function persistTaskHistory(ownerId, agentId, task, data, failure) {
 }
 // Apply IP limits before authentication so invalid-token floods are throttled too.
 // The app currently runs as one Render instance; this in-memory limit is per instance.
-app.use(["/api/task", "/api/brain", "/api/repair-proposals", "/api/agent-history", "/api/agent-portfolio", "/api/youtube", "/api/agnes-video", "/api/approvals"], limitApiRequests);
-app.use(["/api/task", "/api/brain", "/api/repair-proposals", "/api/agent-history", "/api/agent-portfolio", "/api/notifications", "/api/queue"], requireOwner);
-app.use(["/api/task", "/api/brain", "/api/repair-proposals", "/api/agent-history", "/api/agent-portfolio", "/api/notifications", "/api/queue"], auditOwnerRequests);
+app.use(["/api/task", "/api/brain", "/api/repair-proposals", "/api/agent-history", "/api/agent-portfolio", "/api/youtube", "/api/agnes-video", "/api/approvals", "/api/blog", "/api/instagram"], limitApiRequests);
+app.use(["/api/task", "/api/brain", "/api/repair-proposals", "/api/agent-history", "/api/agent-portfolio", "/api/notifications", "/api/queue", "/api/blog", "/api/instagram"], requireOwner);
+app.use(["/api/task", "/api/brain", "/api/repair-proposals", "/api/agent-history", "/api/agent-portfolio", "/api/notifications", "/api/queue", "/api/blog", "/api/instagram"], auditOwnerRequests);
 app.get("/api/agent-history", agentHistoryHandlers.list);
 app.get("/api/agent-portfolio", agentPortfolioHandlers.get);
 
@@ -1370,6 +1374,19 @@ const youtubeHandlers = createYoutubeIntegrationHandlers();
 
 // OAuth callback is intentionally public, but accepts only a short-lived,
 // HMAC-signed state created after a verified owner session.
+app.get("/api/blog/oauth/callback", blogCmsHandlers.callback);
+app.use("/api/blog", requireOwner);
+app.use("/api/blog", auditOwnerRequests);
+app.get("/api/blog/connect-url", blogCmsHandlers.connectUrl);
+app.get("/api/blog/status", blogCmsHandlers.status);
+app.post("/api/blog/drafts/:id/create-cms-draft", blogCmsHandlers.createCmsDraft);
+
+app.get("/api/instagram/oauth/callback", instagramHandlers.callback);
+app.use("/api/instagram", requireOwner);
+app.use("/api/instagram", auditOwnerRequests);
+app.get("/api/instagram/connect-url", instagramHandlers.connectUrl);
+app.get("/api/instagram/status", instagramHandlers.status);
+
 app.get("/api/youtube/oauth/callback", youtubeHandlers.callback);
 // OAuth callback is public but rate-limited; every other YouTube route is owner-only.
 app.use("/api/youtube", requireOwner);
