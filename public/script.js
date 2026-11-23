@@ -616,12 +616,71 @@ async function approvalApi(path, options = {}) {
   return data;
 }
 
+async function loadDailyOperations() {
+  const status = document.getElementById("dailyQueueStatus");
+  const list = document.getElementById("dailyNotificationList");
+  if (!status || !list || !approvalAccessToken) return;
+  status.textContent = "Loading queue and agent notifications…";
+  try {
+    const [queueData, notificationData] = await Promise.all([
+      approvalApi("/api/queue"),
+      approvalApi("/api/notifications")
+    ]);
+    const jobs = Array.isArray(queueData.jobs) ? queueData.jobs : [];
+    const counts = jobs.reduce((acc, job) => {
+      acc[job.status] = (acc[job.status] || 0) + 1;
+      return acc;
+    }, {});
+    status.textContent = "Saved queue · " + jobs.length + " recent jobs · Pending " + (counts.pending || 0) +
+      " · Running " + (counts.running || 0) + " · Completed " + (counts.completed || 0) + " · Failed " + (counts.failed || 0);
+    const items = Array.isArray(notificationData.notifications) ? notificationData.notifications : [];
+    list.replaceChildren();
+    if (!items.length) {
+      list.textContent = "No agent notifications yet. The first scheduled run will add completion and retry updates here.";
+      return;
+    }
+    for (const item of items.slice(0, 30)) {
+      const article = document.createElement("article");
+      article.className = "approval-card";
+      const heading = document.createElement("h4");
+      heading.textContent = item.title || "Agent update";
+      const body = document.createElement("p");
+      body.textContent = item.body || "";
+      const meta = document.createElement("small");
+      meta.textContent = [item.agent_id || "Master", item.notification_type || "update", item.created_at ? new Date(item.created_at).toLocaleString() : ""].filter(Boolean).join(" · ");
+      article.append(heading, body, meta);
+      if (!item.read_at) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "secondary";
+        button.textContent = "Mark as read";
+        button.addEventListener("click", async () => {
+          button.disabled = true;
+          try {
+            await approvalApi("/api/notifications/" + encodeURIComponent(item.id) + "/read", { method: "PATCH" });
+            await loadDailyOperations();
+          } catch (error) {
+            button.disabled = false;
+            status.textContent = error.message;
+          }
+        });
+        article.append(button);
+      }
+      list.append(article);
+    }
+  } catch (error) {
+    status.textContent = "Daily operations status unavailable: " + error.message;
+    list.textContent = "Sign in and confirm the queue database setup is complete.";
+  }
+}
+
 async function loadApprovalQueue() {
   if (!approvalAccessToken) return;
   approvalList.textContent = "Loading approval queue...";
   try {
     const data = await approvalApi("/api/approvals");
     renderApprovalQueue(Array.isArray(data.approvals) ? data.approvals : []);
+    await loadDailyOperations();
     setApprovalMessage("Signed in. Your owner-only approval queue is ready.");
   } catch (error) {
     approvalList.textContent = error.message;

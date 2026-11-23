@@ -1,4 +1,5 @@
 import express from "express";
+import { timingSafeEqual } from "node:crypto";
 import "dotenv/config";
 import { GoogleGenAI } from "@google/genai";
 import { fallbackAgentSelection, requestsAllSpecialists } from "./lib/routing.js";
@@ -20,6 +21,7 @@ import { createYoutubeRhymeMemory } from "./lib/youtube-rhyme-memory.js";
 import { parseSynthesisReuseRequest, validateSavedSpecialistReports } from "./lib/synthesis-reuse.js";
 import { createAgentPortfolioHandlers } from "./lib/agent-portfolio.js";
 import { createAuditMiddleware } from "./lib/audit-log.js";
+import { createPersistentQueue } from "./lib/persistent-queue.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -88,6 +90,7 @@ const requireOwner = createOwnerAuthMiddleware();
 const agentHistoryHandlers = createAgentHistoryHandlers();
 const youtubeRhymeMemory = createYoutubeRhymeMemory();
 const agentPortfolioHandlers = createAgentPortfolioHandlers();
+const persistentQueue = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY ? createPersistentQueue() : null;
 const auditOwnerRequests = createAuditMiddleware();
 async function persistTaskHistory(ownerId, agentId, task, data, failure) {
   if (!ownerId) return;
@@ -139,10 +142,200 @@ async function persistTaskHistory(ownerId, agentId, task, data, failure) {
 // Apply IP limits before authentication so invalid-token floods are throttled too.
 // The app currently runs as one Render instance; this in-memory limit is per instance.
 app.use(["/api/task", "/api/brain", "/api/repair-proposals", "/api/agent-history", "/api/agent-portfolio", "/api/youtube", "/api/agnes-video", "/api/approvals"], limitApiRequests);
-app.use(["/api/task", "/api/brain", "/api/repair-proposals", "/api/agent-history", "/api/agent-portfolio"], requireOwner);
-app.use(["/api/task", "/api/brain", "/api/repair-proposals", "/api/agent-history", "/api/agent-portfolio"], auditOwnerRequests);
+app.use(["/api/task", "/api/brain", "/api/repair-proposals", "/api/agent-history", "/api/agent-portfolio", "/api/notifications", "/api/queue"], requireOwner);
+app.use(["/api/task", "/api/brain", "/api/repair-proposals", "/api/agent-history", "/api/agent-portfolio", "/api/notifications", "/api/queue"], auditOwnerRequests);
 app.get("/api/agent-history", agentHistoryHandlers.list);
 app.get("/api/agent-portfolio", agentPortfolioHandlers.get);
+
+app.get("/api/queue", async (req, res) => {
+  if (!persistentQueue) return res.status(503).json({ success: false, error: "Persistent queue is not configured." });
+  try {
+    const jobs = await persistentQueue.status(req.ownerUser.id);
+    return res.json({ success: true, source: "supabase", jobs });
+  } catch (error) {
+    return res.status(503).json({ success: false, error: error.message });
+  }
+});
+
+app.get("/api/notifications", async (req, res) => {
+  if (!persistentQueue) return res.status(503).json({ success: false, error: "Notifications are not configured." });
+  try {
+    return res.json({ success: true, notifications: await persistentQueue.notifications(req.ownerUser.id) });
+  } catch (error) {
+    return res.status(503).json({ success: false, error: error.message });
+  }
+});
+
+app.patch("/api/notifications/:id/read", async (req, res) => {
+  if (!persistentQueue) return res.status(503).json({ success: false, error: "Notifications are not configured." });
+  try {
+    const updated = await persistentQueue.markNotificationRead(req.ownerUser.id, req.params.id);
+    return res.json({ success: updated });
+  } catch (error) {
+    return res.status(503).json({ success: false, error: error.message });
+  }
+});
+
+function secureSecretMatches(provided, expected) {
+  if (!provided || !expected) return false;
+  const left = Buffer.from(String(provided));
+  const right = Buffer.from(String(expected));
+  return left.length === right.length && timingSafeEqual(left, right);
+}
+
+function indiaDayKey() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit"
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  return values.year + "-" + values.month + "-" + values.day;
+}
+
+let dailyWorkerRunning = false;
+
+const DAILY_ASSIGNMENTS = {
+  affiliate: "Daily production: research one useful India-focused fashion or watch product opportunity. Deliver a cautious product shortlist, buyer problem, comparison criteria, original short-video or blog campaign asset, disclosure text, and tracking plan. Do not invent live prices, stock, commission rates, affiliate eligibility, links, or earnings. Mark every unverified item clearly. Draft only; no posting.",
+  youtube: "Daily production for Global Rhymes 4U: continue the saved rhyme project from its exact next unfinished scene if one exists; otherwise create one original English children's rhyme with a complete script, scene-by-scene visual prompts, consistent character and background bible, title, description, and child-safety/copyright checks. Create production-ready text and prompts only. Do not claim a video clip was generated or upload/publish anything.",
+  blogging: "Daily production: create one original, useful, mobile-friendly blog article draft for an India-focused audience. Choose a topic that supports the owner's existing content business, preferably education or useful product comparisons. Include search intent, a clear outline, complete article draft, title, meta description, internal-link ideas, and fact-check flags. Never fabricate citations or publish the article.",
+  "app-development": "Daily production: identify one small practical Android-first tool or app feature that could support the owner's YouTube, blogging, affiliate, or SEO operations. Deliver a validated problem statement, user stories, beginner-friendly MVP specification, complete implementation plan, acceptance tests, privacy/security notes, and free-first technology choices. Do not deploy or spend.",
+  seo: "Daily cross-workstream SEO: review today's completed affiliate, YouTube, blogging, and app-development outputs in the attached queue context. Produce keyword/topic mapping, search intent, title/meta improvements, internal-link and content repurposing recommendations, technical/measurement checklist, and prioritized fixes for all four workstreams. Do not invent search volumes, rankings, traffic, or performance metrics."
+};
+
+async function processDailyQueue(ownerId, dayKey) {
+  if (!persistentQueue) throw new Error("Persistent queue is not configured.");
+  const workerId = "daily-worker-" + process.pid + "-" + Date.now();
+  const summary = [];
+  for (let count = 0; count < 30; count += 1) {
+    const job = await persistentQueue.claim(workerId);
+    if (!job) break;
+    try {
+      let task = job.task;
+      if (job.agent_id === "youtube") {
+        try {
+          const saved = await youtubeRhymeMemory.context(ownerId);
+          if (saved) task += "\n\nRESUME CONTEXT FROM SAVED RHYME MEMORY:\n" + saved;
+        } catch (error) {
+          console.warn("Daily YouTube resume context unavailable:", error.message);
+        }
+        try {
+          const channel = await getYoutubeAgentContext({ ownerId });
+          if (channel) task += "\n\nCONNECTED CHANNEL CONTEXT:\n" + channel;
+        } catch (error) {
+          console.log("Daily YouTube channel context unavailable:", error.message);
+        }
+      }
+      if (job.agent_id === "seo") {
+        const earlier = await persistentQueue.dailyResults(ownerId, dayKey);
+        const context = earlier.filter(item => item.agent_id !== "seo").map(item =>
+          "AGENT " + item.agent_id + " OUTPUT:\n" + String(item.result?.report || "").slice(0, 5000)
+        ).join("\n\n");
+        if (context) task += "\n\nTODAY'S COMPLETED WORKSTREAM OUTPUTS:\n" + context;
+      }
+      const generated = await generateAI(task, agentInstructions[job.agent_id], 2600);
+      const review = reviewSpecialistReport(generated.result);
+      const result = {
+        success: review.status === "passed",
+        needsAttention: review.status !== "passed",
+        agent: job.agent_id,
+        provider: generated.provider,
+        qualityReview: review,
+        report: generated.result,
+        executionMode: "draft_only",
+        requiresHumanApproval: true
+      };
+      await persistTaskHistory(ownerId, job.agent_id, task, {
+        success: result.success,
+        provider: result.provider,
+        qualityReview: result.qualityReview,
+        result: result.report
+      });
+      await persistentQueue.complete(job.id, workerId, result);
+      await persistentQueue.notify(ownerId, {
+        agentId: job.agent_id,
+        type: result.success ? "agent_completed" : "agent_needs_attention",
+        title: job.agent_id + (result.success ? " completed daily work" : " needs review"),
+        body: result.success
+          ? "Daily draft completed using " + generated.provider + ". Review the saved report before any external action."
+          : "Daily draft was saved but quality review needs attention. Check the agent report before using it.",
+        metadata: { jobId: job.id, dayKey, provider: generated.provider, qualityScore: review.score ?? null }
+      }).catch(notificationError => console.error("Could not save completion notification:", notificationError.message));
+      summary.push({ agentId: job.agent_id, status: result.success ? "completed" : "needs_attention", provider: generated.provider });
+      if (!result.success) {
+        selfHealingMonitor.record(job.agent_id, { success: false, failureType: "report_quality", error: "Daily output requires quality review." });
+      } else {
+        selfHealingMonitor.record(job.agent_id, { success: true });
+      }
+    } catch (error) {
+      const retry = await persistentQueue.fail(job, workerId, error);
+      selfHealingMonitor.record(job.agent_id, { success: false, failureType: inferFailureType(error.message), error: error.message });
+      await persistentQueue.notify(ownerId, {
+        agentId: job.agent_id,
+        type: retry.terminal ? "agent_failed" : "agent_retry_scheduled",
+        title: job.agent_id + (retry.terminal ? " daily task failed" : " daily task will retry"),
+        body: error.message.slice(0, 1200),
+        metadata: { jobId: job.id, dayKey, terminal: retry.terminal, retryInSeconds: retry.retryInSeconds }
+      }).catch(notificationError => console.error("Could not save failure notification:", notificationError.message));
+      summary.push({ agentId: job.agent_id, status: retry.terminal ? "failed" : "retry_scheduled", error: error.message });
+      if (!retry.terminal) await new Promise(resolve => setTimeout(resolve, retry.retryInSeconds * 1000));
+    }
+  }
+  return summary;
+}
+
+async function startDailyWorker(ownerId, dayKey) {
+  if (dailyWorkerRunning) return false;
+  dailyWorkerRunning = true;
+  try {
+    await processDailyQueue(ownerId, dayKey);
+  } finally {
+    dailyWorkerRunning = false;
+  }
+  return true;
+}
+
+function schedulerAuthorized(req) {
+  const provided = String(req.get("authorization") || "").replace(/^Bearer\s+/i, "");
+  return secureSecretMatches(provided, process.env.SCHEDULER_SHARED_SECRET);
+}
+
+app.post("/api/internal/daily-run", async (req, res) => {
+  if (!schedulerAuthorized(req)) return res.status(401).json({ success: false, error: "Unauthorized scheduler request." });
+  if (!persistentQueue) return res.status(503).json({ success: false, error: "Persistent queue is not configured; check Supabase service-role configuration." });
+  const ownerId = String(process.env.SUPABASE_OWNER_USER_ID || "");
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(ownerId)) {
+    return res.status(503).json({ success: false, error: "SUPABASE_OWNER_USER_ID is not configured correctly." });
+  }
+  const dayKey = indiaDayKey();
+  try {
+    const items = Object.entries(DAILY_ASSIGNMENTS).map(([agentId, task]) => ({
+      agentId, task, idempotencyKey: "daily:" + dayKey + ":" + agentId
+    }));
+    const queued = await persistentQueue.enqueue(ownerId, items);
+    void startDailyWorker(ownerId, dayKey).catch(error => console.error("Daily queue worker stopped:", error.message));
+    return res.status(202).json({
+      success: true, accepted: true, dayKey, timezone: "Asia/Kolkata", queued,
+      message: "Daily jobs are saved in the persistent queue. The background worker is processing drafts; publishing and spending remain approval-only."
+    });
+  } catch (error) {
+    console.error("Daily autonomous run failed:", error.message);
+    return res.status(503).json({ success: false, dayKey, error: error.message });
+  }
+});
+
+app.get("/api/internal/daily-status", async (req, res) => {
+  if (!schedulerAuthorized(req)) return res.status(401).json({ success: false, error: "Unauthorized scheduler request." });
+  if (!persistentQueue) return res.status(503).json({ success: false, error: "Persistent queue is not configured." });
+  const ownerId = String(process.env.SUPABASE_OWNER_USER_ID || "");
+  const dayKey = indiaDayKey();
+  try {
+    const jobs = (await persistentQueue.status(ownerId)).filter(job => String(job.idempotency_key || "").startsWith("daily:" + dayKey + ":"));
+    const counts = jobs.reduce((acc, job) => { acc[job.status] = (acc[job.status] || 0) + 1; return acc; }, {});
+    return res.json({ success: true, dayKey, jobs, counts, workerRunning: dailyWorkerRunning, finished: jobs.length === 5 && jobs.every(job => ["completed", "failed"].includes(job.status)) });
+  } catch (error) {
+    return res.status(503).json({ success: false, error: error.message });
+  }
+});
+
 app.use(express.static("public"));
 
 // =====================================

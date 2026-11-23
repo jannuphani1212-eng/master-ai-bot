@@ -81,3 +81,14 @@ These tests validate the routing and fallback orchestration logic. They do not p
 Do not consider a change live until it has been merged and the hosting deployment has completed. Check /api/health and /api/status after deployment, then test real AI requests.
 
 Earnings are not guaranteed. AI output can contain mistakes; verify facts, platform rules, legal requirements, prices, and commission rates before acting.
+
+
+## Autonomous daily operations
+
+The autonomous operations feature adds a Supabase-backed idempotent job queue, retry and worker-lease recovery, daily assignments for all five specialists, and owner-only in-app notifications. Daily work is draft-only; publishing, sending, spending, account changes and deployments remain behind explicit owner approval.
+
+See [Autonomous Daily Operations setup](docs/autonomous-daily-operations.md) and run [the queue and notification schema](docs/autonomous-operations-schema.sql) in the existing Supabase project. The Render web service needs the existing Supabase server credentials and `SUPABASE_OWNER_USER_ID`, plus a strong `SCHEDULER_SHARED_SECRET`. A Render Cron service calls `scripts/daily-scheduler.js` at 08:00 India time (02:30 UTC). Create that Cron service only on a free plan; do not accept paid resources without owner approval.
+
+Owner-only endpoints: `GET /api/queue`, `GET /api/notifications`, and `PATCH /api/notifications/:id/read`. The internal daily-run endpoint is protected by the shared bearer secret.
+
+The daily YouTube task creates rhyme scripts and scene prompts and resumes saved project context. It does not itself render video. Video generation depends on the separately configured video-generation provider and its quotas. Real account integrations must be connected and tested before any live metrics or CMS/social actions can be claimed.
