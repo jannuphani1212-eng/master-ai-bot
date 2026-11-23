@@ -250,6 +250,26 @@ async function processDailyQueue(ownerId, dayKey) {
         savedAssets.blogDraftId = savedDraft.id;
         savedAssets.blogDraftInserted = savedDraft.inserted;
       }
+      if (job.agent_id === "affiliate") {
+        const titleMatch = String(generated.result).match(/^(?:\\*\\*)?(?:Campaign title|Working title|Title)(?:\\*\\*)?\\s*[:：-]\\s*(.+)$/im) ||
+          String(generated.result).match(/^#{1,3}\\s+(.+)$/m);
+        const campaignTitle = String(titleMatch?.[1] || ("Daily affiliate research brief " + dayKey)).trim().slice(0, 180);
+        const savedCampaign = await persistentQueue.saveAffiliateCampaign(ownerId, job.id, {
+          productName: campaignTitle,
+          category: "Research brief",
+          provider: generated.provider,
+          report: generated.result,
+          content: {
+            title: campaignTitle,
+            report: generated.result,
+            source: "master_ai_daily_queue",
+            dayKey,
+            productClaimsVerified: false
+          }
+        });
+        savedAssets.affiliateCampaignId = savedCampaign.id;
+        savedAssets.affiliateCampaignInserted = savedCampaign.inserted;
+      }
       if (job.agent_id === "youtube") {
         try {
           const savedProject = await youtubeRhymeMemory.persistReport(ownerId, null, generated.result);
