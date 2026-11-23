@@ -23,6 +23,7 @@ import { createAgentPortfolioHandlers } from "./lib/agent-portfolio.js";
 import { createAuditMiddleware } from "./lib/audit-log.js";
 import { createPersistentQueue } from "./lib/persistent-queue.js";
 import { createBlogCmsHandlers } from "./lib/blog-cms-integration.js";
+import { createInstagramIntegrationHandlers } from "./lib/instagram-integration.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -93,6 +94,7 @@ const youtubeRhymeMemory = createYoutubeRhymeMemory();
 const agentPortfolioHandlers = createAgentPortfolioHandlers();
 const persistentQueue = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY ? createPersistentQueue() : null;
 const blogCmsHandlers = createBlogCmsHandlers();
+const instagramHandlers = createInstagramIntegrationHandlers();
 const auditOwnerRequests = createAuditMiddleware();
 async function persistTaskHistory(ownerId, agentId, task, data, failure) {
   if (!ownerId) return;
@@ -1416,6 +1418,13 @@ const youtubeHandlers = createYoutubeIntegrationHandlers();
 
 // OAuth callback is intentionally public, but accepts only a short-lived,
 // HMAC-signed state created after a verified owner session.
+app.get("/api/instagram/oauth/callback", instagramHandlers.callback);
+app.use("/api/instagram", limitApiRequests);
+app.use("/api/instagram", requireOwner);
+app.use("/api/instagram", auditOwnerRequests);
+app.get("/api/instagram/connect-url", instagramHandlers.connectUrl);
+app.get("/api/instagram/status", instagramHandlers.status);
+
 app.get("/api/blog/oauth/callback", blogCmsHandlers.callback);
 app.use("/api/blog", limitApiRequests);
 app.use("/api/blog", requireOwner);
@@ -1594,11 +1603,17 @@ app.get("/api/status", (req, res) => {
       affiliate: { campaignTrackingStorage: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY), externalProgramApi: false },
       blogging: {
         draftStorage: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY),
-        cmsOAuth: Boolean(process.env.BLOG_CMS_TOKEN_ENCRYPTION_KEY &&
-          process.env.BLOGGER_REDIRECT_URI &&
+        bloggerOAuthConfigured: Boolean(process.env.BLOG_CMS_TOKEN_ENCRYPTION_KEY && process.env.BLOGGER_REDIRECT_URI &&
           (process.env.BLOGGER_CLIENT_ID || process.env.YOUTUBE_CLIENT_ID) &&
-          (process.env.BLOGGER_CLIENT_SECRET || process.env.YOUTUBE_CLIENT_SECRET) &&
+          (process.env.BLOGGER_CLIENT_SECRET || process.env.YOUTUBE_CLIENT_SECRET)),
+        wordpressOAuthConfigured: Boolean(process.env.BLOG_CMS_TOKEN_ENCRYPTION_KEY &&
           process.env.WORDPRESS_CLIENT_ID && process.env.WORDPRESS_CLIENT_SECRET && process.env.WORDPRESS_REDIRECT_URI)
+      },
+      instagram: {
+        oauthConfigured: Boolean(process.env.INSTAGRAM_APP_ID && process.env.INSTAGRAM_APP_SECRET &&
+          process.env.INSTAGRAM_REDIRECT_URI && process.env.INSTAGRAM_TOKEN_ENCRYPTION_KEY &&
+          process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY),
+        mode: "professional_account_connection"
       },
       seo: { searchConsoleOAuth: false },
       "app-development": { repositoryAutomation: false }
