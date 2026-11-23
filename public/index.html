@@ -65,6 +65,17 @@
   <p id="blogConnectionStatus" class="muted" aria-live="polite">Sign in to check connected blog sites.</p>
   <div id="blogConnectionList" class="approval-list" aria-live="polite"></div>
 </section>
+<section class="panel private-panel" id="instagramPanel" hidden>
+  <div class="eyebrow">SOCIAL ACCOUNT INTEGRATION</div>
+  <h2>Instagram Professional Account</h2>
+  <p class="muted">Connect an Instagram Business or Creator account using Meta's official Instagram Login. The current integration checks account connection and token validity; publishing remains disabled until a separate approval-backed publishing flow is completed.</p>
+  <div class="workspace-actions">
+    <button type="button" id="connectInstagramButton" class="secondary">Connect Instagram</button>
+    <button type="button" id="refreshInstagramButton" class="secondary">Refresh connection</button>
+  </div>
+  <p id="instagramConnectionStatus" class="muted" aria-live="polite">Sign in to check Instagram connections.</p>
+  <div id="instagramConnectionList" class="approval-list" aria-live="polite"></div>
+</section>
 <section class="panel private-panel" id="youtubePanel" hidden><div class="eyebrow">CONNECTED ACCOUNT</div><h2>YouTube Channel Manager</h2><p class="muted">Channel information and analytics are read-only. The bot cannot publish or modify videos.</p>
 <div class="youtube-channel-manager">
   <label for="youtubeChannelNameInput">Channel name to connect</label>
