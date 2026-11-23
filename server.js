@@ -256,7 +256,7 @@ async function processDailyQueue(ownerId, dayKey) {
           ? "Daily draft completed using " + generated.provider + ". Review the saved report before any external action."
           : "Daily draft was saved but quality review needs attention. Check the agent report before using it.",
         metadata: { jobId: job.id, dayKey, provider: generated.provider, qualityScore: review.score ?? null }
-      });
+      }).catch(notificationError => console.error("Could not save completion notification:", notificationError.message));
       summary.push({ agentId: job.agent_id, status: result.success ? "completed" : "needs_attention", provider: generated.provider });
       if (!result.success) {
         selfHealingMonitor.record(job.agent_id, { success: false, failureType: "report_quality", error: "Daily output requires quality review." });
@@ -274,6 +274,7 @@ async function processDailyQueue(ownerId, dayKey) {
         metadata: { jobId: job.id, dayKey, terminal: retry.terminal, retryInSeconds: retry.retryInSeconds }
       }).catch(notificationError => console.error("Could not save failure notification:", notificationError.message));
       summary.push({ agentId: job.agent_id, status: retry.terminal ? "failed" : "retry_scheduled", error: error.message });
+      if (!retry.terminal) await new Promise(resolve => setTimeout(resolve, retry.retryInSeconds * 1000));
     }
   }
   return summary;
