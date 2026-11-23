@@ -53,17 +53,6 @@
 <div class="approval-toolbar"><strong id="approvalOwnerLabel">Owner session active</strong><button type="button" id="approvalLogoutButton" class="secondary">Sign out</button><button type="button" id="approvalRefreshButton" class="secondary">Refresh queue</button></div>
 <h3>Create an approval proposal</h3><form id="approvalCreateForm" class="approval-form"><label for="approvalTitle">Proposal title</label><input id="approvalTitle" maxlength="200" required placeholder="Example: Publish the reviewed YouTube video"><label for="approvalActionType">Action category</label><select id="approvalActionType"><option value="publish">Publish content</option><option value="send">Send a message</option><option value="purchase">Purchase</option><option value="spend">Spend money</option><option value="delete">Delete data</option><option value="account_change">Account change</option><option value="deploy">Deploy code</option><option value="other">Other</option></select><label for="approvalPayload">Details (JSON object)</label><textarea id="approvalPayload" rows="4">{}</textarea><button type="submit" id="approvalCreateButton" class="primary-button">Save proposal for review</button></form>
 <h3>Approval queue</h3><div id="approvalList" class="approval-list" aria-live="polite">No proposals loaded.</div><h3>Autonomous Daily Operations</h3><p id="dailyQueueStatus" class="muted" aria-live="polite">Loading daily task status…</p><div id="dailyNotificationList" class="approval-list" aria-live="polite">No agent notifications loaded.</div></div></section>
-<section class="panel private-panel" id="instagramPanel" hidden>
-  <div class="eyebrow">INSTAGRAM INTEGRATION</div>
-  <h2>Instagram professional account</h2>
-  <p class="muted">Connect an eligible Instagram professional account through Meta. The agent can prepare campaign assets; publishing remains disabled unless you explicitly approve a supported action.</p>
-  <div class="workspace-actions">
-    <button type="button" id="connectInstagramButton" class="secondary">Connect Instagram</button>
-    <button type="button" id="refreshInstagramButton" class="secondary">Refresh account status</button>
-  </div>
-  <p id="instagramConnectionStatus" class="muted" aria-live="polite">Sign in to check Instagram connection.</p>
-  <div id="instagramConnectionList" class="approval-list" aria-live="polite"></div>
-</section>
 <section class="panel private-panel" id="blogPanel" hidden>
   <div class="eyebrow">BLOGGING INTEGRATIONS</div>
   <h2>Blogger & WordPress.com</h2>
