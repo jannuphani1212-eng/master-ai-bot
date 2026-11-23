@@ -32,7 +32,7 @@ The cron process calls the authenticated internal endpoint, then polls `/api/int
 
 The queue creates one idempotent task per day for Affiliate, YouTube, Blogging, App Development, and SEO. SEO runs after the other four and receives their completed reports as context. Re-running the same daily schedule does not create duplicate tasks for that owner/day/agent. Failed tasks are retried with exponential backoff, up to four attempts. A job with a lost worker lease can be reclaimed after ten minutes.
 
-YouTube daily work produces original rhyme scripts, scene prompts, and consistency notes and reuses saved rhyme memory when available. It does not claim to have rendered clips. Actual video generation remains dependent on the separately configured and quota-limited video-generation integration.
+YouTube daily work produces original rhyme scripts, scene prompts, and consistency notes and saves the machine-readable production state to the existing rhyme-memory table when the report contains a valid state block. It does not claim to have rendered clips. Blogging saves one idempotent CMS draft in `blog_drafts` for each daily queue job. Affiliate, App Development and SEO reports remain in persistent agent history and the queue result until their dedicated production integrations are connected. Actual video generation remains dependent on the separately configured and quota-limited video-generation integration.
 
 ## 5. Notifications and verification
 
@@ -45,7 +45,7 @@ The daily-run endpoint is internal and requires the bearer secret. It returns an
 
 ## 6. Integrations and publishing
 
-Existing OAuth and portfolio tables are not the same as connected accounts. Connect each service through its official OAuth flow and verify the connection status. Blog and Instagram integrations must be tested with the actual owner account. Draft creation and reporting can run automatically; publishing remains locked behind the existing explicit owner-approval policy. Commission and revenue figures must come from official platform reports or owner-verified imports; estimates are never counted as earnings.
+Existing OAuth and portfolio tables are not the same as connected accounts. Connect each service through its official OAuth flow and verify the connection status. Blog and Instagram integrations must be tested with the actual owner account. Draft creation and reporting can run automatically; publishing remains locked behind the existing explicit owner-approval policy. The Income Centre sums only owner-verified affiliate commission rows marked paid; pending and unverified rows are shown separately. YouTube ad revenue, blog income and app income are not yet connected as verified payout sources. Commission and revenue figures must come from official platform reports or owner-verified imports; estimates are never counted as earnings.
 
 ## 7. Reliability checks
 
