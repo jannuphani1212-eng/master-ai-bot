@@ -334,8 +334,9 @@ app.post("/api/internal/daily-run", async (req, res) => {
   }
   const dayKey = indiaDayKey();
   try {
+    const priority = { affiliate: 10, youtube: 20, blogging: 30, "app-development": 40, seo: 100 };
     const items = Object.entries(DAILY_ASSIGNMENTS).map(([agentId, task]) => ({
-      agentId, task, idempotencyKey: "daily:" + dayKey + ":" + agentId
+      agentId, task, priority: priority[agentId], idempotencyKey: "daily:" + dayKey + ":" + agentId
     }));
     const queued = await persistentQueue.enqueue(ownerId, items);
     void startDailyWorker(ownerId, dayKey).catch(error => console.error("Daily queue worker stopped:", error.message));
