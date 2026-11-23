@@ -22,8 +22,7 @@ The repository includes `.github/workflows/daily-autonomous-ops.yml`, which runs
 
 Add these two GitHub repository Actions secrets (Settings → Secrets and variables → Actions → New repository secret):
 
-- `MASTER_AI_BOT_URL` = `https://master-ai-bot-iskj.onrender.com`
-- `SCHEDULER_SHARED_SECRET` = the exact same value configured on the Render web service.
+- `SCHEDULER_SHARED_SECRET` = the exact same value configured on the Render web service. The web-service URL is already set in the workflow and is not a secret.
 
 Do not put the shared secret in the repository, source files, or workflow YAML. The Render web service needs `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_OWNER_USER_ID`, and `SCHEDULER_SHARED_SECRET`. The daily cron is intentionally implemented with GitHub Actions to avoid creating a paid Render Cron resource. If a Render Cron is ever used instead, it must only be created after its price is reviewed and approved.
 
