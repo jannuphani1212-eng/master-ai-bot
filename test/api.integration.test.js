@@ -195,3 +195,15 @@ test("blog and Instagram connection APIs require the signed-in owner", async () 
   assert.equal(blog.status, 401);
   assert.equal(instagram.status, 401);
 });
+
+
+test("Blogger and Instagram OAuth callbacks remain reachable without a browser session", async () => {
+  const [blog, instagram] = await Promise.all([
+    fetch(`${baseUrl}/api/blog/oauth/callback?state=invalid&code=invalid`, { redirect: "manual" }),
+    fetch(`${baseUrl}/api/instagram/oauth/callback?state=invalid&code=invalid`, { redirect: "manual" })
+  ]);
+  assert.equal(blog.status, 302);
+  assert.equal(instagram.status, 302);
+  assert.match(blog.headers.get("location") || "", /blogConnection=error/);
+  assert.match(instagram.headers.get("location") || "", /instagramConnection=error/);
+});
