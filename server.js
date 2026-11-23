@@ -212,6 +212,12 @@ async function processDailyQueue(ownerId, dayKey) {
   for (let count = 0; count < 30; count += 1) {
     const job = await persistentQueue.claim(workerId);
     if (!job) break;
+    const leaseHeartbeat = setInterval(() => {
+      void persistentQueue.renew(job.id, workerId).then(renewed => {
+        if (!renewed) console.error("Daily queue worker lease was lost for job:", job.id);
+      }).catch(error => console.error("Daily queue lease renewal failed:", error.message));
+    }, 60 * 1000);
+    if (typeof leaseHeartbeat.unref === "function") leaseHeartbeat.unref();
     try {
       let task = job.task;
       if (job.agent_id === "youtube") {
@@ -328,6 +334,8 @@ async function processDailyQueue(ownerId, dayKey) {
       }).catch(notificationError => console.error("Could not save failure notification:", notificationError.message));
       summary.push({ agentId: job.agent_id, status: retry.terminal ? "failed" : "retry_scheduled", error: error.message });
       if (!retry.terminal) await new Promise(resolve => setTimeout(resolve, retry.retryInSeconds * 1000));
+    } finally {
+      clearInterval(leaseHeartbeat);
     }
   }
   return summary;
