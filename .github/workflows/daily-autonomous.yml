@@ -1,0 +1,39 @@
+name: Master AI autonomous daily operations
+
+on:
+  schedule:
+    # 05:30 India time; repeat every 30 minutes to recover interrupted queue work.
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: master-ai-autonomous-daily
+  cancel-in-progress: false
+
+jobs:
+  trigger-daily-queue:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Validate scheduler secret
+        env:
+          SCHEDULER_SHARED_SECRET: ${{ secrets.SCHEDULER_SHARED_SECRET }}
+        run: |
+          if [ -z "$SCHEDULER_SHARED_SECRET" ]; then
+            echo "::error::Add SCHEDULER_SHARED_SECRET to GitHub Actions secrets and to the Render web service environment."
+            exit 1
+          fi
+      - name: Enqueue daily work and recover pending jobs
+        env:
+          SCHEDULER_SHARED_SECRET: ${{ secrets.SCHEDULER_SHARED_SECRET }}
+        run: |
+          curl --fail-with-body --silent --show-error \
+            --max-time 90 \
+            -X POST \
+            -H "Authorization: Bearer $SCHEDULER_SHARED_SECRET" \
+            -H "Content-Type: application/json" \
+            --data '{}' \
+            https://master-ai-bot-iskj.onrender.com/api/internal/daily-run
