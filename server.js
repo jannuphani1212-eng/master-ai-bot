@@ -809,7 +809,7 @@ async function runCentralBrain(task, ownerUserId) {
         try {
           const channelContext = await getYoutubeAgentContext({ ownerId: ownerUserId, channelId: req.body?.channelId });
           if (channelContext) {
-            specialistTask = item.task + "\n\n" + channelContext;
+            specialistTask += "\n\n" + channelContext;
           }
         } catch (contextError) {
           console.log("YouTube channel context unavailable; continuing with the user request only:", contextError.message);
