@@ -232,6 +232,32 @@ async function processDailyQueue(ownerId, dayKey) {
         if (context) task += "\n\nTODAY'S COMPLETED WORKSTREAM OUTPUTS:\n" + context;
       }
       const generated = await generateAI(task, agentInstructions[job.agent_id], 2600);
+      const savedAssets = {};
+      if (job.agent_id === "blogging") {
+        const titleMatch = String(generated.result).match(/^(?:\\*\\*)?(?:Article title|Working title|Title)(?:\\*\\*)?\\s*[:：-]\\s*(.+)$/im);
+        const headingMatch = String(generated.result).match(/^#{1,3}\\s+(.+)$/m);
+        const keywordMatch = String(generated.result).match(/^(?:Primary target keyword|Target keyword|Primary keyword)(?:\\*\\*)?\\s*[:：-]\\s*(.+)$/im);
+        const articleTitle = String(titleMatch?.[1] || headingMatch?.[1] || ("Daily article draft " + dayKey)).trim().slice(0, 180);
+        const savedDraft = await persistentQueue.saveBlogDraft(ownerId, job.id, {
+          topic: articleTitle,
+          language: "English",
+          audience: "India-focused readers",
+          targetKeyword: keywordMatch?.[1] || "",
+          provider: generated.provider,
+          report: generated.result,
+          content: { title: articleTitle, report: generated.result, source: "master_ai_daily_queue", dayKey }
+        });
+        savedAssets.blogDraftId = savedDraft.id;
+        savedAssets.blogDraftInserted = savedDraft.inserted;
+      }
+      if (job.agent_id === "youtube") {
+        try {
+          const savedProject = await youtubeRhymeMemory.persistReport(ownerId, null, generated.result);
+          if (savedProject?.id) savedAssets.youtubeRhymeProjectId = savedProject.id;
+        } catch (memoryError) {
+          console.error("Daily YouTube rhyme state could not be saved:", memoryError.message);
+        }
+      }
       const review = reviewSpecialistReport(generated.result);
       const result = {
         success: review.status === "passed",
@@ -240,6 +266,7 @@ async function processDailyQueue(ownerId, dayKey) {
         provider: generated.provider,
         qualityReview: review,
         report: generated.result,
+        savedAssets,
         executionMode: "draft_only",
         requiresHumanApproval: true
       };
@@ -257,9 +284,9 @@ async function processDailyQueue(ownerId, dayKey) {
         body: result.success
           ? "Daily draft completed using " + generated.provider + ". Review the saved report before any external action."
           : "Daily draft was saved but quality review needs attention. Check the agent report before using it.",
-        metadata: { jobId: job.id, dayKey, provider: generated.provider, qualityScore: review.score ?? null }
+        metadata: { jobId: job.id, dayKey, provider: generated.provider, qualityScore: review.score ?? null, ...savedAssets }
       }).catch(notificationError => console.error("Could not save completion notification:", notificationError.message));
-      summary.push({ agentId: job.agent_id, status: result.success ? "completed" : "needs_attention", provider: generated.provider });
+      summary.push({ agentId: job.agent_id, status: result.success ? "completed" : "needs_attention", provider: generated.provider, savedAssets });
       if (!result.success) {
         selfHealingMonitor.record(job.agent_id, { success: false, failureType: "report_quality", error: "Daily output requires quality review." });
       } else {
