@@ -15,7 +15,7 @@ concurrency:
 jobs:
   daily-production:
     runs-on: ubuntu-latest
-    timeout-minutes: 600
+    timeout-minutes: 360
     steps:
       - name: Check out Master AI Bot
         uses: actions/checkout@v4
