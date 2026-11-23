@@ -15,11 +15,13 @@ const wakeMessage = document.getElementById("wakeMessage");
 const taskFeed = document.getElementById("taskFeed");
 const approvalPanel = document.getElementById("approvalPanel");
 const youtubePanel = document.getElementById("youtubePanel");
+const blogPanel = document.getElementById("blogPanel");
+const instagramPanel = document.getElementById("instagramPanel");
 const incomeCentre = document.getElementById("incomeCentre");
 const incomeCentreNav = document.getElementById("incomeCentreNav");
 function showToast(message){toastElement.textContent=message;toastElement.classList.add("show");setTimeout(()=>toastElement.classList.remove("show"),2600);}
 function updateTaskAuthStatus(){const label=document.getElementById("taskAuthStatus");if(!label)return;const signedIn=Boolean(approvalAccessToken);label.textContent=signedIn?"Owner signed in · Tasks enabled":"Owner sign-in required to run tasks";label.classList.toggle("auth-ready",signedIn);}
-function setPrivatePanelsVisible(visible){approvalPanel.hidden=!visible;youtubePanel.hidden=!visible;incomeCentre.hidden=!visible;incomeCentreNav.hidden=!visible;incomeCentre.setAttribute("aria-hidden",String(!visible));incomeCentreNav.setAttribute("aria-hidden",String(!visible));ownerSignInButton.textContent=visible?"Owner workspace":"Owner sign in";updateTaskAuthStatus();if(visible)void refreshAgnesVideoGate();}
+function setPrivatePanelsVisible(visible){approvalPanel.hidden=!visible;youtubePanel.hidden=!visible;blogPanel.hidden=!visible;instagramPanel.hidden=!visible;incomeCentre.hidden=!visible;incomeCentreNav.hidden=!visible;incomeCentre.setAttribute("aria-hidden",String(!visible));incomeCentreNav.setAttribute("aria-hidden",String(!visible));ownerSignInButton.textContent=visible?"Owner workspace":"Owner sign in";updateTaskAuthStatus();if(visible){void refreshAgnesVideoGate();void loadBlogCmsConnections();void loadInstagramConnection();}}
 function addFeedStep(message,done=false){const row=document.createElement("div");row.className="feed-step"+(done?" done":"");const dot=document.createElement("span");dot.className="feed-dot";const label=document.createElement("span");label.textContent=message;row.append(dot,label);taskFeed.appendChild(row);}
 
 function addText(parent, tag, text, className) {
@@ -674,6 +676,95 @@ async function loadDailyOperations() {
   }
 }
 
+async function loadBlogCmsConnections() {
+  const status = document.getElementById("blogConnectionStatus");
+  const list = document.getElementById("blogConnectionList");
+  if (!status || !list || !approvalAccessToken) return;
+  status.textContent = "Checking Blogger and WordPress.com connections…";
+  list.replaceChildren();
+  const results = await Promise.allSettled([
+    approvalApi("/api/blog/status?provider=blogger"),
+    approvalApi("/api/blog/status?provider=wordpress")
+  ]);
+  let connected = 0;
+  results.forEach((result, index) => {
+    const provider = index === 0 ? "Blogger" : "WordPress.com";
+    if (result.status !== "fulfilled") {
+      addText(list, "p", provider + ": " + result.reason.message, "muted");
+      return;
+    }
+    const sites = Array.isArray(result.value.sites) ? result.value.sites : [];
+    connected += sites.length;
+    if (!sites.length) {
+      addText(list, "p", provider + ": no site connected yet.", "muted");
+      return;
+    }
+    sites.forEach(site => {
+      const row = document.createElement("article");
+      row.className = "approval-card";
+      addText(row, "strong", site.site_name || provider);
+      addText(row, "p", site.site_url || "Site URL not provided", "muted");
+      addText(row, "small", provider + (site.selected ? " · Selected" : ""), "muted");
+      list.appendChild(row);
+    });
+  });
+  status.textContent = connected
+    ? connected + " blog site connection(s) saved in your owner account. Remote content remains draft-only."
+    : "No blog sites connected yet. Connect Blogger or WordPress.com below.";
+}
+
+async function connectBlogCms(provider) {
+  const status = document.getElementById("blogConnectionStatus");
+  try {
+    const data = await approvalApi("/api/blog/connect-url?provider=" + encodeURIComponent(provider));
+    if (!data.authorizationUrl) throw new Error("The CMS provider did not return an authorization link.");
+    status.textContent = "Opening " + (provider === "blogger" ? "Blogger" : "WordPress.com") + " secure authorization…";
+    window.location.assign(data.authorizationUrl);
+  } catch (error) {
+    status.textContent = "Could not start " + provider + " connection: " + error.message;
+  }
+}
+
+async function loadInstagramConnection() {
+  const status = document.getElementById("instagramConnectionStatus");
+  const list = document.getElementById("instagramConnectionList");
+  if (!status || !list || !approvalAccessToken) return;
+  status.textContent = "Checking Instagram professional-account connection…";
+  list.replaceChildren();
+  try {
+    const data = await approvalApi("/api/instagram/status");
+    const accounts = Array.isArray(data.accounts) ? data.accounts : [];
+    if (!accounts.length) {
+      status.textContent = "No Instagram professional account connected yet.";
+      return;
+    }
+    accounts.forEach(account => {
+      const row = document.createElement("article");
+      row.className = "approval-card";
+      addText(row, "strong", account.username ? "@" + account.username : "Instagram account");
+      addText(row, "p", account.accountType + " · " + (account.connected ? "Token active" : "Reconnect required"), account.connected ? "muted" : "warning-text");
+      addText(row, "small", "Token expiry: " + (account.expiresAt ? new Date(account.expiresAt).toLocaleString() : "not reported"), "muted");
+      if (account.error) addText(row, "p", account.error, "warning-text");
+      list.appendChild(row);
+    });
+    status.textContent = accounts.length + " Instagram account(s) found. Only professional accounts are supported; publishing is still locked.";
+  } catch (error) {
+    status.textContent = "Instagram connection status unavailable: " + error.message;
+  }
+}
+
+async function connectInstagramAccount() {
+  const status = document.getElementById("instagramConnectionStatus");
+  try {
+    const data = await approvalApi("/api/instagram/connect-url");
+    if (!data.authorizationUrl) throw new Error("Meta did not return an authorization link.");
+    status.textContent = "Opening Instagram's secure authorization page…";
+    window.location.assign(data.authorizationUrl);
+  } catch (error) {
+    status.textContent = "Could not start Instagram connection: " + error.message;
+  }
+}
+
 async function loadApprovalQueue() {
   if (!approvalAccessToken) return;
   approvalList.textContent = "Loading approval queue...";
@@ -681,6 +772,8 @@ async function loadApprovalQueue() {
     const data = await approvalApi("/api/approvals");
     renderApprovalQueue(Array.isArray(data.approvals) ? data.approvals : []);
     await loadDailyOperations();
+    await loadBlogCmsConnections();
+    await loadInstagramConnection();
     setApprovalMessage("Signed in. Your owner-only approval queue is ready.");
   } catch (error) {
     approvalList.textContent = error.message;
@@ -839,6 +932,11 @@ approvalLogoutButton.addEventListener("click", () => {
 });
 
 approvalRefreshButton.addEventListener("click", loadApprovalQueue);
+document.getElementById("connectBloggerButton")?.addEventListener("click", () => connectBlogCms("blogger"));
+document.getElementById("connectWordPressButton")?.addEventListener("click", () => connectBlogCms("wordpress"));
+document.getElementById("refreshBlogConnectionsButton")?.addEventListener("click", loadBlogCmsConnections);
+document.getElementById("connectInstagramButton")?.addEventListener("click", connectInstagramAccount);
+document.getElementById("refreshInstagramButton")?.addEventListener("click", loadInstagramConnection);
 
 
 // GLOBAL RHYMES 4U YOUTUBE CONNECTION
