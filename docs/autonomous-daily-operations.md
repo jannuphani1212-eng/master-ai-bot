@@ -16,16 +16,18 @@ RLS is enabled and direct access for `anon` and `authenticated` is revoked. Only
 
 Keep existing variables and add a long random value as `SCHEDULER_SHARED_SECRET` to the existing Render web service. Do not put this value in GitHub or frontend code. The existing server also needs `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and a valid `SUPABASE_OWNER_USER_ID` for the owner account. The service-role key must remain server-side.
 
-## 3. Render Cron service
+## 3. Free daily schedule
 
-Create a Node cron service from this repository after the code is merged to main:
+The repository includes `.github/workflows/daily-autonomous-ops.yml`, which runs every day at 02:30 UTC (08:00 India Standard Time) and can also be started manually from GitHub Actions. It calls `node scripts/daily-scheduler.js`, which triggers the web service and polls until all five daily jobs reach a terminal state.
 
-- Build command: `npm install`
-- Start command: `node scripts/daily-scheduler.js`
-- Schedule: `30 2 * * *` (02:30 UTC = 08:00 India Standard Time)
-- Environment: `MASTER_AI_BOT_URL=https://master-ai-bot-iskj.onrender.com` and the same `SCHEDULER_SHARED_SECRET` value as the web service.
+Add these two GitHub repository Actions secrets (Settings → Secrets and variables → Actions → New repository secret):
 
-Use a free plan only if Render offers it for this cron in the account. If Render requires a paid plan, do not approve or create a paid resource without the owner's cost approval. The cron process calls the authenticated internal endpoint, then polls `/api/internal/daily-status` while the web service background worker drains the queue. It re-triggers the idempotent scheduler if the web service restarts and leaves pending jobs.
+- `MASTER_AI_BOT_URL` = `https://master-ai-bot-iskj.onrender.com`
+- `SCHEDULER_SHARED_SECRET` = the exact same value configured on the Render web service.
+
+Do not put the shared secret in the repository, source files, or workflow YAML. The Render web service needs `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_OWNER_USER_ID`, and `SCHEDULER_SHARED_SECRET`. The daily cron is intentionally implemented with GitHub Actions to avoid creating a paid Render Cron resource. If a Render Cron is ever used instead, it must only be created after its price is reviewed and approved.
+
+The cron process calls the authenticated internal endpoint, then polls `/api/internal/daily-status` while the web service background worker drains the queue. It re-triggers the idempotent scheduler if the web service restarts and leaves pending jobs.
 
 ## 4. Daily production
 
