@@ -215,12 +215,12 @@ async function persistDailyArtifact(ownerId, job, generated, review, dayKey) {
   }
   if (!["blogging", "affiliate"].includes(job.agent_id)) return null;
 
-  const supabaseUrl = String(process.env.SUPABASE_URL || "").trim().replace(/\\/+$/, "");
+  const supabaseUrl = String(process.env.SUPABASE_URL || "").trim().replace(/\/+$/, "");
   const serviceKey = String(process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
   if (!supabaseUrl || !serviceKey) throw new Error("Daily content artifact storage needs server-side Supabase credentials.");
 
-  const titleMatch = generated.result.match(/^\\s*#{1,3}\\s+(.+)$/m) ||
-    generated.result.match(/^\\s*(?:Title|Working title):\\s*(.+)$/im);
+  const titleMatch = generated.result.match(/^\s*#{1,3}\s+(.+)$/m) ||
+    generated.result.match(/^\s*(?:Title|Working title):\s*(.+)$/im);
   const title = String(titleMatch?.[1] || "").trim().slice(0, 180);
   let table;
   let row;
