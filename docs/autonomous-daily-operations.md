@@ -16,16 +16,17 @@ RLS is enabled and direct access for `anon` and `authenticated` is revoked. Only
 
 Keep existing variables and add a long random value as `SCHEDULER_SHARED_SECRET` to the existing Render web service. Do not put this value in GitHub or frontend code. The existing server also needs `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and a valid `SUPABASE_OWNER_USER_ID` for the owner account. The service-role key must remain server-side.
 
-## 3. Render Cron service
+## 3. Free-first scheduler
 
-Create a Node cron service from this repository after the code is merged to main:
+The default scheduler is GitHub Actions in `.github/workflows/daily-autonomous.yml`. It runs every 30 minutes and calls the protected Render endpoint. The first call of each India-local day inserts the five daily jobs; later calls are idempotent and act as recovery triggers if Render restarted while jobs were pending.
 
-- Build command: `npm install`
-- Start command: `node scripts/daily-scheduler.js`
-- Schedule: `30 2 * * *` (02:30 UTC = 08:00 India Standard Time)
-- Environment: `MASTER_AI_BOT_URL=https://master-ai-bot-iskj.onrender.com` and the same `SCHEDULER_SHARED_SECRET` value as the web service.
+Before the workflow can run, set the same dedicated random `SCHEDULER_SHARED_SECRET` in:
+- the existing Render web service environment; and
+- GitHub repository Settings → Secrets and variables → Actions.
 
-Use a free plan only if Render offers it for this cron in the account. If Render requires a paid plan, do not approve or create a paid resource without the owner's cost approval. The cron process calls the authenticated internal endpoint, then polls `/api/internal/daily-status` while the web service background worker drains the queue. It re-triggers the idempotent scheduler if the web service restarts and leaves pending jobs.
+Do not reuse a Supabase key or password. Never commit the secret. Scheduled GitHub Actions workflows run only from the repository's default branch, so merge the workflow into `main` before its schedule becomes active. Use the Actions page's manual run after setting the secret to verify the first trigger.
+
+A Render Cron service using `node scripts/daily-scheduler.js` is an optional alternative. Render cron jobs incur additional cost; do not create one unless the owner explicitly approves the current price. Do not run both schedulers at the same time.
 
 ## 4. Daily production
 
