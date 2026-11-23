@@ -86,3 +86,10 @@ create index if not exists master_ai_notifications_owner_idx
 alter table public.master_ai_notifications enable row level security;
 revoke all on public.master_ai_notifications from anon, authenticated;
 grant all on public.master_ai_notifications to service_role;
+
+-- Link a generated daily queue job to its single saved CMS draft, preventing duplicate drafts on retry.
+alter table public.blog_drafts
+  add column if not exists source_job_id uuid references public.master_ai_job_queue(id) on delete set null;
+create unique index if not exists blog_drafts_owner_source_job_uidx
+  on public.blog_drafts(owner_user_id, source_job_id)
+  where source_job_id is not null;
