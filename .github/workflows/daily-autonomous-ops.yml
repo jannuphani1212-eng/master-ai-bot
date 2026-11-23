@@ -26,5 +26,5 @@ jobs:
       - name: Run the persistent daily queue
         run: node scripts/daily-scheduler.js
         env:
-          MASTER_AI_BOT_URL: ${{ secrets.MASTER_AI_BOT_URL }}
+          MASTER_AI_BOT_URL: "https://master-ai-bot-iskj.onrender.com"
           SCHEDULER_SHARED_SECRET: ${{ secrets.SCHEDULER_SHARED_SECRET }}
