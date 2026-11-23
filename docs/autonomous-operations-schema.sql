@@ -37,6 +37,11 @@ begin
   if p_worker_id is null or length(trim(p_worker_id)) < 3 then
     raise exception 'A worker ID is required';
   end if;
+  update public.master_ai_job_queue
+  set status = 'failed', finished_at = now(), locked_at = null, locked_by = null,
+      last_error = coalesce(last_error, 'Worker lease expired after the final retry')
+  where status = 'running' and attempts >= max_attempts
+    and locked_at < now() - interval '10 minutes';
   return query
   with candidate as (
     select q.id
