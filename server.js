@@ -208,6 +208,12 @@ async function processDailyQueue(ownerId, dayKey) {
   for (let count = 0; count < 30; count += 1) {
     const job = await persistentQueue.claim(workerId);
     if (!job) break;
+    const leaseHeartbeat = setInterval(() => {
+      void persistentQueue.renew(job.id, workerId).then(renewed => {
+        if (!renewed) console.error("Daily queue worker lease was lost for job:", job.id);
+      }).catch(error => console.error("Daily queue lease renewal failed:", error.message));
+    }, 60 * 1000);
+    if (typeof leaseHeartbeat.unref === "function") leaseHeartbeat.unref();
     try {
       let task = job.task;
       if (job.agent_id === "youtube") {
@@ -227,9 +233,12 @@ async function processDailyQueue(ownerId, dayKey) {
       if (job.agent_id === "seo") {
         const earlier = await persistentQueue.dailyResults(ownerId, dayKey);
         const context = earlier.filter(item => item.agent_id !== "seo").map(item =>
-          "AGENT " + item.agent_id + " OUTPUT:\n" + String(item.result?.report || "").slice(0, 5000)
+          "AGENT " + item.agent_id + " STATUS: " + item.status + "\n" +
+          (item.result?.report
+            ? "OUTPUT:\n" + String(item.result.report).slice(0, 5000)
+            : "OUTPUT NOT AVAILABLE. " + String(item.last_error || "The workstream has not completed yet.").slice(0, 500))
         ).join("\n\n");
-        if (context) task += "\n\nTODAY'S COMPLETED WORKSTREAM OUTPUTS:\n" + context;
+        if (context) task += "\n\nTODAY'S CROSS-WORKSTREAM STATUS AND OUTPUTS:\n" + context;
       }
       const generated = await generateAI(task, agentInstructions[job.agent_id], 2600);
       const review = reviewSpecialistReport(generated.result);
@@ -277,6 +286,8 @@ async function processDailyQueue(ownerId, dayKey) {
       }).catch(notificationError => console.error("Could not save failure notification:", notificationError.message));
       summary.push({ agentId: job.agent_id, status: retry.terminal ? "failed" : "retry_scheduled", error: error.message });
       if (!retry.terminal) await new Promise(resolve => setTimeout(resolve, retry.retryInSeconds * 1000));
+    } finally {
+      clearInterval(leaseHeartbeat);
     }
   }
   return summary;
