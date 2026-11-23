@@ -1238,10 +1238,16 @@ async function refreshIncomeCentre() {
     const commissions = p.affiliate?.commissionRecords ?? "unavailable";
     const blogDrafts = p.blogging?.drafts ?? "unavailable";
     const seoAccounts = p.seo?.searchConsoleAccounts ?? "unavailable";
-    const paidText = p.affiliate?.verifiedPaidCommissions?.length ? p.affiliate.verifiedPaidCommissions.map(item => item.currency + " " + Number(item.amount).toFixed(2)).join(", ") : "none recorded";
-    const pendingText = p.affiliate?.verifiedPendingCommissions?.length ? p.affiliate.verifiedPendingCommissions.map(item => item.currency + " " + Number(item.amount).toFixed(2)).join(", ") : "none recorded";
-    const unverified = p.affiliate?.unverifiedCommissionRecords ?? 0;
-    status.textContent = "Live owner records — YouTube channels: " + youtube + "; affiliate campaigns: " + affiliate + "; commission records: " + commissions + "; blog drafts: " + blogDrafts + "; Search Console accounts: " + seoAccounts + ". Verified paid affiliate income: " + paidText + ". Verified pending commissions (not income yet): " + pendingText + ". Unverified commission rows excluded: " + unverified + ". YouTube ad revenue and blog/app income are not connected as verified payout sources yet.";
+    const formatTotals = totals => {
+      if (totals === null || totals === undefined) return "unavailable (incomplete records)";
+      return totals.length ? totals.map(item => item.currency + " " + Number(item.amount).toFixed(2)).join(", ") : "none recorded";
+    };
+    const verifiedTotal = formatTotals(p.affiliate?.verifiedCommissionTotals);
+    const paidText = formatTotals(p.affiliate?.verifiedPaidCommissions);
+    const pendingText = formatTotals(p.affiliate?.verifiedPendingCommissions);
+    const unverified = p.affiliate?.unverifiedCommissionRecords ?? "unavailable (incomplete records)";
+    const coverage = p.affiliate?.commissionTotalsComplete === true ? "complete" : "incomplete";
+    status.textContent = "Live owner records — YouTube channels: " + youtube + "; affiliate campaigns: " + affiliate + "; commission records: " + commissions + "; blog drafts: " + blogDrafts + "; Search Console accounts: " + seoAccounts + ". Owner-verified affiliate commissions (paid + pending): " + verifiedTotal + " (" + coverage + " record set). Verified paid affiliate income: " + paidText + ". Verified pending commissions (not income yet): " + pendingText + ". Unverified commission rows excluded: " + unverified + ". YouTube estimated revenue is separate from confirmed payouts; blog/app income is not connected as a verified payout source yet.";
   } catch (error) {
     status.textContent = "Income data could not be loaded: " + error.message + ". Opportunity planning remains available; earnings are not assumed.";
   }
