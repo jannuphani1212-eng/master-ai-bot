@@ -237,7 +237,10 @@ async function processDailyQueue(ownerId, dayKey) {
       if (job.agent_id === "seo") {
         const earlier = await persistentQueue.dailyResults(ownerId, dayKey);
         const context = earlier.filter(item => item.agent_id !== "seo").map(item =>
-          "AGENT " + item.agent_id + " OUTPUT:\n" + String(item.result?.report || "").slice(0, 5000)
+          "AGENT " + item.agent_id + " STATUS: " + item.status + "\n" +
+          (item.result?.report
+            ? "OUTPUT:\n" + String(item.result.report).slice(0, 5000)
+            : "OUTPUT NOT AVAILABLE. " + String(item.last_error || "The workstream has not completed yet.").slice(0, 500))
         ).join("\n\n");
         if (context) task += "\n\nTODAY'S COMPLETED WORKSTREAM OUTPUTS:\n" + context;
       }
