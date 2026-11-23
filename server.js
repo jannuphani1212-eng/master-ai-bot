@@ -294,7 +294,7 @@ async function startDailyWorker(ownerId, dayKey) {
 }
 
 function schedulerAuthorized(req) {
-  const provided = String(req.get("authorization") || "").replace(/^Bearer\\s+/i, "");
+  const provided = String(req.get("authorization") || "").replace(/^Bearer\s+/i, "");
   return secureSecretMatches(provided, process.env.SCHEDULER_SHARED_SECRET);
 }
 
