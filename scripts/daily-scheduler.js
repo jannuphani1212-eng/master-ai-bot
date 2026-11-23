@@ -7,23 +7,48 @@ if (!baseUrl || !secret) {
   process.exit(1);
 }
 
-const controller = AbortSignal.timeout(11 * 60 * 60 * 1000);
-try {
-  const response = await fetch(baseUrl + "/api/internal/daily-run", {
-    method: "POST",
-    headers: { Authorization: "Bearer " + secret, "Content-Type": "application/json" },
-    body: JSON.stringify({ trigger: "render-cron" }),
-    signal: controller
+const headers = { Authorization: "Bearer " + secret, "Content-Type": "application/json" };
+const deadline = Date.now() + 10 * 60 * 60 * 1000;
+const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+async function call(path, method = "GET") {
+  const response = await fetch(baseUrl + path, {
+    method, headers, ...(method === "POST" ? { body: JSON.stringify({ trigger: "render-cron" }) } : {}),
+    signal: AbortSignal.timeout(4 * 60 * 1000)
   });
   const body = await response.text();
   let data;
   try { data = JSON.parse(body); } catch { data = { response: body.slice(0, 1000) }; }
-  if (!response.ok || data.success !== true) {
-    console.error("Daily run failed:", response.status, data);
-    process.exit(1);
+  if (!response.ok || data.success !== true) throw new Error("HTTP " + response.status + ": " + JSON.stringify(data));
+  return data;
+}
+
+try {
+  const accepted = await call("/api/internal/daily-run", "POST");
+  console.log("Daily queue accepted:", JSON.stringify(accepted));
+  let lastSummary = null;
+  while (Date.now() < deadline) {
+    const status = await call("/api/internal/daily-status");
+    lastSummary = status;
+    console.log("Daily queue status:", JSON.stringify({
+      dayKey: status.dayKey, counts: status.counts, workerRunning: status.workerRunning
+    }));
+    if (status.finished) {
+      console.log("All five daily jobs reached a terminal state:", JSON.stringify(status));
+      if ((status.counts?.failed || 0) > 0) process.exitCode = 1;
+      break;
+    }
+    // Re-trigger idempotently so a web-service restart cannot strand queued jobs.
+    if (!status.workerRunning && (status.counts?.pending || 0) + (status.counts?.running || 0) > 0) {
+      await call("/api/internal/daily-run", "POST");
+    }
+    await wait(20000);
   }
-  console.log("Daily run completed:", JSON.stringify(data));
+  if (!lastSummary?.finished) {
+    console.error("Daily queue did not finish within the cron run window.");
+    process.exitCode = 1;
+  }
 } catch (error) {
-  console.error("Could not reach Master AI Bot daily-run endpoint:", error.message);
-  process.exit(1);
+  console.error("Daily autonomous schedule failed:", error.message);
+  process.exitCode = 1;
 }
