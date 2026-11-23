@@ -1140,7 +1140,7 @@ async function refreshIncomeCentre() {
     const commissions = p.affiliate?.commissionRecords ?? "unavailable";
     const blogDrafts = p.blogging?.drafts ?? "unavailable";
     const seoAccounts = p.seo?.searchConsoleAccounts ?? "unavailable";
-    status.textContent = "Live owner records — YouTube channels: " + youtube + "; affiliate campaigns: " + affiliate + "; commission records: " + commissions + "; blog drafts: " + blogDrafts + "; Search Console accounts: " + seoAccounts + ". This workspace does not yet verify payout totals, so recorded earnings remain unverified.";
+    status.textContent = "Live owner records — YouTube channels: " + youtube + "; affiliate campaigns: " + affiliate + "; commission records: " + commissions + "; blog drafts: " + blogDrafts + "; Search Console accounts: " + seoAccounts + ". " + (p.affiliate?.verifiedPaidCommissions?.length ? "Owner-verified paid affiliate commissions: " + p.affiliate.verifiedPaidCommissions.map(item => item.currency + " " + Number(item.amount).toFixed(2)).join(", ") + ". " : "No owner-verified paid affiliate commission totals are recorded yet. ") + "Pending verified commissions are separate; unverified imports are not counted as earnings. YouTube ad revenue and blog/app income are not connected as verified payout sources yet.";
   } catch (error) {
     status.textContent = "Income data could not be loaded: " + error.message + ". Opportunity planning remains available; earnings are not assumed.";
   }
