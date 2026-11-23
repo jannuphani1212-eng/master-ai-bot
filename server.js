@@ -191,6 +191,8 @@ function indiaDayKey() {
   return values.year + "-" + values.month + "-" + values.day;
 }
 
+let dailyWorkerRunning = false;
+
 const DAILY_ASSIGNMENTS = {
   affiliate: "Daily production: research one useful India-focused fashion or watch product opportunity. Deliver a cautious product shortlist, buyer problem, comparison criteria, original short-video or blog campaign asset, disclosure text, and tracking plan. Do not invent live prices, stock, commission rates, affiliate eligibility, links, or earnings. Mark every unverified item clearly. Draft only; no posting.",
   youtube: "Daily production for Global Rhymes 4U: continue the saved rhyme project from its exact next unfinished scene if one exists; otherwise create one original English children's rhyme with a complete script, scene-by-scene visual prompts, consistent character and background bible, title, description, and child-safety/copyright checks. Create production-ready text and prompts only. Do not claim a video clip was generated or upload/publish anything.",
@@ -203,7 +205,7 @@ async function processDailyQueue(ownerId, dayKey) {
   if (!persistentQueue) throw new Error("Persistent queue is not configured.");
   const workerId = "daily-worker-" + process.pid + "-" + Date.now();
   const summary = [];
-  for (let count = 0; count < 10; count += 1) {
+  for (let count = 0; count < 30; count += 1) {
     const job = await persistentQueue.claim(workerId);
     if (!job) break;
     try {
@@ -280,6 +282,22 @@ async function processDailyQueue(ownerId, dayKey) {
   return summary;
 }
 
+async function startDailyWorker(ownerId, dayKey) {
+  if (dailyWorkerRunning) return false;
+  dailyWorkerRunning = true;
+  try {
+    await processDailyQueue(ownerId, dayKey);
+  } finally {
+    dailyWorkerRunning = false;
+  }
+  return true;
+}
+
+function schedulerAuthorized(req) {
+  const provided = String(req.get("authorization") || "").replace(/^Bearer\\s+/i, "");
+  return secureSecretMatches(provided, process.env.SCHEDULER_SHARED_SECRET);
+}
+
 app.post("/api/internal/daily-run", async (req, res) => {
   const expected = process.env.SCHEDULER_SHARED_SECRET;
   const provided = String(req.get("authorization") || "").replace(/^Bearer\s+/i, "");
@@ -295,17 +313,28 @@ app.post("/api/internal/daily-run", async (req, res) => {
       agentId, task, idempotencyKey: "daily:" + dayKey + ":" + agentId
     }));
     const queued = await persistentQueue.enqueue(ownerId, items);
-    const results = await processDailyQueue(ownerId, dayKey);
-    const remaining = await persistentQueue.status(ownerId);
-    return res.json({
-      success: true, dayKey, timezone: "Asia/Kolkata",
-      queued, processed: results,
-      pendingOrRunning: remaining.filter(item => ["pending", "running"].includes(item.status)).length,
-      message: "Draft production only. Publishing, spending, and account changes still require owner approval."
+    void startDailyWorker(ownerId, dayKey).catch(error => console.error("Daily queue worker stopped:", error.message));
+    return res.status(202).json({
+      success: true, accepted: true, dayKey, timezone: "Asia/Kolkata", queued,
+      message: "Daily jobs are saved in the persistent queue. The background worker is processing drafts; publishing and spending remain approval-only."
     });
   } catch (error) {
     console.error("Daily autonomous run failed:", error.message);
     return res.status(503).json({ success: false, dayKey, error: error.message });
+  }
+});
+
+app.get("/api/internal/daily-status", async (req, res) => {
+  if (!schedulerAuthorized(req)) return res.status(401).json({ success: false, error: "Unauthorized scheduler request." });
+  if (!persistentQueue) return res.status(503).json({ success: false, error: "Persistent queue is not configured." });
+  const ownerId = String(process.env.SUPABASE_OWNER_USER_ID || "");
+  const dayKey = indiaDayKey();
+  try {
+    const jobs = (await persistentQueue.status(ownerId)).filter(job => String(job.idempotency_key || "").startsWith("daily:" + dayKey + ":"));
+    const counts = jobs.reduce((acc, job) => { acc[job.status] = (acc[job.status] || 0) + 1; return acc; }, {});
+    return res.json({ success: true, dayKey, jobs, counts, workerRunning: dailyWorkerRunning, finished: jobs.length === 5 && jobs.every(job => ["completed", "failed"].includes(job.status)) });
+  } catch (error) {
+    return res.status(503).json({ success: false, error: error.message });
   }
 });
 
