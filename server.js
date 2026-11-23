@@ -22,6 +22,7 @@ import { parseSynthesisReuseRequest, validateSavedSpecialistReports } from "./li
 import { createAgentPortfolioHandlers } from "./lib/agent-portfolio.js";
 import { createAuditMiddleware } from "./lib/audit-log.js";
 import { createPersistentQueue } from "./lib/persistent-queue.js";
+import { createBlogCmsHandlers } from "./lib/blog-cms-integration.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -91,6 +92,7 @@ const agentHistoryHandlers = createAgentHistoryHandlers();
 const youtubeRhymeMemory = createYoutubeRhymeMemory();
 const agentPortfolioHandlers = createAgentPortfolioHandlers();
 const persistentQueue = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY ? createPersistentQueue() : null;
+const blogCmsHandlers = createBlogCmsHandlers();
 const auditOwnerRequests = createAuditMiddleware();
 async function persistTaskHistory(ownerId, agentId, task, data, failure) {
   if (!ownerId) return;
@@ -1414,6 +1416,14 @@ const youtubeHandlers = createYoutubeIntegrationHandlers();
 
 // OAuth callback is intentionally public, but accepts only a short-lived,
 // HMAC-signed state created after a verified owner session.
+app.get("/api/blog/oauth/callback", blogCmsHandlers.callback);
+app.use("/api/blog", limitApiRequests);
+app.use("/api/blog", requireOwner);
+app.use("/api/blog", auditOwnerRequests);
+app.get("/api/blog/connect-url", blogCmsHandlers.connectUrl);
+app.get("/api/blog/status", blogCmsHandlers.status);
+app.post("/api/blog/drafts/:id/create-cms-draft", blogCmsHandlers.createCmsDraft);
+
 app.get("/api/youtube/oauth/callback", youtubeHandlers.callback);
 // OAuth callback is public but rate-limited; every other YouTube route is owner-only.
 app.use("/api/youtube", requireOwner);
@@ -1582,7 +1592,14 @@ app.get("/api/status", (req, res) => {
         requiresFreeTierVerification: true
       },
       affiliate: { campaignTrackingStorage: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY), externalProgramApi: false },
-      blogging: { draftStorage: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY), cmsOAuth: false },
+      blogging: {
+        draftStorage: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY),
+        cmsOAuth: Boolean(process.env.BLOG_CMS_TOKEN_ENCRYPTION_KEY &&
+          process.env.BLOGGER_REDIRECT_URI &&
+          (process.env.BLOGGER_CLIENT_ID || process.env.YOUTUBE_CLIENT_ID) &&
+          (process.env.BLOGGER_CLIENT_SECRET || process.env.YOUTUBE_CLIENT_SECRET) &&
+          process.env.WORDPRESS_CLIENT_ID && process.env.WORDPRESS_CLIENT_SECRET && process.env.WORDPRESS_REDIRECT_URI)
+      },
       seo: { searchConsoleOAuth: false },
       "app-development": { repositoryAutomation: false }
     },
