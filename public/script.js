@@ -641,8 +641,8 @@ async function loadDailyOperations() {
     }
     for (const item of items.slice(0, 30)) {
       const article = document.createElement("article");
-      article.className = "approval-item";
-      const heading = document.createElement("strong");
+      article.className = "approval-card";
+      const heading = document.createElement("h4");
       heading.textContent = item.title || "Agent update";
       const body = document.createElement("p");
       body.textContent = item.body || "";
