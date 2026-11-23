@@ -234,9 +234,9 @@ async function processDailyQueue(ownerId, dayKey) {
       const generated = await generateAI(task, agentInstructions[job.agent_id], 2600);
       const savedAssets = {};
       if (job.agent_id === "blogging") {
-        const titleMatch = String(generated.result).match(/^(?:\\*\\*)?(?:Article title|Working title|Title)(?:\\*\\*)?\\s*[:：-]\\s*(.+)$/im);
-        const headingMatch = String(generated.result).match(/^#{1,3}\\s+(.+)$/m);
-        const keywordMatch = String(generated.result).match(/^(?:Primary target keyword|Target keyword|Primary keyword)(?:\\*\\*)?\\s*[:：-]\\s*(.+)$/im);
+        const titleMatch = String(generated.result).match(/^(?:\*\*)?(?:Article title|Working title|Title)(?:\*\*)?\s*[:：-]\s*(.+)$/im);
+        const headingMatch = String(generated.result).match(/^#{1,3}\s+(.+)$/m);
+        const keywordMatch = String(generated.result).match(/^(?:Primary target keyword|Target keyword|Primary keyword)(?:\*\*)?\s*[:：-]\s*(.+)$/im);
         const articleTitle = String(titleMatch?.[1] || headingMatch?.[1] || ("Daily article draft " + dayKey)).trim().slice(0, 180);
         const savedDraft = await persistentQueue.saveBlogDraft(ownerId, job.id, {
           topic: articleTitle,
