@@ -25,7 +25,7 @@ Create a Node cron service from this repository after the code is merged to main
 - Schedule: `30 2 * * *` (02:30 UTC = 08:00 India Standard Time)
 - Environment: `MASTER_AI_BOT_URL=https://master-ai-bot-iskj.onrender.com` and the same `SCHEDULER_SHARED_SECRET` value as the web service.
 
-Use a free plan only if Render offers it for this cron in the account. If Render requires a paid plan, do not approve or create a paid resource without the owner's cost approval. The cron process calls the authenticated internal endpoint; the web service enqueues and drains the queue.
+Use a free plan only if Render offers it for this cron in the account. If Render requires a paid plan, do not approve or create a paid resource without the owner's cost approval. The cron process calls the authenticated internal endpoint, then polls `/api/internal/daily-status` while the web service background worker drains the queue. It re-triggers the idempotent scheduler if the web service restarts and leaves pending jobs.
 
 ## 4. Daily production
 
@@ -40,7 +40,7 @@ Owner-only APIs:
 - `GET /api/notifications`
 - `PATCH /api/notifications/:id/read`
 
-The daily-run endpoint is internal and requires the bearer secret. It returns the day key, queued count, each specialist result, and outstanding queue count. Confirm a full five-agent run from the returned response and Supabase queue/history records.
+The daily-run endpoint is internal and requires the bearer secret. It returns an accepted queue response; `/api/internal/daily-status` returns job states, counts and whether all five jobs have reached a terminal state. Confirm a full five-agent run from the cron logs and Supabase queue/history records.
 
 ## 6. Integrations and publishing
 
