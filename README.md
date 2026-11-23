@@ -87,7 +87,7 @@ Earnings are not guaranteed. AI output can contain mistakes; verify facts, platf
 
 The autonomous operations feature adds a Supabase-backed idempotent job queue, retry and worker-lease recovery, daily assignments for all five specialists, and owner-only in-app notifications. Daily work is draft-only; publishing, sending, spending, account changes and deployments remain behind explicit owner approval.
 
-See [Autonomous Daily Operations setup](docs/autonomous-daily-operations.md) and run [the queue and notification schema](docs/autonomous-operations-schema.sql) in the existing Supabase project. The Render web service needs the existing Supabase server credentials and `SUPABASE_OWNER_USER_ID`, plus a strong `SCHEDULER_SHARED_SECRET`. A Render Cron service calls `scripts/daily-scheduler.js` at 08:00 India time (02:30 UTC). Create that Cron service only on a free plan; do not accept paid resources without owner approval.
+See [Autonomous Daily Operations setup](docs/autonomous-daily-operations.md) and run [the queue and notification schema](docs/autonomous-operations-schema.sql) in the existing Supabase project. The Render web service needs the existing Supabase server credentials and `SUPABASE_OWNER_USER_ID`, plus a strong `SCHEDULER_SHARED_SECRET`. The GitHub Actions workflow `.github/workflows/daily-autonomous-ops.yml` calls `scripts/daily-scheduler.js` at 08:00 India time (02:30 UTC). Add `MASTER_AI_BOT_URL` and `SCHEDULER_SHARED_SECRET` as GitHub repository Actions secrets; do not put the secret in source code. This avoids a paid Render Cron resource.
 
 Owner-only endpoints: `GET /api/queue`, `GET /api/notifications`, and `PATCH /api/notifications/:id/read`. The internal daily-run endpoint is protected by the shared bearer secret.
 
