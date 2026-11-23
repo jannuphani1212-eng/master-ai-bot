@@ -201,6 +201,73 @@ const DAILY_ASSIGNMENTS = {
   seo: "Daily cross-workstream SEO: review today's completed affiliate, YouTube, blogging, and app-development outputs in the attached queue context. Produce keyword/topic mapping, search intent, title/meta improvements, internal-link and content repurposing recommendations, technical/measurement checklist, and prioritized fixes for all four workstreams. Do not invent search volumes, rankings, traffic, or performance metrics."
 };
 
+async function persistDailyArtifact(ownerId, job, generated, review, dayKey) {
+  if (!ownerId || !job?.id || !generated?.result) return null;
+  if (job.agent_id === "youtube") {
+    const saved = await youtubeRhymeMemory.persistReport(ownerId, null, generated.result);
+    return saved
+      ? { table: "youtube_rhyme_projects", id: saved.id || null }
+      : { table: "youtube_rhyme_projects", saved: false, reason: "The YouTube report did not contain a valid structured rhyme production state." };
+  }
+  if (!["blogging", "affiliate"].includes(job.agent_id)) return null;
+
+  const supabaseUrl = String(process.env.SUPABASE_URL || "").trim().replace(/\\/+$/, "");
+  const serviceKey = String(process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+  if (!supabaseUrl || !serviceKey) throw new Error("Daily content artifact storage needs server-side Supabase credentials.");
+
+  const titleMatch = generated.result.match(/^\\s*#{1,3}\\s+(.+)$/m) ||
+    generated.result.match(/^\\s*(?:Title|Working title):\\s*(.+)$/im);
+  const title = String(titleMatch?.[1] || "").trim().slice(0, 180);
+  let table;
+  let row;
+  if (job.agent_id === "blogging") {
+    table = "blog_drafts";
+    row = {
+      owner_user_id: ownerId,
+      topic: title.length >= 3 ? title : "Daily blog draft — " + dayKey,
+      language: "English",
+      audience: "India-focused readers",
+      target_keyword: "",
+      content_json: { title: title || null, report: generated.result, dayKey, qualityReview: review },
+      generation_provider: generated.provider,
+      status: "draft",
+      source_job_id: job.id,
+      updated_at: new Date().toISOString()
+    };
+  } else {
+    table = "affiliate_campaigns";
+    row = {
+      owner_user_id: ownerId,
+      product_name: "Daily affiliate opportunity brief — " + dayKey,
+      category: "Research brief",
+      commission_status: "not_provided",
+      research_status: "needs_live_verification",
+      content_json: { report: generated.result, dayKey, qualityReview: review, productClaimsVerified: false },
+      generation_provider: generated.provider,
+      status: "draft",
+      source_job_id: job.id,
+      updated_at: new Date().toISOString()
+    };
+  }
+
+  const response = await fetch(supabaseUrl + "/rest/v1/" + table + "?on_conflict=source_job_id", {
+    method: "POST",
+    headers: {
+      apikey: serviceKey,
+      Authorization: "Bearer " + serviceKey,
+      "Content-Type": "application/json",
+      Prefer: "resolution=merge-duplicates,return=representation"
+    },
+    body: JSON.stringify(row),
+    signal: AbortSignal.timeout(20000)
+  });
+  const raw = await response.text();
+  let data = null;
+  try { data = raw ? JSON.parse(raw) : null; } catch {}
+  if (!response.ok) throw new Error("Could not save daily " + job.agent_id + " draft to " + table + " (" + response.status + "): " + raw.slice(0, 240));
+  return { table, id: Array.isArray(data) ? data[0]?.id || null : null };
+}
+
 async function processDailyQueue(ownerId, dayKey) {
   if (!persistentQueue) throw new Error("Persistent queue is not configured.");
   const workerId = "daily-worker-" + process.pid + "-" + Date.now();
@@ -242,9 +309,20 @@ async function processDailyQueue(ownerId, dayKey) {
       }
       const generated = await generateAI(task, agentInstructions[job.agent_id], 2600);
       const review = reviewSpecialistReport(generated.result);
+      let artifact = null;
+      let artifactError = null;
+      try {
+        artifact = await persistDailyArtifact(ownerId, job, generated, review, dayKey);
+        if (artifact?.saved === false) artifactError = artifact.reason;
+      } catch (error) {
+        artifactError = error.message;
+        console.error("Daily " + job.agent_id + " artifact persistence failed:", error.message);
+      }
       const result = {
-        success: review.status === "passed",
-        needsAttention: review.status !== "passed",
+        success: review.status === "passed" && !artifactError,
+        needsAttention: review.status !== "passed" || Boolean(artifactError),
+        ...(artifactError ? { error: artifactError } : {}),
+        artifact,
         agent: job.agent_id,
         provider: generated.provider,
         qualityReview: review,
@@ -256,6 +334,7 @@ async function processDailyQueue(ownerId, dayKey) {
         success: result.success,
         provider: result.provider,
         qualityReview: result.qualityReview,
+        error: result.error,
         result: result.report
       });
       await persistentQueue.complete(job.id, workerId, result);
@@ -264,16 +343,18 @@ async function processDailyQueue(ownerId, dayKey) {
         type: result.success ? "agent_completed" : "agent_needs_attention",
         title: job.agent_id + (result.success ? " completed daily work" : " needs review"),
         body: result.success
-          ? "Daily draft completed using " + generated.provider + ". Review the saved report before any external action."
-          : "Daily draft was saved but quality review needs attention. Check the agent report before using it.",
+          ? "Daily draft and specialist artifact were saved using " + generated.provider + ". Review them before any external action."
+          : "Daily output needs attention. " + (artifactError ? "Artifact storage: " + artifactError : "Quality review needs attention.") + " Check the saved report.",
         metadata: { jobId: job.id, dayKey, provider: generated.provider, qualityScore: review.score ?? null }
       }).catch(notificationError => console.error("Could not save completion notification:", notificationError.message));
       summary.push({ agentId: job.agent_id, status: result.success ? "completed" : "needs_attention", provider: generated.provider });
-      if (!result.success) {
+      if (review.status !== "passed") {
         selfHealingMonitor.record(job.agent_id, { success: false, failureType: "report_quality", error: "Daily output requires quality review." });
-      } else {
-        selfHealingMonitor.record(job.agent_id, { success: true });
       }
+      if (artifactError) {
+        selfHealingMonitor.record(job.agent_id, { success: false, failureType: "execution", error: artifactError });
+      }
+      if (result.success) selfHealingMonitor.record(job.agent_id, { success: true });
     } catch (error) {
       const retry = await persistentQueue.fail(job, workerId, error);
       selfHealingMonitor.record(job.agent_id, { success: false, failureType: inferFailureType(error.message), error: error.message });
