@@ -299,9 +299,7 @@ function schedulerAuthorized(req) {
 }
 
 app.post("/api/internal/daily-run", async (req, res) => {
-  const expected = process.env.SCHEDULER_SHARED_SECRET;
-  const provided = String(req.get("authorization") || "").replace(/^Bearer\s+/i, "");
-  if (!secureSecretMatches(provided, expected)) return res.status(401).json({ success: false, error: "Unauthorized scheduler request." });
+  if (!schedulerAuthorized(req)) return res.status(401).json({ success: false, error: "Unauthorized scheduler request." });
   if (!persistentQueue) return res.status(503).json({ success: false, error: "Persistent queue is not configured; check Supabase service-role configuration." });
   const ownerId = String(process.env.SUPABASE_OWNER_USER_ID || "");
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(ownerId)) {
