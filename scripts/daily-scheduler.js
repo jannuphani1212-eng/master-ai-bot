@@ -8,7 +8,7 @@ if (!baseUrl || !secret) {
 }
 
 const headers = { Authorization: "Bearer " + secret, "Content-Type": "application/json" };
-const deadline = Date.now() + 10 * 60 * 60 * 1000;
+const deadline = Date.now() + 5.5 * 60 * 60 * 1000;
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 async function call(path, method = "GET") {
