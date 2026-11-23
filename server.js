@@ -18,6 +18,7 @@ import { createYoutubeIntegrationHandlers, getYoutubeAgentContext } from "./lib/
 import { createAgnesVideoHandlers } from "./lib/agnes-video.js";
 import { createAgentHistoryHandlers } from "./lib/supabase-task-history.js";
 import { createYoutubeRhymeMemory } from "./lib/youtube-rhyme-memory.js";
+import { buildYoutubeTaskContext } from "./lib/youtube-task-context.js";
 import { parseSynthesisReuseRequest, validateSavedSpecialistReports } from "./lib/synthesis-reuse.js";
 import { createAgentPortfolioHandlers } from "./lib/agent-portfolio.js";
 import { createAuditMiddleware } from "./lib/audit-log.js";
@@ -990,7 +991,7 @@ function compactReport(text, maxLength = 2600) {
 // CENTRAL AI BRAIN: EXECUTION
 // =====================================
 
-async function runCentralBrain(task, ownerUserId) {
+async function runCentralBrain(task, ownerUserId, channelId) {
 
   let plan;
 
@@ -1053,23 +1054,22 @@ async function runCentralBrain(task, ownerUserId) {
     try {
 
       let specialistTask = item.task;
-      if (item.agentId === "youtube" && ownerUserId && /rhyme|resume|continue|scene|clip/i.test(item.task)) {
-        try {
-          const savedRhymeContext = await youtubeRhymeMemory.context(ownerUserId, req.body?.channelId);
-          if (savedRhymeContext) specialistTask += "\\n\\n" + savedRhymeContext;
-        } catch (memoryError) {
-          console.warn("Saved YouTube rhyme memory unavailable; continuing without resume context:", memoryError.message);
-        }
-      }
-      if (item.agentId === "youtube" && ownerUserId) {
-        try {
-          const channelContext = await getYoutubeAgentContext({ ownerId: ownerUserId, channelId: req.body?.channelId });
-          if (channelContext) {
-            specialistTask += "\n\n" + channelContext;
+      if (item.agentId === "youtube") {
+        const youtubeContext = await buildYoutubeTaskContext({
+          ownerId: ownerUserId,
+          channelId,
+          task: item.task,
+          rhymeMemory: youtubeRhymeMemory,
+          getYoutubeAgentContext,
+          onError: (kind, error) => {
+            if (kind === "rhyme_memory") {
+              console.warn("Saved YouTube rhyme memory unavailable; continuing without resume context:", error.message);
+            } else {
+              console.log("YouTube channel context unavailable; continuing with the user request only:", error.message);
+            }
           }
-        } catch (contextError) {
-          console.log("YouTube channel context unavailable; continuing with the user request only:", contextError.message);
-        }
+        });
+        if (youtubeContext) specialistTask += youtubeContext;
       }
 
       const conciseInstructions =
@@ -1092,7 +1092,7 @@ async function runCentralBrain(task, ownerUserId) {
       let specialistProvider = response.provider;
       if (item.agentId === "youtube" && ownerUserId) {
         try {
-          const savedRhyme = await youtubeRhymeMemory.persistReport(ownerUserId, req.body?.channelId, specialistReport);
+          const savedRhyme = await youtubeRhymeMemory.persistReport(ownerUserId, channelId, specialistReport);
           if (savedRhyme) console.log("YouTube rhyme production state saved:", savedRhyme.id);
         } catch (memoryError) {
           console.warn("YouTube rhyme production state could not be saved:", memoryError.message);
@@ -1637,7 +1637,7 @@ app.post("/api/brain", async (req, res) => {
     const reuseReportIds = parseSynthesisReuseRequest(task);
     const result = reuseReportIds
       ? await runSynthesisFromSavedReports(task, req.ownerUser?.id, reuseReportIds)
-      : await runCentralBrain(task, req.ownerUser?.id);
+      : await runCentralBrain(task, req.ownerUser?.id, req.body?.channelId);
     await persistTaskHistory(req.ownerUser?.id, "master", task, result);
 
     return res.json(result);
@@ -1718,7 +1718,7 @@ app.post("/api/task", async (req, res) => {
   try {
 
     if (agentId === "master") {
-      const result = await runCentralBrain(task, req.ownerUser?.id);
+      const result = await runCentralBrain(task, req.ownerUser?.id, req.body?.channelId);
       await persistTaskHistory(req.ownerUser?.id, agentId, task, result);
       return res.json(result);
     }
