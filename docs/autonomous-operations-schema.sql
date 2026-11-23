@@ -4,6 +4,7 @@ create table if not exists public.master_ai_job_queue (
   id uuid primary key default gen_random_uuid(),
   owner_user_id uuid not null references auth.users(id) on delete cascade,
   agent_id text not null check (agent_id in ('affiliate','youtube','blogging','app-development','seo')),
+  priority smallint not null default 100 check (priority between 0 and 1000),
   task text not null check (char_length(task) between 1 and 10000),
   idempotency_key text not null,
   status text not null default 'pending' check (status in ('pending','running','completed','failed')),
@@ -52,7 +53,7 @@ begin
         q.status = 'pending'
         or (q.status = 'running' and q.locked_at < now() - interval '10 minutes')
       )
-    order by q.created_at asc
+    order by q.priority asc, q.created_at asc
     for update skip locked
     limit 1
   )
@@ -93,3 +94,6 @@ alter table public.blog_drafts
 create unique index if not exists blog_drafts_owner_source_job_uidx
   on public.blog_drafts(owner_user_id, source_job_id)
   where source_job_id is not null;
+
+alter table public.master_ai_job_queue add column if not exists priority smallint not null default 100 check (priority between 0 and 1000);
+create index if not exists master_ai_job_queue_priority_idx on public.master_ai_job_queue(priority, status, next_run_at, created_at);
