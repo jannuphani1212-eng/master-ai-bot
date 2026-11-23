@@ -1,4 +1,5 @@
-const baseUrl = String(process.env.MASTER_AI_BOT_URL || "").trim().replace(/\\/+$/, "");
+const rawBaseUrl = String(process.env.MASTER_AI_BOT_URL || "").trim();
+const baseUrl = rawBaseUrl.endsWith("/") ? rawBaseUrl.slice(0, -1) : rawBaseUrl;
 const secret = String(process.env.SCHEDULER_SHARED_SECRET || "").trim();
 
 if (!baseUrl || !secret) {
