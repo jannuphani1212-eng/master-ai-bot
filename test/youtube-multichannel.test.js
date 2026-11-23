@@ -52,4 +52,5 @@ test("YouTube OAuth connect URL carries the exact channel title selected by the 
   const payload = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8"));
   assert.equal(payload.channelTitle, "Second Rhymes");
   assert.equal(url.searchParams.get("prompt"), "select_account consent");
+  assert.ok(url.searchParams.get("scope").includes("https://www.googleapis.com/auth/yt-analytics-monetary.readonly"));
 });

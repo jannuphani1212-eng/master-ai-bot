@@ -22,6 +22,8 @@ import { parseSynthesisReuseRequest, validateSavedSpecialistReports } from "./li
 import { createAgentPortfolioHandlers } from "./lib/agent-portfolio.js";
 import { createAuditMiddleware } from "./lib/audit-log.js";
 import { createPersistentQueue } from "./lib/persistent-queue.js";
+import { createBlogCmsHandlers } from "./lib/blog-cms-integration.js";
+import { createInstagramIntegrationHandlers } from "./lib/instagram-integration.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -91,6 +93,8 @@ const agentHistoryHandlers = createAgentHistoryHandlers();
 const youtubeRhymeMemory = createYoutubeRhymeMemory();
 const agentPortfolioHandlers = createAgentPortfolioHandlers();
 const persistentQueue = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY ? createPersistentQueue() : null;
+const blogCmsHandlers = createBlogCmsHandlers();
+const instagramHandlers = createInstagramIntegrationHandlers();
 const auditOwnerRequests = createAuditMiddleware();
 async function persistTaskHistory(ownerId, agentId, task, data, failure) {
   if (!ownerId) return;
@@ -141,7 +145,7 @@ async function persistTaskHistory(ownerId, agentId, task, data, failure) {
 }
 // Apply IP limits before authentication so invalid-token floods are throttled too.
 // The app currently runs as one Render instance; this in-memory limit is per instance.
-app.use(["/api/task", "/api/brain", "/api/repair-proposals", "/api/agent-history", "/api/agent-portfolio", "/api/youtube", "/api/agnes-video", "/api/approvals"], limitApiRequests);
+app.use(["/api/task", "/api/brain", "/api/repair-proposals", "/api/agent-history", "/api/agent-portfolio", "/api/youtube", "/api/agnes-video", "/api/approvals", "/api/blog", "/api/instagram"], limitApiRequests);
 app.use(["/api/task", "/api/brain", "/api/repair-proposals", "/api/agent-history", "/api/agent-portfolio", "/api/notifications", "/api/queue"], requireOwner);
 app.use(["/api/task", "/api/brain", "/api/repair-proposals", "/api/agent-history", "/api/agent-portfolio", "/api/notifications", "/api/queue"], auditOwnerRequests);
 app.get("/api/agent-history", agentHistoryHandlers.list);
@@ -208,6 +212,12 @@ async function processDailyQueue(ownerId, dayKey) {
   for (let count = 0; count < 30; count += 1) {
     const job = await persistentQueue.claim(workerId);
     if (!job) break;
+    const leaseHeartbeat = setInterval(() => {
+      void persistentQueue.renew(job.id, workerId).then(renewed => {
+        if (!renewed) console.error("Daily queue worker lease was lost for job:", job.id);
+      }).catch(error => console.error("Daily queue lease renewal failed:", error.message));
+    }, 60 * 1000);
+    if (typeof leaseHeartbeat.unref === "function") leaseHeartbeat.unref();
     try {
       let task = job.task;
       if (job.agent_id === "youtube") {
@@ -227,7 +237,10 @@ async function processDailyQueue(ownerId, dayKey) {
       if (job.agent_id === "seo") {
         const earlier = await persistentQueue.dailyResults(ownerId, dayKey);
         const context = earlier.filter(item => item.agent_id !== "seo").map(item =>
-          "AGENT " + item.agent_id + " OUTPUT:\n" + String(item.result?.report || "").slice(0, 5000)
+          "AGENT " + item.agent_id + " STATUS: " + item.status + "\n" +
+          (item.result?.report
+            ? "OUTPUT:\n" + String(item.result.report).slice(0, 5000)
+            : "OUTPUT NOT AVAILABLE. " + String(item.last_error || "The workstream has not completed yet.").slice(0, 500))
         ).join("\n\n");
         if (context) task += "\n\nTODAY'S COMPLETED WORKSTREAM OUTPUTS:\n" + context;
       }
@@ -249,6 +262,26 @@ async function processDailyQueue(ownerId, dayKey) {
         });
         savedAssets.blogDraftId = savedDraft.id;
         savedAssets.blogDraftInserted = savedDraft.inserted;
+      }
+      if (job.agent_id === "affiliate") {
+        const titleMatch = String(generated.result).match(/^(?:\\*\\*)?(?:Campaign title|Working title|Title)(?:\\*\\*)?\\s*[:：-]\\s*(.+)$/im) ||
+          String(generated.result).match(/^#{1,3}\\s+(.+)$/m);
+        const campaignTitle = String(titleMatch?.[1] || ("Daily affiliate research brief " + dayKey)).trim().slice(0, 180);
+        const savedCampaign = await persistentQueue.saveAffiliateCampaign(ownerId, job.id, {
+          productName: campaignTitle,
+          category: "Research brief",
+          provider: generated.provider,
+          report: generated.result,
+          content: {
+            title: campaignTitle,
+            report: generated.result,
+            source: "master_ai_daily_queue",
+            dayKey,
+            productClaimsVerified: false
+          }
+        });
+        savedAssets.affiliateCampaignId = savedCampaign.id;
+        savedAssets.affiliateCampaignInserted = savedCampaign.inserted;
       }
       if (job.agent_id === "youtube") {
         try {
@@ -304,6 +337,8 @@ async function processDailyQueue(ownerId, dayKey) {
       }).catch(notificationError => console.error("Could not save failure notification:", notificationError.message));
       summary.push({ agentId: job.agent_id, status: retry.terminal ? "failed" : "retry_scheduled", error: error.message });
       if (!retry.terminal) await new Promise(resolve => setTimeout(resolve, retry.retryInSeconds * 1000));
+    } finally {
+      clearInterval(leaseHeartbeat);
     }
   }
   return summary;
@@ -1350,6 +1385,19 @@ const youtubeHandlers = createYoutubeIntegrationHandlers();
 
 // OAuth callback is intentionally public, but accepts only a short-lived,
 // HMAC-signed state created after a verified owner session.
+app.get("/api/blog/oauth/callback", blogCmsHandlers.callback);
+app.use("/api/blog", requireOwner);
+app.use("/api/blog", auditOwnerRequests);
+app.get("/api/blog/connect-url", blogCmsHandlers.connectUrl);
+app.get("/api/blog/status", blogCmsHandlers.status);
+app.post("/api/blog/drafts/:id/create-cms-draft", blogCmsHandlers.createCmsDraft);
+
+app.get("/api/instagram/oauth/callback", instagramHandlers.callback);
+app.use("/api/instagram", requireOwner);
+app.use("/api/instagram", auditOwnerRequests);
+app.get("/api/instagram/connect-url", instagramHandlers.connectUrl);
+app.get("/api/instagram/status", instagramHandlers.status);
+
 app.get("/api/youtube/oauth/callback", youtubeHandlers.callback);
 // OAuth callback is public but rate-limited; every other YouTube route is owner-only.
 app.use("/api/youtube", requireOwner);
