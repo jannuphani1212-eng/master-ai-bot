@@ -1140,7 +1140,16 @@ async function refreshIncomeCentre() {
     const commissions = p.affiliate?.commissionRecords ?? "unavailable";
     const blogDrafts = p.blogging?.drafts ?? "unavailable";
     const seoAccounts = p.seo?.searchConsoleAccounts ?? "unavailable";
-    status.textContent = "Live owner records — YouTube channels: " + youtube + "; affiliate campaigns: " + affiliate + "; commission records: " + commissions + "; blog drafts: " + blogDrafts + "; Search Console accounts: " + seoAccounts + ". This workspace does not yet verify payout totals, so recorded earnings remain unverified.";
+    const formatTotals = totals => {
+      if (totals === null || totals === undefined) return "unavailable (incomplete records or query)";
+      const entries = Object.entries(totals);
+      return entries.length ? entries.map(([currency, amount]) => currency + " " + Number(amount).toFixed(2)).join(", ") : "none recorded";
+    };
+    const verified = formatTotals(p.affiliate?.verifiedCommissionTotalsByCurrency);
+    const paid = formatTotals(p.affiliate?.paidCommissionTotalsByCurrency);
+    const pending = formatTotals(p.affiliate?.pendingCommissionTotalsByCurrency);
+    const unverified = p.affiliate?.unverifiedCommissionRecords ?? "unavailable";
+    status.textContent = "Live owner records — YouTube channels: " + youtube + "; affiliate campaigns: " + affiliate + "; tracked clicks: " + (p.affiliate?.trackedClicks ?? "unavailable") + "; blog drafts: " + blogDrafts + "; Search Console accounts: " + seoAccounts + ". Owner-verified affiliate commissions: " + verified + ". Owner-verified and paid: " + paid + ". Owner-verified but unpaid: " + pending + ". Commission records still awaiting owner verification: " + unverified + ". Only verified imported records are counted; YouTube estimated revenue is reported separately in the connected YouTube analytics context and is not treated as a payout.";
   } catch (error) {
     status.textContent = "Income data could not be loaded: " + error.message + ". Opportunity planning remains available; earnings are not assumed.";
   }
