@@ -136,7 +136,7 @@ test("recovers and persists a complete human-readable plan when the provider omi
     "The colors dance through the meadow.",
     "### Scene 3: Grand Finale",
     "Everyone celebrates together."
-  ].join("\\n");
+  ].join("\n");
 
   const saved = await memory.persistReport("owner-1", "channel-rainbow", report);
   assert.equal(rows.length, 1);
@@ -154,7 +154,7 @@ test("recovers and persists a complete human-readable plan when the provider omi
 
 test("does not persist incomplete reports without a full script and numbered scenes", async () => {
   const { rows, memory } = createMemoryStore();
-  const saved = await memory.persistReport("owner-1", "channel-1", "# Rainbow's Little Parade\\nA short idea only.");
+  const saved = await memory.persistReport("owner-1", "channel-1", "# Rainbow's Little Parade\nA short idea only.");
   assert.equal(saved, null);
   assert.equal(rows.length, 0);
 });
