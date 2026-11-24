@@ -91,6 +91,8 @@ test("renderer creates a playable MP4, thumbnail, and original instrumental trac
   assert.equal(result.narration.subarray(0, 4).toString(), "RIFF");
   assert.equal(result.sceneCount, 2);
   assert.equal(result.durationSeconds, 6);
+  assert.equal(result.resolution, "854x480");
+  assert.equal(result.frameRate, 15);
   assert.equal(result.audio.music, "original_synthesized_instrumental");
   assert.equal(result.audio.narration, "offline_espeak_ng_synthesized_voice");
 });
