@@ -81,3 +81,11 @@ test("flags missing evidence labels without misrepresenting factual accuracy as 
   assert.equal(review.evidenceReview, "needs_verification");
   assert.equal(review.factualAccuracyScore, null);
 });
+
+test("recognizes Research & Evidence headings in bold numbered specialist reports", () => {
+  const report = completeReport.replace("## Research and evidence", "**3. Research & Evidence**");
+  const review = reviewSpecialistReport(report);
+  assert.equal(review.passedSections.includes("Research and evidence"), true);
+  assert.equal(review.missingSections.includes("Research and evidence"), false);
+  assert.equal(review.status, "passed");
+});
