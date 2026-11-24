@@ -1456,6 +1456,7 @@ async function runYoutubeVideoJob(job) {
       title: job.rhyme_title,
       scenes: scenes.map(scene => ({ caption: scene.caption || scene.visualDescription })),
       sceneImages,
+      narrationText: job.script,
       onSceneRendered: async (index, imageBytes) => {
         const sceneNumber = index + 1;
         const scenePath = await youtubeVideoJobStore.upload(ownerId, job.id,
@@ -1474,6 +1475,7 @@ async function runYoutubeVideoJob(job) {
     await youtubeVideoJobStore.update(ownerId, job.id, { status: "uploading", completed_scenes: [...completed].sort((a, b) => a - b), next_scene: null });
     const videoPath = await youtubeVideoJobStore.upload(ownerId, job.id, "rhyme-video.mp4", rendered.video, "video/mp4");
     const thumbnailPath = await youtubeVideoJobStore.upload(ownerId, job.id, "thumbnail.png", rendered.thumbnail, "image/png");
+    const narrationPath = await youtubeVideoJobStore.upload(ownerId, job.id, "narration.wav", rendered.narration, "audio/wav");
     await youtubeVideoJobStore.update(ownerId, job.id, {
       status: "ready_for_review",
       completed_scenes: scenes.map((_, index) => index + 1),
@@ -1481,7 +1483,7 @@ async function runYoutubeVideoJob(job) {
       retry_at: null,
       video_path: videoPath,
       thumbnail_path: thumbnailPath,
-      asset_paths: { ...assetPaths, video: videoPath, thumbnail: thumbnailPath },
+      asset_paths: { ...assetPaths, video: videoPath, thumbnail: thumbnailPath, narration: narrationPath },
       metadata: {
         renderStyle: rendered.renderStyle,
         durationSeconds: rendered.durationSeconds,
