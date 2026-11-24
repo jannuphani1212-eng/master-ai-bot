@@ -70,3 +70,27 @@ test("pending job recovery query respects retry cooldown timestamps", async () =
   assert.match(requestedUrl, /retry_at\.is\.null/);
   assert.match(requestedUrl, /retry_at\.lte\./);
 });
+
+test("signed private asset URLs include the Supabase storage API prefix", async () => {
+  const store = createYoutubeVideoJobStore({
+    env,
+    fetchImpl: async (url) => {
+      if (url.includes("/rest/v1/youtube_video_jobs")) {
+        return new Response(JSON.stringify([{
+          id: job, owner_user_id: owner,
+          video_path: owner + "/" + job + "/rhyme-video.mp4",
+          thumbnail_path: null, asset_paths: {}
+        }]), { status: 200 });
+      }
+      if (url.includes("/storage/v1/object/sign/")) {
+        return new Response(JSON.stringify({
+          signedURL: "/object/sign/youtube-production/" + owner + "/" + job + "/rhyme-video.mp4?token=test-token"
+        }), { status: 200 });
+      }
+      throw new Error("Unexpected request: " + url);
+    }
+  });
+  const url = await store.signedAsset(owner, job, "video");
+  assert.equal(url, "https://example.supabase.co/storage/v1/object/sign/youtube-production/" +
+    owner + "/" + job + "/rhyme-video.mp4?token=test-token");
+});
