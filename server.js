@@ -1429,10 +1429,12 @@ app.get("/api/youtube/rhyme-projects/:id", youtubeRhymeMemoryHandlers.getHandler
 app.get("/api/youtube/production-jobs", youtubeVideoJobHandlers.list);
 app.get("/api/youtube/production-jobs/:id", youtubeVideoJobHandlers.get);
 const activeYoutubeVideoJobs = new Set();
+let youtubeVideoWorkerRunning = false;
 
 async function runYoutubeVideoJob(job) {
   const ownerId = job?.owner_user_id;
-  if (!ownerId || !job?.id || activeYoutubeVideoJobs.has(job.id)) return;
+  if (!ownerId || !job?.id || activeYoutubeVideoJobs.has(job.id) || youtubeVideoWorkerRunning) return;
+  youtubeVideoWorkerRunning = true;
   activeYoutubeVideoJobs.add(job.id);
   try {
     const scenes = Array.isArray(job.production_spec?.scenes) ? job.production_spec.scenes.slice(0, 8) : [];
@@ -1475,7 +1477,7 @@ async function runYoutubeVideoJob(job) {
     await youtubeVideoJobStore.update(ownerId, job.id, { status: "uploading", completed_scenes: [...completed].sort((a, b) => a - b), next_scene: null });
     const videoPath = await youtubeVideoJobStore.upload(ownerId, job.id, "rhyme-video.mp4", rendered.video, "video/mp4");
     const thumbnailPath = await youtubeVideoJobStore.upload(ownerId, job.id, "thumbnail.png", rendered.thumbnail, "image/png");
-    const narrationPath = await youtubeVideoJobStore.upload(ownerId, job.id, "narration.wav", rendered.narration, "audio/wav");
+    const narrationPath = rendered.narration ? await youtubeVideoJobStore.upload(ownerId, job.id, "narration.wav", rendered.narration, "audio/wav") : null;
     await youtubeVideoJobStore.update(ownerId, job.id, {
       status: "ready_for_review",
       completed_scenes: scenes.map((_, index) => index + 1),
@@ -1483,18 +1485,19 @@ async function runYoutubeVideoJob(job) {
       retry_at: null,
       video_path: videoPath,
       thumbnail_path: thumbnailPath,
-      asset_paths: { ...assetPaths, video: videoPath, thumbnail: thumbnailPath, narration: narrationPath },
+      asset_paths: { ...assetPaths, video: videoPath, thumbnail: thumbnailPath, ...(narrationPath ? { narration: narrationPath } : {}) },
       metadata: {
         renderStyle: rendered.renderStyle,
         durationSeconds: rendered.durationSeconds,
         music: rendered.audio.music,
         narration: rendered.audio.narration,
-        narrationRequired: true,
+        narrationRequired: Boolean(rendered.narration),
+        narrationWarning: rendered.narrationError || null,
         youtubeMetadata: job.production_spec?.youtubeMetadata || {},
         policyPreflight: job.production_spec?.policyPreflight || {},
         ownerApprovalRequired: true,
         publishingEnabled: false,
-        limitations: ["Spoken narration is synthesized with an offline computer voice and may sound robotic; no sung vocals are generated.", "Policy preflight is an AI draft, not legal clearance or a monetization guarantee."]
+        limitations: [rendered.narration ? "Spoken narration is synthesized with an offline computer voice and may sound robotic; no sung vocals are generated." : "Offline narration was unavailable in this render; the video contains original instrumental audio and on-screen lyrics/captions. Retry narration after the local speech engine is repaired.", "Policy preflight is an AI draft, not legal clearance or a monetization guarantee."]
       }
     });
   } catch (error) {
@@ -1513,12 +1516,17 @@ async function runYoutubeVideoJob(job) {
     }
   } finally {
     activeYoutubeVideoJobs.delete(job.id);
+    youtubeVideoWorkerRunning = false;
   }
 }
 async function resumeYoutubeVideoJobs() {
   try {
+    if (youtubeVideoWorkerRunning) return;
     const pending = await youtubeVideoJobStore.listPending(10);
-    for (const job of pending) void runYoutubeVideoJob(job);
+    for (const job of pending) {
+      if (youtubeVideoWorkerRunning) break;
+      await runYoutubeVideoJob(job);
+    }
   } catch (error) {
     console.error("YouTube production recovery check failed:", error.message);
   }
