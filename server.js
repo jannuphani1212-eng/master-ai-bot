@@ -1437,21 +1437,51 @@ async function runYoutubeVideoJob(job) {
   try {
     const scenes = Array.isArray(job.production_spec?.scenes) ? job.production_spec.scenes.slice(0, 8) : [];
     if (scenes.length < 5) throw new Error("Saved production job is missing its complete storyboard.");
-    await youtubeVideoJobStore.update(ownerId, job.id, { status: "rendering", total_scenes: scenes.length, next_scene: 1, last_error: null });
+    const assetPaths = { ...(job.asset_paths || {}), scenes: { ...(job.asset_paths?.scenes || {}) } };
+    const sceneImages = {};
+    for (let i = 0; i < scenes.length; i++) {
+      const savedPath = assetPaths.scenes[String(i + 1)];
+      if (savedPath) sceneImages[i] = await youtubeVideoJobStore.download(ownerId, job.id, savedPath);
+    }
+    const completed = new Set(Object.keys(assetPaths.scenes).map(Number));
+    await youtubeVideoJobStore.update(ownerId, job.id, {
+      status: "rendering",
+      total_scenes: scenes.length,
+      completed_scenes: [...completed].sort((a, b) => a - b),
+      next_scene: scenes.findIndex((_, index) => !sceneImages[index]) + 1 || null,
+      retry_at: null,
+      last_error: null
+    });
     const rendered = await renderNurseryRhymeVideo({
       title: job.rhyme_title,
-      scenes: scenes.map(scene => ({ caption: scene.caption || scene.visualDescription }))
+      scenes: scenes.map(scene => ({ caption: scene.caption || scene.visualDescription })),
+      sceneImages,
+      onSceneRendered: async (index, imageBytes) => {
+        const sceneNumber = index + 1;
+        const scenePath = await youtubeVideoJobStore.upload(ownerId, job.id,
+          "scene-" + String(sceneNumber).padStart(2, "0") + ".png", imageBytes, "image/png");
+        assetPaths.scenes[String(sceneNumber)] = scenePath;
+        completed.add(sceneNumber);
+        const next = scenes.findIndex((_, sceneIndex) => !completed.has(sceneIndex + 1));
+        await youtubeVideoJobStore.update(ownerId, job.id, {
+          status: "rendering",
+          completed_scenes: [...completed].sort((a, b) => a - b),
+          next_scene: next < 0 ? null : next + 1,
+          asset_paths: assetPaths
+        });
+      }
     });
-    await youtubeVideoJobStore.update(ownerId, job.id, { status: "uploading" });
+    await youtubeVideoJobStore.update(ownerId, job.id, { status: "uploading", completed_scenes: [...completed].sort((a, b) => a - b), next_scene: null });
     const videoPath = await youtubeVideoJobStore.upload(ownerId, job.id, "rhyme-video.mp4", rendered.video, "video/mp4");
     const thumbnailPath = await youtubeVideoJobStore.upload(ownerId, job.id, "thumbnail.png", rendered.thumbnail, "image/png");
     await youtubeVideoJobStore.update(ownerId, job.id, {
       status: "ready_for_review",
       completed_scenes: scenes.map((_, index) => index + 1),
       next_scene: null,
+      retry_at: null,
       video_path: videoPath,
       thumbnail_path: thumbnailPath,
-      asset_paths: { video: videoPath, thumbnail: thumbnailPath },
+      asset_paths: { ...assetPaths, video: videoPath, thumbnail: thumbnailPath },
       metadata: {
         renderStyle: rendered.renderStyle,
         durationSeconds: rendered.durationSeconds,
@@ -1465,10 +1495,13 @@ async function runYoutubeVideoJob(job) {
     });
   } catch (error) {
     console.error("YouTube video production job failed:", error.message);
+    const attempts = Number(job.retry_attempts || 0) + 1;
+    const canRetry = attempts < 3;
     try {
       await youtubeVideoJobStore.update(ownerId, job.id, {
-        status: "failed",
-        retry_attempts: Number(job.retry_attempts || 0) + 1,
+        status: canRetry ? "queued" : "failed",
+        retry_attempts: attempts,
+        retry_at: canRetry ? new Date(Date.now() + attempts * 60000).toISOString() : null,
         last_error: String(error.message || error).slice(0, 1200)
       });
     } catch (saveError) {
@@ -1478,7 +1511,6 @@ async function runYoutubeVideoJob(job) {
     activeYoutubeVideoJobs.delete(job.id);
   }
 }
-
 async function resumeYoutubeVideoJobs() {
   try {
     const pending = await youtubeVideoJobStore.listPending(10);
