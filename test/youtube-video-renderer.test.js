@@ -2,6 +2,30 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createSceneSvg, escapeXml, renderNurseryRhymeVideo } from "../lib/youtube-video-renderer.js";
 
+function createTestNarrationWav(durationSeconds = 6, sampleRate = 22050) {
+  const sampleCount = durationSeconds * sampleRate;
+  const pcm = Buffer.alloc(sampleCount * 2);
+  for (let i = 0; i < sampleCount; i += 1) {
+    const sample = Math.round(Math.sin((i / sampleRate) * 2 * Math.PI * 440) * 2500);
+    pcm.writeInt16LE(sample, i * 2);
+  }
+  const header = Buffer.alloc(44);
+  header.write("RIFF", 0);
+  header.writeUInt32LE(36 + pcm.length, 4);
+  header.write("WAVE", 8);
+  header.write("fmt ", 12);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
+  header.writeUInt16LE(1, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(sampleRate * 2, 28);
+  header.writeUInt16LE(2, 32);
+  header.writeUInt16LE(16, 34);
+  header.write("data", 36);
+  header.writeUInt32LE(pcm.length, 40);
+  return Buffer.concat([header, pcm]);
+}
+
 test("escapeXml protects text inserted into the SVG artwork", () => {
   assert.equal(escapeXml("<Bird & Friends>"), "&lt;Bird &amp; Friends&gt;");
 });
@@ -21,6 +45,7 @@ test("renderer reuses saved scene artwork and checkpoints newly rendered scenes"
     scenes: [{ caption: "One" }, { caption: "Two" }],
     durationPerScene: 3,
     narrationText: "Little bird, fly up high. Rainbow colors fill the sky.",
+    synthesizeNarration: async () => createTestNarrationWav(),
     onSceneRendered: async (index, bytes) => checkpoints.push([index, bytes])
   });
   assert.equal(checkpoints.length, 2);
@@ -31,6 +56,7 @@ test("renderer reuses saved scene artwork and checkpoints newly rendered scenes"
     scenes: [{ caption: "One" }, { caption: "Two" }],
     durationPerScene: 3,
     narrationText: "Little bird, fly up high. Rainbow colors fill the sky.",
+    synthesizeNarration: async () => createTestNarrationWav(),
     sceneImages: saved,
     onSceneRendered: async () => { rerendered++; }
   });
@@ -54,7 +80,8 @@ test("renderer creates a playable MP4, thumbnail, and original instrumental trac
       { caption: "Little bird friends dance tonight!" }
     ],
     durationPerScene: 3,
-    narrationText: "Rainbow colors shine so bright. Little bird friends sing tonight."
+    narrationText: "Rainbow colors shine so bright. Little bird friends sing tonight.",
+    synthesizeNarration: async () => createTestNarrationWav()
   });
   assert.ok(Buffer.isBuffer(result.video));
   assert.ok(result.video.length > 10000);
