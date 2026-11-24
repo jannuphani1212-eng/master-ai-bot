@@ -994,6 +994,26 @@ async function loadYoutubeProductionJobs() {
       addText(card, "h4", job.rhyme_title || "Untitled rhyme");
       addText(card, "p", "Status: " + String(job.status || "unknown").replaceAll("_", " ") +
         " · Scenes: " + (job.completed_scenes?.length || 0) + "/" + (job.total_scenes || "—"), "muted");
+      if (job.script) {
+        const lyrics = document.createElement("details");
+        const summary = document.createElement("summary");
+        summary.textContent = "View complete original lyrics";
+        lyrics.appendChild(summary);
+        addText(lyrics, "p", job.script);
+        card.appendChild(lyrics);
+      }
+      const ytMeta = job.production_spec?.youtubeMetadata || job.metadata?.youtubeMetadata;
+      if (ytMeta) {
+        addText(card, "h4", "YouTube upload details");
+        addText(card, "p", "Title: " + (ytMeta.title || job.rhyme_title));
+        addText(card, "p", "Description: " + (ytMeta.description || ""));
+        addText(card, "p", "Tags: " + (Array.isArray(ytMeta.tags) ? ytMeta.tags.join(", ") : ""));
+        const checks = ytMeta.policyPreflight || job.production_spec?.policyPreflight || {};
+        addText(card, "p", "Originality review: " + (checks.originality || "Owner review required."));
+        addText(card, "p", "Made-for-kids: " + (checks.madeForKids || "Confirm before publishing."));
+        addText(card, "p", "Child safety: " + (checks.childSafety || "Owner review required."));
+        addText(card, "p", "Monetization: " + (checks.monetization || "No guarantee."));
+      }
       if (job.last_error) addText(card, "p", job.last_error, "warning-text");
       if (job.videoUrl) {
         const video = document.createElement("video");
