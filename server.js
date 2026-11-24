@@ -1489,6 +1489,8 @@ async function runYoutubeVideoJob(job) {
       metadata: {
         renderStyle: rendered.renderStyle,
         durationSeconds: rendered.durationSeconds,
+        resolution: rendered.resolution,
+        frameRate: rendered.frameRate,
         music: rendered.audio.music,
         narration: rendered.audio.narration,
         narrationRequired: Boolean(rendered.narration),
