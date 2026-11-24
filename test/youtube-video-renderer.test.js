@@ -14,6 +14,29 @@ test("createSceneSvg creates a consistent, numbered 16:9 cartoon scene", () => {
   assert.match(svg, /Scene 2 \/ 6/);
 });
 
+test("renderer reuses saved scene artwork and checkpoints newly rendered scenes", async () => {
+  const checkpoints = [];
+  const first = await renderNurseryRhymeVideo({
+    title: "Checkpoint Test",
+    scenes: [{ caption: "One" }, { caption: "Two" }],
+    durationPerScene: 3,
+    onSceneRendered: async (index, bytes) => checkpoints.push([index, bytes])
+  });
+  assert.equal(checkpoints.length, 2);
+  const saved = Object.fromEntries(checkpoints.map(([index, bytes]) => [index, bytes]));
+  let rerendered = 0;
+  const second = await renderNurseryRhymeVideo({
+    title: "Checkpoint Test",
+    scenes: [{ caption: "One" }, { caption: "Two" }],
+    durationPerScene: 3,
+    sceneImages: saved,
+    onSceneRendered: async () => { rerendered++; }
+  });
+  assert.equal(rerendered, 0);
+  assert.equal(second.sceneCount, first.sceneCount);
+  assert.ok(second.video.length > 10000);
+});
+
 test("renderer rejects missing scene cards before starting FFmpeg", async () => {
   await assert.rejects(
     renderNurseryRhymeVideo({ title: "Test", scenes: [] }),
