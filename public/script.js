@@ -1062,7 +1062,7 @@ async function startYoutubeProduction() {
   const title = titleInput.value.trim();
   if (!title) { statusNode.textContent = "Enter a rhyme title first."; return; }
   button.disabled = true;
-  statusNode.textContent = "Writing original lyrics and storyboard with the AI provider. Please keep this page open.";
+  statusNode.textContent = "Writing original lyrics and storyboard. The server keeps working if you leave this page.";
   try {
     const data = await youtubeApi("/api/youtube/production-jobs", {
       method: "POST",
