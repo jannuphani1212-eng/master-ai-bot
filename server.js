@@ -18,6 +18,7 @@ import { createYoutubeIntegrationHandlers, getYoutubeAgentContext } from "./lib/
 import { createAgnesVideoHandlers } from "./lib/agnes-video.js";
 import { createAgentHistoryHandlers } from "./lib/supabase-task-history.js";
 import { createYoutubeRhymeMemory } from "./lib/youtube-rhyme-memory.js";
+import { createYoutubeVideoJobStore, createYoutubeVideoJobHandlers } from "./lib/youtube-video-jobs.js";
 import { buildYoutubeTaskContext } from "./lib/youtube-task-context.js";
 import { parseSynthesisReuseRequest, validateSavedSpecialistReports } from "./lib/synthesis-reuse.js";
 import { createAgentPortfolioHandlers } from "./lib/agent-portfolio.js";
@@ -92,6 +93,8 @@ app.use(express.json({ limit: "1mb" }));
 const requireOwner = createOwnerAuthMiddleware();
 const agentHistoryHandlers = createAgentHistoryHandlers();
 const youtubeRhymeMemory = createYoutubeRhymeMemory();
+const youtubeVideoJobStore = createYoutubeVideoJobStore();
+const youtubeVideoJobHandlers = createYoutubeVideoJobHandlers(youtubeVideoJobStore);
 const agentPortfolioHandlers = createAgentPortfolioHandlers();
 const persistentQueue = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY ? createPersistentQueue() : null;
 const blogCmsHandlers = createBlogCmsHandlers();
@@ -1422,6 +1425,8 @@ const youtubeRhymeMemoryHandlers = youtubeRhymeMemory;
 app.get("/api/youtube/rhyme-projects", youtubeRhymeMemoryHandlers.listHandler);
 app.post("/api/youtube/rhyme-projects", youtubeRhymeMemoryHandlers.saveHandler);
 app.get("/api/youtube/rhyme-projects/:id", youtubeRhymeMemoryHandlers.getHandler);
+app.get("/api/youtube/production-jobs", youtubeVideoJobHandlers.list);
+app.get("/api/youtube/production-jobs/:id", youtubeVideoJobHandlers.get);
 
 // Agnes video generation is owner-only and remains locked until its free-tier
 // eligibility has been verified in the provider console and explicitly enabled.
