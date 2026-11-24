@@ -118,3 +118,43 @@ test("updates the existing rhyme instead of creating a duplicate when production
   assert.equal(updated.cooldown_status, "ready");
   assert.equal(updated.retry_attempts, 2);
 });
+
+test("recovers and persists a complete human-readable plan when the provider omits the state block", async () => {
+  const { rows, memory } = createMemoryStore();
+  const report = [
+    "# Rainbow's Little Parade",
+    "## 1. Character Continuity",
+    "Rainbow is a cheerful rainbow with seven bright bands and large friendly eyes.",
+    "## 2. Background Continuity",
+    "A soft pastel meadow with rolling green hills and fluffy clouds.",
+    "## 3.2 Complete Rhyme Script",
+    "Red and orange lead the way, yellow sunshine starts the day. Green and blue go dancing by, indigo and violet paint the sky. Rainbow friends all laugh and play, marching in a bright parade today.",
+    "## 4. Numbered Video Scenes",
+    "### Scene 1: The Parade Begins",
+    "Rainbow waves to the little friends.",
+    "### Scene 2: Colors Join In",
+    "The colors dance through the meadow.",
+    "### Scene 3: Grand Finale",
+    "Everyone celebrates together."
+  ].join("\\n");
+
+  const saved = await memory.persistReport("owner-1", "channel-rainbow", report);
+  assert.equal(rows.length, 1);
+  assert.equal(saved.rhyme_title, "Rainbow's Little Parade");
+  assert.match(saved.script, /Red and orange lead the way/);
+  assert.equal(saved.total_scenes, 3);
+  assert.equal(saved.next_scene, 1);
+  assert.deepEqual(saved.completed_scenes, []);
+  assert.deepEqual(saved.remaining_scenes, [1, 2, 3]);
+  assert.equal(saved.production_status, "planning");
+  assert.equal(saved.channel_id, "channel-rainbow");
+  assert.match(saved.character_continuity.description, /seven bright bands/);
+  assert.match(saved.background_continuity.description, /pastel meadow/);
+});
+
+test("does not persist incomplete reports without a full script and numbered scenes", async () => {
+  const { rows, memory } = createMemoryStore();
+  const saved = await memory.persistReport("owner-1", "channel-1", "# Rainbow's Little Parade\\nA short idea only.");
+  assert.equal(saved, null);
+  assert.equal(rows.length, 0);
+});
