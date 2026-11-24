@@ -1553,7 +1553,7 @@ app.post("/api/youtube/production-jobs", async (req, res) => {
       rhyme_title: String(plan.rhymeTitle || rhymeTitle).slice(0, 180),
       script,
       scenes,
-      production_spec: { provider: generated.provider, scenes, youtubeMetadata, policyPreflight: youtubeMetadata.policyPreflight, characterContinuity: "One consistent original yellow baby bird character", visualStyle: "2D vector cartoon", music: "original synthesized instrumental", narration: "not generated in this zero-budget renderer" }
+      production_spec: { provider: generated.provider, scenes, youtubeMetadata, policyPreflight: youtubeMetadata.policyPreflight, characterContinuity: "One consistent original yellow baby bird character", visualStyle: "2D vector cartoon", music: "original synthesized instrumental", narration: "offline English speech synthesis from the complete original lyrics" }
     });
     res.status(202).json({ success: true, job, message: "Rhyme and storyboard created. Rendering has started. Spoken narration uses an offline synthetic voice, not a human voice or sung vocals.", reviewRequired: true, publishingEnabled: false });
     void runYoutubeVideoJob(job);
