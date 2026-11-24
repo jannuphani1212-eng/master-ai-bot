@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createSceneSvg, escapeXml, renderNurseryRhymeVideo } from "../lib/youtube-video-renderer.js";
 
-function createTestNarrationWav(durationSeconds = 6, sampleRate = 22050) {
+function createTestNarrationWav(durationSeconds = 3, sampleRate = 22050) {
   const sampleCount = durationSeconds * sampleRate;
   const pcm = Buffer.alloc(sampleCount * 2);
   for (let i = 0; i < sampleCount; i += 1) {
