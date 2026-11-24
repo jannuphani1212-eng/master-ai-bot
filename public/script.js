@@ -1025,7 +1025,7 @@ async function loadYoutubeProductionJobs() {
         video.style.maxWidth = "720px";
         video.style.borderRadius = "14px";
         card.appendChild(video);
-        addText(card, "p", "Private review video · link expires after 15 minutes. Spoken narration uses an offline synthetic voice.", "muted");
+        addText(card, "p", "Private review video · link expires after 15 minutes. " + (job.narrationUrl ? "A separate spoken-lyrics track is available." : "This render contains original instrumental audio and on-screen captions; spoken narration is unavailable in this free-tier render."), "muted");
       }
       if (job.narrationUrl) {
         const narration = document.createElement("audio");
