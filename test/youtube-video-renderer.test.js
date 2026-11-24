@@ -67,3 +67,20 @@ test("renderer creates a playable MP4, thumbnail, and original instrumental trac
   assert.equal(result.audio.music, "original_synthesized_instrumental");
   assert.equal(result.audio.narration, "offline_espeak_ng_synthesized_voice");
 });
+
+
+test("renderer still creates a playable MP4 when offline narration fails", async () => {
+  const result = await renderNurseryRhymeVideo({
+    title: "Narration fallback test",
+    scenes: [{ caption: "A rainbow shines" }, { caption: "Little birds dance" }],
+    durationPerScene: 3,
+    narrationText: "This speech engine will fail in the test.",
+    synthesizeNarration: async () => { throw new Error("simulated speech engine failure"); }
+  });
+  assert.ok(Buffer.isBuffer(result.video));
+  assert.ok(result.video.length > 10000);
+  assert.equal(result.video.subarray(4, 8).toString(), "ftyp");
+  assert.equal(result.narration, null);
+  assert.match(result.narrationError, /simulated speech engine failure/);
+  assert.equal(result.audio.narration, "unavailable_rendered_with_instrumental_only");
+});
