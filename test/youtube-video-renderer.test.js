@@ -20,6 +20,7 @@ test("renderer reuses saved scene artwork and checkpoints newly rendered scenes"
     title: "Checkpoint Test",
     scenes: [{ caption: "One" }, { caption: "Two" }],
     durationPerScene: 3,
+    narrationText: "Little bird, fly up high. Rainbow colors fill the sky.",
     onSceneRendered: async (index, bytes) => checkpoints.push([index, bytes])
   });
   assert.equal(checkpoints.length, 2);
@@ -29,6 +30,7 @@ test("renderer reuses saved scene artwork and checkpoints newly rendered scenes"
     title: "Checkpoint Test",
     scenes: [{ caption: "One" }, { caption: "Two" }],
     durationPerScene: 3,
+    narrationText: "Little bird, fly up high. Rainbow colors fill the sky.",
     sceneImages: saved,
     onSceneRendered: async () => { rerendered++; }
   });
@@ -51,14 +53,17 @@ test("renderer creates a playable MP4, thumbnail, and original instrumental trac
       { caption: "Rainbow colors shine so bright!" },
       { caption: "Little bird friends dance tonight!" }
     ],
-    durationPerScene: 3
+    durationPerScene: 3,
+    narrationText: "Rainbow colors shine so bright. Little bird friends sing tonight."
   });
   assert.ok(Buffer.isBuffer(result.video));
   assert.ok(result.video.length > 10000);
   assert.equal(result.video.subarray(4, 8).toString(), "ftyp");
   assert.ok(Buffer.isBuffer(result.thumbnail));
+  assert.ok(Buffer.isBuffer(result.narration));
+  assert.equal(result.narration.subarray(0, 4).toString(), "RIFF");
   assert.equal(result.sceneCount, 2);
   assert.equal(result.durationSeconds, 6);
   assert.equal(result.audio.music, "original_synthesized_instrumental");
-  assert.equal(result.audio.narration, "not_generated");
+  assert.equal(result.audio.narration, "offline_espeak_ng_synthesized_voice");
 });
