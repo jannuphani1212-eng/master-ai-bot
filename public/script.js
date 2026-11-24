@@ -1025,7 +1025,16 @@ async function loadYoutubeProductionJobs() {
         video.style.maxWidth = "720px";
         video.style.borderRadius = "14px";
         card.appendChild(video);
-        addText(card, "p", "Private review video · link expires after 15 minutes. Voice narration is still pending.", "muted");
+        addText(card, "p", "Private review video · link expires after 15 minutes. Spoken narration uses an offline synthetic voice.", "muted");
+      }
+      if (job.narrationUrl) {
+        const narration = document.createElement("audio");
+        narration.controls = true;
+        narration.preload = "none";
+        narration.src = job.narrationUrl;
+        narration.style.width = "100%";
+        card.appendChild(narration);
+        addText(card, "p", "Separate spoken-lyrics track for review.", "muted");
       }
       if (job.thumbnailUrl) {
         const image = document.createElement("img");
