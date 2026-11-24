@@ -1090,14 +1090,6 @@ async function runCentralBrain(task, ownerUserId, channelId) {
 
       let specialistReport = response.result;
       let specialistProvider = response.provider;
-      if (item.agentId === "youtube" && ownerUserId) {
-        try {
-          const savedRhyme = await youtubeRhymeMemory.persistReport(ownerUserId, channelId, specialistReport);
-          if (savedRhyme) console.log("YouTube rhyme production state saved:", savedRhyme.id);
-        } catch (memoryError) {
-          console.warn("YouTube rhyme production state could not be saved:", memoryError.message);
-        }
-      }
       let qualityReview = reviewSpecialistReport(specialistReport);
       let reportRepaired = false;
 
@@ -1142,6 +1134,24 @@ async function runCentralBrain(task, ownerUserId, channelId) {
         }
       }
 
+      // Save after report repair because the repair pass can add the machine-readable state block.
+      let rhymeMemorySave = null;
+      if (item.agentId === "youtube" && ownerUserId && /rhyme|nursery|scene|production plan/i.test(item.task)) {
+        try {
+          const savedRhyme = await youtubeRhymeMemory.persistReport(ownerUserId, channelId, specialistReport);
+          if (savedRhyme && savedRhyme.id) {
+            rhymeMemorySave = { success: true, projectId: savedRhyme.id };
+            console.log("YouTube rhyme production state saved:", savedRhyme.id);
+          } else {
+            rhymeMemorySave = { success: false, error: "Final report did not contain a valid complete rhyme production state." };
+            console.warn("YouTube rhyme production state was not saved: final report has no valid state block.");
+          }
+        } catch (memoryError) {
+          rhymeMemorySave = { success: false, error: String(memoryError.message || "Unknown storage error").slice(0, 300) };
+          console.warn("YouTube rhyme production state could not be saved:", memoryError.message);
+        }
+      }
+
       providersUsed.add(response.provider);
       const qualityPassed = qualityReview.status === "passed";
       const structuralIssues = [
@@ -1175,6 +1185,7 @@ async function runCentralBrain(task, ownerUserId, channelId) {
         structuralStatus: qualityReview.status,
         evidenceReview: qualityReview.evidenceReview,
         qualityReview,
+        rhymeMemory: rhymeMemorySave,
         result: specialistReport
       });
 
