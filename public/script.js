@@ -962,7 +962,7 @@ function resetYoutubePanel(message) {
   youtubeAnalyticsHeading.hidden = true;
 }
 
-async function youtubeApi(path) {
+async function youtubeApi(path, options = {}) {
   if (!(await ensureApprovalSession())) throw new Error("Your owner session is unavailable. Please sign in again.");
   if (path.startsWith("/api/youtube/") &&
       !path.startsWith("/api/youtube/status") &&
@@ -972,12 +972,124 @@ async function youtubeApi(path) {
   }
   const response = await ownerAuthenticatedFetch(path, {
     cache: "no-store",
-    headers: { Authorization: "Bearer " + approvalAccessToken }
+    ...options,
+    headers: { ...(options.headers || {}), Authorization: "Bearer " + approvalAccessToken }
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error || "YouTube request failed.");
   return data;
 }
+async function loadYoutubeProductionJobs() {
+  const statusNode = document.getElementById("youtubeProductionStatus");
+  const listNode = document.getElementById("youtubeProductionJobs");
+  if (!statusNode || !listNode) return [];
+  try {
+    const data = await youtubeApi("/api/youtube/production-jobs");
+    const jobs = Array.isArray(data.jobs) ? data.jobs : [];
+    listNode.replaceChildren();
+    if (!jobs.length) addText(listNode, "p", "No video production jobs yet.");
+    jobs.forEach(job => {
+      const card = document.createElement("article");
+      card.className = "rhyme-memory-item";
+      addText(card, "h4", job.rhyme_title || "Untitled rhyme");
+      addText(card, "p", "Status: " + String(job.status || "unknown").replaceAll("_", " ") +
+        " · Scenes: " + (job.completed_scenes?.length || 0) + "/" + (job.total_scenes || "—"), "muted");
+      if (job.script) {
+        const lyrics = document.createElement("details");
+        const summary = document.createElement("summary");
+        summary.textContent = "View complete original lyrics";
+        lyrics.appendChild(summary);
+        addText(lyrics, "p", job.script);
+        card.appendChild(lyrics);
+      }
+      const ytMeta = job.production_spec?.youtubeMetadata || job.metadata?.youtubeMetadata;
+      if (ytMeta) {
+        addText(card, "h4", "YouTube upload details");
+        addText(card, "p", "Title: " + (ytMeta.title || job.rhyme_title));
+        addText(card, "p", "Description: " + (ytMeta.description || ""));
+        addText(card, "p", "Tags: " + (Array.isArray(ytMeta.tags) ? ytMeta.tags.join(", ") : ""));
+        const checks = ytMeta.policyPreflight || job.production_spec?.policyPreflight || {};
+        addText(card, "p", "Originality review: " + (checks.originality || "Owner review required."));
+        addText(card, "p", "Made-for-kids: " + (checks.madeForKids || "Confirm before publishing."));
+        addText(card, "p", "Child safety: " + (checks.childSafety || "Owner review required."));
+        addText(card, "p", "Monetization: " + (checks.monetization || "No guarantee."));
+      }
+      if (job.last_error) addText(card, "p", job.last_error, "warning-text");
+      if (job.videoUrl) {
+        const video = document.createElement("video");
+        video.controls = true;
+        video.playsInline = true;
+        video.preload = "metadata";
+        video.src = job.videoUrl;
+        video.style.width = "100%";
+        video.style.maxWidth = "720px";
+        video.style.borderRadius = "14px";
+        card.appendChild(video);
+        addText(card, "p", "Private review video · link expires after 15 minutes. Spoken narration uses an offline synthetic voice.", "muted");
+      }
+      if (job.narrationUrl) {
+        const narration = document.createElement("audio");
+        narration.controls = true;
+        narration.preload = "none";
+        narration.src = job.narrationUrl;
+        narration.style.width = "100%";
+        card.appendChild(narration);
+        addText(card, "p", "Separate spoken-lyrics track for review.", "muted");
+      }
+      if (job.thumbnailUrl) {
+        const image = document.createElement("img");
+        image.src = job.thumbnailUrl;
+        image.alt = "Generated rhyme thumbnail";
+        image.loading = "lazy";
+        image.style.width = "180px";
+        image.style.borderRadius = "12px";
+        card.appendChild(image);
+      }
+      listNode.appendChild(card);
+    });
+    statusNode.textContent = jobs.length + " saved production job(s). Videos stay private until you approve the next step.";
+    return jobs;
+  } catch (error) {
+    statusNode.textContent = error.message;
+    return [];
+  }
+}
+
+async function startYoutubeProduction() {
+  const button = document.getElementById("youtubeProductionStartButton");
+  const titleInput = document.getElementById("youtubeProductionTitle");
+  const statusNode = document.getElementById("youtubeProductionStatus");
+  const title = titleInput.value.trim();
+  if (!title) { statusNode.textContent = "Enter a rhyme title first."; return; }
+  button.disabled = true;
+  statusNode.textContent = "Writing original lyrics and storyboard with the AI provider. Please keep this page open.";
+  try {
+    const data = await youtubeApi("/api/youtube/production-jobs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rhyme_title: title })
+    });
+    statusNode.textContent = data.message || "Production job queued.";
+    let attempts = 0;
+    const poll = async () => {
+      const jobs = await loadYoutubeProductionJobs();
+      const current = jobs.find(item => item.id === data.job?.id);
+      if (current && ["queued", "planning", "rendering", "uploading"].includes(current.status) && attempts < 30) {
+        attempts += 1;
+        setTimeout(poll, 6000);
+      }
+    };
+    await loadYoutubeProductionJobs();
+    setTimeout(poll, 6000);
+  } catch (error) {
+    statusNode.textContent = "Could not start production: " + error.message;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+document.getElementById("youtubeProductionStartButton")?.addEventListener("click", startYoutubeProduction);
+
 
 function addYoutubeMetric(parent, label, value) {
   const card = document.createElement("article");
@@ -988,6 +1100,7 @@ function addYoutubeMetric(parent, label, value) {
 }
 
 async function loadYoutubeStatus() {
+  void loadYoutubeProductionJobs();
   if (!approvalAccessToken) {
     resetYoutubePanel("Sign in as the owner to check the YouTube connection.");
     return;

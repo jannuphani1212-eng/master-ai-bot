@@ -103,6 +103,15 @@
   <div class="workspace-section-heading"><div><div class="eyebrow">PERSISTENT PRODUCTION MEMORY</div><h3>Rhyme Production Progress</h3></div><button type="button" class="secondary" id="youtubeRhymeMemoryRefresh">Refresh progress</button></div>
   <p id="youtubeRhymeMemoryStatus" class="muted" aria-live="polite">Sign in to load saved rhyme projects.</p>
   <div id="youtubeRhymeMemoryList" class="rhyme-memory-list"></div>
+</div><div class="rhyme-memory-panel" id="youtubeVideoProductionPanel">
+  <div class="eyebrow">ZERO-BUDGET VIDEO WORKSHOP</div>
+  <h3>Autonomous nursery rhyme production</h3>
+  <p class="muted">Start a rhyme once. The specialist writes the original lyrics and storyboard, renders a 2D cartoon MP4 with captions and original instrumental music, and saves it privately for your review. Offline computer-generated spoken narration is included; the voice sounds synthetic rather than human. Publishing remains disabled.</p>
+  <label for="youtubeProductionTitle">Rhyme title</label>
+  <input id="youtubeProductionTitle" maxlength="180" value="Rainbow's Little Parade">
+  <button type="button" id="youtubeProductionStartButton" class="primary-button">Create rhyme video →</button>
+  <p id="youtubeProductionStatus" class="muted" aria-live="polite">Sign in as owner to start video production.</p>
+  <div id="youtubeProductionJobs" class="rhyme-memory-list"></div>
 </div><div id="youtubeChannel" class="youtube-channel" hidden></div><h3 id="youtubeVideosHeading" hidden>Recent videos</h3><div id="youtubeVideos" class="youtube-video-grid"></div><h3 id="youtubeAnalyticsHeading" hidden>Last 28 days analytics</h3><div id="youtubeAnalytics" class="youtube-analytics"></div></section>
 </main><footer>MASTER AI BOT <span>·</span> You stay in control of every external action.</footer>
 <dialog id="ownerLoginDialog" class="modal"><div class="modal-head"><div><div class="eyebrow">RESTRICTED ACCESS</div><h2>Owner sign in</h2></div><button type="button" id="closeLoginDialog" class="icon-button" aria-label="Close">×</button></div><p class="muted">Sign in with your Supabase owner account to open private controls, approvals and connected account data.</p><p id="loginFeedback" class="muted" aria-live="polite"></p><form id="approvalLoginForm" class="approval-form"><label for="approvalEmail">Owner email</label><input id="approvalEmail" type="email" autocomplete="username" required><label for="approvalPassword">Password</label><input id="approvalPassword" type="password" autocomplete="current-password" required><button type="submit" id="approvalLoginButton" class="primary-button">Sign in securely</button></form></dialog>

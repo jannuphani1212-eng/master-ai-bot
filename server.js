@@ -18,6 +18,8 @@ import { createYoutubeIntegrationHandlers, getYoutubeAgentContext } from "./lib/
 import { createAgnesVideoHandlers } from "./lib/agnes-video.js";
 import { createAgentHistoryHandlers } from "./lib/supabase-task-history.js";
 import { createYoutubeRhymeMemory } from "./lib/youtube-rhyme-memory.js";
+import { createYoutubeVideoJobStore, createYoutubeVideoJobHandlers } from "./lib/youtube-video-jobs.js";
+import { renderNurseryRhymeVideo } from "./lib/youtube-video-renderer.js";
 import { buildYoutubeTaskContext } from "./lib/youtube-task-context.js";
 import { parseSynthesisReuseRequest, validateSavedSpecialistReports } from "./lib/synthesis-reuse.js";
 import { createAgentPortfolioHandlers } from "./lib/agent-portfolio.js";
@@ -92,6 +94,8 @@ app.use(express.json({ limit: "1mb" }));
 const requireOwner = createOwnerAuthMiddleware();
 const agentHistoryHandlers = createAgentHistoryHandlers();
 const youtubeRhymeMemory = createYoutubeRhymeMemory();
+const youtubeVideoJobStore = createYoutubeVideoJobStore();
+const youtubeVideoJobHandlers = createYoutubeVideoJobHandlers(youtubeVideoJobStore);
 const agentPortfolioHandlers = createAgentPortfolioHandlers();
 const persistentQueue = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY ? createPersistentQueue() : null;
 const blogCmsHandlers = createBlogCmsHandlers();
@@ -1422,6 +1426,145 @@ const youtubeRhymeMemoryHandlers = youtubeRhymeMemory;
 app.get("/api/youtube/rhyme-projects", youtubeRhymeMemoryHandlers.listHandler);
 app.post("/api/youtube/rhyme-projects", youtubeRhymeMemoryHandlers.saveHandler);
 app.get("/api/youtube/rhyme-projects/:id", youtubeRhymeMemoryHandlers.getHandler);
+app.get("/api/youtube/production-jobs", youtubeVideoJobHandlers.list);
+app.get("/api/youtube/production-jobs/:id", youtubeVideoJobHandlers.get);
+const activeYoutubeVideoJobs = new Set();
+
+async function runYoutubeVideoJob(job) {
+  const ownerId = job?.owner_user_id;
+  if (!ownerId || !job?.id || activeYoutubeVideoJobs.has(job.id)) return;
+  activeYoutubeVideoJobs.add(job.id);
+  try {
+    const scenes = Array.isArray(job.production_spec?.scenes) ? job.production_spec.scenes.slice(0, 8) : [];
+    if (scenes.length < 5) throw new Error("Saved production job is missing its complete storyboard.");
+    const assetPaths = { ...(job.asset_paths || {}), scenes: { ...(job.asset_paths?.scenes || {}) } };
+    const sceneImages = {};
+    for (let i = 0; i < scenes.length; i++) {
+      const savedPath = assetPaths.scenes[String(i + 1)];
+      if (savedPath) sceneImages[i] = await youtubeVideoJobStore.download(ownerId, job.id, savedPath);
+    }
+    const completed = new Set(Object.keys(assetPaths.scenes).map(Number));
+    await youtubeVideoJobStore.update(ownerId, job.id, {
+      status: "rendering",
+      total_scenes: scenes.length,
+      completed_scenes: [...completed].sort((a, b) => a - b),
+      next_scene: scenes.findIndex((_, index) => !sceneImages[index]) + 1 || null,
+      retry_at: null,
+      last_error: null
+    });
+    const rendered = await renderNurseryRhymeVideo({
+      title: job.rhyme_title,
+      scenes: scenes.map(scene => ({ caption: scene.caption || scene.visualDescription })),
+      sceneImages,
+      narrationText: job.script,
+      onSceneRendered: async (index, imageBytes) => {
+        const sceneNumber = index + 1;
+        const scenePath = await youtubeVideoJobStore.upload(ownerId, job.id,
+          "scene-" + String(sceneNumber).padStart(2, "0") + ".png", imageBytes, "image/png");
+        assetPaths.scenes[String(sceneNumber)] = scenePath;
+        completed.add(sceneNumber);
+        const next = scenes.findIndex((_, sceneIndex) => !completed.has(sceneIndex + 1));
+        await youtubeVideoJobStore.update(ownerId, job.id, {
+          status: "rendering",
+          completed_scenes: [...completed].sort((a, b) => a - b),
+          next_scene: next < 0 ? null : next + 1,
+          asset_paths: assetPaths
+        });
+      }
+    });
+    await youtubeVideoJobStore.update(ownerId, job.id, { status: "uploading", completed_scenes: [...completed].sort((a, b) => a - b), next_scene: null });
+    const videoPath = await youtubeVideoJobStore.upload(ownerId, job.id, "rhyme-video.mp4", rendered.video, "video/mp4");
+    const thumbnailPath = await youtubeVideoJobStore.upload(ownerId, job.id, "thumbnail.png", rendered.thumbnail, "image/png");
+    const narrationPath = await youtubeVideoJobStore.upload(ownerId, job.id, "narration.wav", rendered.narration, "audio/wav");
+    await youtubeVideoJobStore.update(ownerId, job.id, {
+      status: "ready_for_review",
+      completed_scenes: scenes.map((_, index) => index + 1),
+      next_scene: null,
+      retry_at: null,
+      video_path: videoPath,
+      thumbnail_path: thumbnailPath,
+      asset_paths: { ...assetPaths, video: videoPath, thumbnail: thumbnailPath, narration: narrationPath },
+      metadata: {
+        renderStyle: rendered.renderStyle,
+        durationSeconds: rendered.durationSeconds,
+        music: rendered.audio.music,
+        narration: rendered.audio.narration,
+        narrationRequired: true,
+        youtubeMetadata: job.production_spec?.youtubeMetadata || {},
+        policyPreflight: job.production_spec?.policyPreflight || {},
+        ownerApprovalRequired: true,
+        publishingEnabled: false,
+        limitations: ["Spoken narration is synthesized with an offline computer voice and may sound robotic; no sung vocals are generated.", "Policy preflight is an AI draft, not legal clearance or a monetization guarantee."]
+      }
+    });
+  } catch (error) {
+    console.error("YouTube video production job failed:", error.message);
+    const attempts = Number(job.retry_attempts || 0) + 1;
+    const canRetry = attempts < 3;
+    try {
+      await youtubeVideoJobStore.update(ownerId, job.id, {
+        status: canRetry ? "queued" : "failed",
+        retry_attempts: attempts,
+        retry_at: canRetry ? new Date(Date.now() + attempts * 60000).toISOString() : null,
+        last_error: String(error.message || error).slice(0, 1200)
+      });
+    } catch (saveError) {
+      console.error("Could not persist YouTube production failure:", saveError.message);
+    }
+  } finally {
+    activeYoutubeVideoJobs.delete(job.id);
+  }
+}
+async function resumeYoutubeVideoJobs() {
+  try {
+    const pending = await youtubeVideoJobStore.listPending(10);
+    for (const job of pending) void runYoutubeVideoJob(job);
+  } catch (error) {
+    console.error("YouTube production recovery check failed:", error.message);
+  }
+}
+app.post("/api/youtube/production-jobs", async (req, res) => {
+  let job = null;
+  try {
+    const rhymeTitle = String(req.body?.rhyme_title || req.body?.rhymeTitle || "Rainbow's Little Parade").trim().slice(0, 180);
+    const prompt = "Create an original preschool nursery rhyme production for the children's YouTube channel Global Rhymes 4U. Title: " + rhymeTitle + ". Return ONLY one JSON object with keys rhymeTitle, script, scenes, youtubeMetadata, policyPreflight. script must contain complete original lyrics. scenes must be an array of 5 to 8 objects, each with a short caption (maximum 100 characters) and a visualDescription for an original friendly 2D cartoon scene. Keep the same cute yellow baby bird character in every scene, with consistent appearance and child-safe cheerful backgrounds. No copyrighted characters, melodies, lyrics, brands, or imitation of known artists. Make captions correspond to the lyrics. youtubeMetadata must include a concise YouTube title, description, and 8 to 15 relevant tags. policyPreflight must include an originality statement, madeForKids recommendation, childSafety notes, and monetization caveat. These are preliminary AI suggestions, never claim legal clearance or guaranteed monetization.";
+    const generated = await generateAI(prompt,
+      "You are an original children's rhyme writer and storyboard artist. Output valid JSON only. Use simple, age-appropriate language and positive themes. Do not include production claims that cannot be verified.", 2400);
+    const plan = extractJson(generated.result);
+    const scenes = Array.isArray(plan.scenes) ? plan.scenes.slice(0, 8) : [];
+    const script = String(plan.script || "").trim().slice(0, 30000);
+    const metadata = plan.youtubeMetadata && typeof plan.youtubeMetadata === "object" ? plan.youtubeMetadata : {};
+    const policyPreflight = plan.policyPreflight && typeof plan.policyPreflight === "object" ? plan.policyPreflight : {};
+    const youtubeMetadata = {
+      title: String(metadata.title || plan.rhymeTitle || rhymeTitle).trim().slice(0, 100),
+      description: String(metadata.description || "Original nursery rhyme for Global Rhymes 4U.").trim().slice(0, 5000),
+      tags: Array.isArray(metadata.tags) ? metadata.tags.map(tag => String(tag).trim().slice(0, 40)).filter(Boolean).slice(0, 15) : [],
+      policyPreflight: {
+        originality: String(policyPreflight.originality || "AI-generated draft; human review required.").slice(0, 500),
+        madeForKids: String(policyPreflight.madeForKids || "Likely made for kids; confirm the audience setting before publishing.").slice(0, 500),
+        childSafety: String(policyPreflight.childSafety || "Owner must review all lyrics and visuals for child safety.").slice(0, 500),
+        monetization: String(policyPreflight.monetization || "No monetization or policy compliance guarantee.").slice(0, 500)
+      }
+    };
+    if (script.length < 80 || scenes.length < 5 || scenes.some(scene => !String(scene.caption || scene.visualDescription || "").trim())) {
+      throw new Error("The AI production plan did not contain a complete rhyme and at least five usable scenes.");
+    }
+    job = await youtubeVideoJobStore.create(req.ownerUser.id, {
+      rhyme_title: String(plan.rhymeTitle || rhymeTitle).slice(0, 180),
+      script,
+      scenes,
+      production_spec: { provider: generated.provider, scenes, youtubeMetadata, policyPreflight: youtubeMetadata.policyPreflight, characterContinuity: "One consistent original yellow baby bird character", visualStyle: "2D vector cartoon", music: "original synthesized instrumental", narration: "offline English speech synthesis from the complete original lyrics" }
+    });
+    res.status(202).json({ success: true, job, message: "Rhyme and storyboard created. Rendering has started. Spoken narration uses an offline synthetic voice, not a human voice or sung vocals.", reviewRequired: true, publishingEnabled: false });
+    void runYoutubeVideoJob(job);
+  } catch (error) {
+    return res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+const youtubeVideoRecoveryTimer = setInterval(resumeYoutubeVideoJobs, 30000);
+if (typeof youtubeVideoRecoveryTimer.unref === "function") youtubeVideoRecoveryTimer.unref();
+setTimeout(resumeYoutubeVideoJobs, 5000).unref?.();
 
 // Agnes video generation is owner-only and remains locked until its free-tier
 // eligibility has been verified in the provider console and explicitly enabled.
