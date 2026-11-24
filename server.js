@@ -1508,12 +1508,6 @@ app.post("/api/youtube/production-jobs", async (req, res) => {
     });
     res.status(202).json({ success: true, job, message: "Rhyme and storyboard created. Rendering has started. Narration is not yet available in this zero-budget renderer.", reviewRequired: true, publishingEnabled: false });
     void runYoutubeVideoJob(job);
-
-      } catch (error) {
-        console.error("YouTube video production job failed:", error.message);
-        try { await youtubeVideoJobStore.update(req.ownerUser.id, job.id, { status: "failed", last_error: String(error.message || error).slice(0, 1200) }); } catch (saveError) { console.error("Could not persist YouTube production failure:", saveError.message); }
-      }
-    });
   } catch (error) {
     return res.status(400).json({ success: false, error: error.message });
   }
