@@ -401,7 +401,7 @@ app.post("/api/internal/daily-run", async (req, res) => {
   const dayKey = indiaDayKey();
   try {
     const priority = { affiliate: 10, youtube: 20, blogging: 30, "app-development": 40, seo: 100 };
-    const recentBlogDrafts = await persistentQueue.recentBlogTopics(ownerId, 30);
+    const recentBlogDrafts = await persistentQueue.recentBlogTopics(ownerId, 200);
     const blogTask = buildDailyBlogTask({
       dayKey,
       priorTopics: recentBlogDrafts.map(item => item.topic)
