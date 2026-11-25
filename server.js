@@ -255,7 +255,7 @@ async function processDailyQueue(ownerId, dayKey) {
       let blogReview = null;
       if (job.agent_id === "blogging") {
         const article = extractBlogArticle(generated.result, dayKey);
-        blogReview = reviewBlogArticle(article);
+        blogReview = reviewBlogArticle({ ...article, dayKey });
         const savedDraft = await persistentQueue.saveBlogDraft(ownerId, job.id, {
           topic: article.title,
           language: "English",
