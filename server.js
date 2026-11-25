@@ -255,6 +255,9 @@ async function processDailyQueue(ownerId, dayKey) {
       let blogReview = null;
       if (job.agent_id === "blogging") {
         const article = extractBlogArticle(generated.result, dayKey);
+        if (article.extractionStatus !== "complete") {
+          throw new Error("Blog article extraction failed: full article body was not found or was too short. The draft was not saved; the queue will retry.");
+        }
         blogReview = reviewBlogArticle({ ...article, dayKey });
         const savedDraft = await persistentQueue.saveBlogDraft(ownerId, job.id, {
           topic: article.title,
