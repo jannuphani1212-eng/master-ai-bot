@@ -1599,16 +1599,31 @@ app.post("/api/youtube/production-jobs", async (req, res) => {
       scenes,
       production_spec: { provider: generated.provider, scenes, youtubeMetadata, policyPreflight: youtubeMetadata.policyPreflight, characterContinuity: "One consistent original yellow baby bird character", visualStyle: "2D vector cartoon", music: "original synthesized instrumental", narration: "captions and original instrumental audio; speech synthesis disabled on the free memory-limited deployment" }
     });
-    res.status(202).json({ success: true, job, message: "Rhyme and storyboard created. Captioned video rendering has started with original instrumental audio. Spoken narration is disabled on this memory-limited free deployment.", reviewRequired: true, publishingEnabled: false });
-    void runYoutubeVideoJob(job);
+    const workerEnabled = process.env.YOUTUBE_VIDEO_WORKER_ENABLED === "true";
+    res.status(202).json({
+      success: true,
+      job,
+      message: workerEnabled
+        ? "Rhyme and storyboard created. Video rendering has been queued for the background worker. Publishing remains disabled."
+        : "Rhyme and storyboard saved safely. Video rendering is paused because this free web instance has a 512 MB memory limit; the job remains queued for a dedicated worker.",
+      reviewRequired: true,
+      publishingEnabled: false,
+      videoWorkerEnabled: workerEnabled
+    });
+    if (workerEnabled) void runYoutubeVideoJob(job);
   } catch (error) {
     return res.status(400).json({ success: false, error: error.message });
   }
 });
 
-const youtubeVideoRecoveryTimer = setInterval(resumeYoutubeVideoJobs, 30000);
-if (typeof youtubeVideoRecoveryTimer.unref === "function") youtubeVideoRecoveryTimer.unref();
-setTimeout(resumeYoutubeVideoJobs, 5000).unref?.();
+// Video recovery is opt-in: running FFmpeg alongside the API can exceed
+// Render's 512 MB free-instance memory limit. Keep queued jobs durable until
+// a separately sized worker is explicitly enabled.
+if (process.env.YOUTUBE_VIDEO_WORKER_ENABLED === "true") {
+  const youtubeVideoRecoveryTimer = setInterval(resumeYoutubeVideoJobs, 30000);
+  if (typeof youtubeVideoRecoveryTimer.unref === "function") youtubeVideoRecoveryTimer.unref();
+  setTimeout(resumeYoutubeVideoJobs, 5000).unref?.();
+}
 
 // Agnes video generation is owner-only and remains locked until its free-tier
 // eligibility has been verified in the provider console and explicitly enabled.
