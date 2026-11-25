@@ -27,6 +27,7 @@ import { createAuditMiddleware } from "./lib/audit-log.js";
 import { createPersistentQueue } from "./lib/persistent-queue.js";
 import { createBlogCmsHandlers } from "./lib/blog-cms-integration.js";
 import { createInstagramIntegrationHandlers } from "./lib/instagram-integration.js";
+import { buildDailyBlogTask, extractBlogArticle, reviewBlogArticle } from "./lib/blog-automation.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -249,24 +250,41 @@ async function processDailyQueue(ownerId, dayKey) {
         ).join("\n\n");
         if (context) task += "\n\nTODAY'S COMPLETED WORKSTREAM OUTPUTS:\n" + context;
       }
-      const generated = await generateAI(task, agentInstructions[job.agent_id], 2600);
+      const generated = await generateAI(task, agentInstructions[job.agent_id], job.agent_id === "blogging" ? 4300 : 2600);
       const savedAssets = {};
+      let blogReview = null;
       if (job.agent_id === "blogging") {
-        const titleMatch = String(generated.result).match(/^(?:\*\*)?(?:Article title|Working title|Title)(?:\*\*)?\s*[:：-]\s*(.+)$/im);
-        const headingMatch = String(generated.result).match(/^#{1,3}\s+(.+)$/m);
-        const keywordMatch = String(generated.result).match(/^(?:Primary target keyword|Target keyword|Primary keyword)(?:\*\*)?\s*[:：-]\s*(.+)$/im);
-        const articleTitle = String(titleMatch?.[1] || headingMatch?.[1] || ("Daily article draft " + dayKey)).trim().slice(0, 180);
+        const article = extractBlogArticle(generated.result, dayKey);
+        blogReview = reviewBlogArticle(article);
         const savedDraft = await persistentQueue.saveBlogDraft(ownerId, job.id, {
-          topic: articleTitle,
+          topic: article.title,
           language: "English",
           audience: "India-focused readers",
-          targetKeyword: keywordMatch?.[1] || "",
+          targetKeyword: article.primaryKeyword,
           provider: generated.provider,
           report: generated.result,
-          content: { title: articleTitle, report: generated.result, source: "master_ai_daily_queue", dayKey }
+          content: {
+            title: article.title,
+            article: article.article,
+            metaDescription: article.metaDescription,
+            primaryKeyword: article.primaryKeyword,
+            wordCount: article.wordCount,
+            editorialReview: blogReview,
+            fullReport: generated.result,
+            source: "master_ai_daily_queue",
+            dayKey,
+            cmsPublication: "owner_approval_required",
+            actualIncome: "not_connected_or_not_measured"
+          }
         });
+        if (!savedDraft.verified) throw new Error("Blog draft storage did not return a verified read-back result.");
         savedAssets.blogDraftId = savedDraft.id;
         savedAssets.blogDraftInserted = savedDraft.inserted;
+        savedAssets.blogDraftVerified = true;
+        savedAssets.articleWordCount = article.wordCount;
+        savedAssets.editorialScore = blogReview.score;
+        savedAssets.editorialStatus = blogReview.status;
+        savedAssets.cmsTransfer = "approval_required";
       }
       if (job.agent_id === "affiliate") {
         const titleMatch = String(generated.result).match(/^(?:\\*\\*)?(?:Campaign title|Working title|Title)(?:\\*\\*)?\\s*[:：-]\\s*(.+)$/im) ||
@@ -296,7 +314,11 @@ async function processDailyQueue(ownerId, dayKey) {
           console.error("Daily YouTube rhyme state could not be saved:", memoryError.message);
         }
       }
-      const review = reviewSpecialistReport(generated.result);
+      const review = job.agent_id === "blogging"
+        ? { ...blogReview, status: blogReview?.status || "needs_review", score: blogReview?.score ?? 0,
+            warnings: (blogReview?.failures || []).map(item => "Blog editorial check failed: " + item),
+            disclaimer: blogReview?.disclaimer || "Editorial quality requires owner review." }
+        : reviewSpecialistReport(generated.result);
       const result = {
         success: review.status === "passed",
         needsAttention: review.status !== "passed",
@@ -375,8 +397,16 @@ app.post("/api/internal/daily-run", async (req, res) => {
   const dayKey = indiaDayKey();
   try {
     const priority = { affiliate: 10, youtube: 20, blogging: 30, "app-development": 40, seo: 100 };
+    const recentBlogDrafts = await persistentQueue.recentBlogTopics(ownerId, 30);
+    const blogTask = buildDailyBlogTask({
+      dayKey,
+      priorTopics: recentBlogDrafts.map(item => item.topic)
+    });
     const items = Object.entries(DAILY_ASSIGNMENTS).map(([agentId, task]) => ({
-      agentId, task, priority: priority[agentId], idempotencyKey: "daily:" + dayKey + ":" + agentId
+      agentId,
+      task: agentId === "blogging" ? blogTask : task,
+      priority: priority[agentId],
+      idempotencyKey: "daily:" + dayKey + ":" + agentId
     }));
     const queued = await persistentQueue.enqueue(ownerId, items);
     void startDailyWorker(ownerId, dayKey).catch(error => console.error("Daily queue worker stopped:", error.message));
