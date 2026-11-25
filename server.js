@@ -27,7 +27,7 @@ import { createAuditMiddleware } from "./lib/audit-log.js";
 import { createPersistentQueue } from "./lib/persistent-queue.js";
 import { createBlogCmsHandlers } from "./lib/blog-cms-integration.js";
 import { createInstagramIntegrationHandlers } from "./lib/instagram-integration.js";
-import { buildDailyBlogTask, extractBlogArticle, reviewBlogArticle } from "./lib/blog-automation.js";
+import { buildDailyBlogTask, ensureBlogOriginalityCaveat, extractBlogArticle, reviewBlogArticle } from "./lib/blog-automation.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -251,6 +251,7 @@ async function processDailyQueue(ownerId, dayKey) {
         if (context) task += "\n\nTODAY'S COMPLETED WORKSTREAM OUTPUTS:\n" + context;
       }
       const generated = await generateAI(task, agentInstructions[job.agent_id], job.agent_id === "blogging" ? 4300 : 2600);
+      if (job.agent_id === "blogging") generated.result = ensureBlogOriginalityCaveat(generated.result);
       const savedAssets = {};
       let blogReview = null;
       if (job.agent_id === "blogging") {
