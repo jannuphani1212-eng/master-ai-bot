@@ -613,8 +613,17 @@ async function ownerAuthenticatedFetch(path, options = {}) {
 async function approvalApi(path, options = {}) {
   if (!(await ensureApprovalSession())) throw new Error("Your owner session is not available. Please sign in again.");
   const response = await ownerAuthenticatedFetch(path, options);
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || "Approval request failed.");
+  const body = await response.text();
+  let data = {};
+  if (body) {
+    try { data = JSON.parse(body); }
+    catch { throw new Error("The server returned an invalid response (HTTP " + response.status + "). Please retry after the service is stable."); }
+  } else if (!response.ok) {
+    throw new Error("The server returned an empty response (HTTP " + response.status + "). It may be restarting or unavailable.");
+  } else {
+    throw new Error("The server returned an empty response. Please retry.");
+  }
+  if (!response.ok) throw new Error(data.error || "Approval request failed (HTTP " + response.status + ").");
   return data;
 }
 
