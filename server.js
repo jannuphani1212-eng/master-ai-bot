@@ -28,7 +28,7 @@ import { createAuditMiddleware } from "./lib/audit-log.js";
 import { createPersistentQueue } from "./lib/persistent-queue.js";
 import { createBlogCmsHandlers } from "./lib/blog-cms-integration.js";
 import { createInstagramIntegrationHandlers } from "./lib/instagram-integration.js";
-import { buildDailyBlogTask, ensureBlogOriginalityCaveat, extractBlogArticle, reviewBlogArticle } from "./lib/blog-automation.js";
+import { buildDailyBlogTask, buildBlogRevisionTask, ensureBlogOriginalityCaveat, extractBlogArticle, reviewBlogArticle } from "./lib/blog-automation.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -255,6 +255,9 @@ async function processDailyQueue(ownerId, dayKey) {
       }
       // Keep the sports article output budget compatible with the free Groq TPM window.
       // 1,900 requested tokens maps to 2,500 max_completion_tokens in callGroq.
+      if (job.agent_id === "blogging") {
+        task = buildBlogRevisionTask({ task, attempt: job.attempts, previousError: job.last_error });
+      }
       const generated = await generateAI(task, agentInstructions[job.agent_id], job.agent_id === "blogging" ? 1900 : 2600);
       if (job.agent_id === "blogging") generated.result = ensureBlogOriginalityCaveat(generated.result);
       const savedAssets = {};
@@ -295,6 +298,14 @@ async function processDailyQueue(ownerId, dayKey) {
         savedAssets.editorialScore = blogReview.score;
         savedAssets.editorialStatus = blogReview.status;
         savedAssets.cmsTransfer = "quality_gate_blocked";
+        if (blogReview.status !== "passed" || Number(blogReview.score) < 97) {
+          const details = [
+            "Blog editorial gate failed at " + blogReview.score + "/100.",
+            "Failed checks: " + (blogReview.failures || []).join(", "),
+            "Blockers: " + (blogReview.blockers || []).join(" ")
+          ].join(" ");
+          throw new Error(details.slice(0, 1800));
+        }
         if (blogReview.status === "passed" && Number(blogReview.score) >= 97) {
           try {
             const cmsResult = await blogCmsHandlers.createDailyCmsDraft({ ownerId, draftId: savedDraft.id });
@@ -304,6 +315,9 @@ async function processDailyQueue(ownerId, dayKey) {
             savedAssets.bloggerSiteName = cmsResult.siteName || null;
             savedAssets.bloggerDraftUrl = cmsResult.publication?.remote_url || cmsResult.remoteDraft?.url || null;
             if (!cmsResult.success && cmsResult.message) savedAssets.bloggerDraftMessage = cmsResult.message;
+            if (!savedAssets.bloggerDraftCreated && !savedAssets.bloggerDraftAlreadyCreated) {
+              throw new Error("Blogger private-draft delivery did not complete: " + String(cmsResult.message || cmsResult.status || "unknown CMS result").slice(0, 500));
+            }
           } catch (cmsError) {
             // Keep the verified internal article and report CMS delivery separately.
             // A transient Blogger error must not discard the completed editorial work.
