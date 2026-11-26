@@ -86,12 +86,15 @@ test("does not repeat a truncated response; immediately switches to the next pro
   const calls = [];
   const result = await runProviderFallback([
     { id: "groq", name: "Groq", available: true, call: async () => { calls.push("Groq"); throw new Error("HTTP 429 daily quota exhausted"); } },
-    { id: "openrouter", name: "OpenRouter", available: true, call: async () => { calls.push("OpenRouter"); if (calls.filter(item => item === "OpenRouter").length === 1) throw new Error("OpenRouter response was truncated by its output-token limit (finish_reason=length, partial_chars=0)"); return "recovered response"; } },
-    { id: "gemini", name: "Gemini", available: true, call: async () => { calls.push("Gemini"); return "should not run"; } }
+    { id: "openrouter", name: "OpenRouter", available: true, call: async () => {
+      calls.push("OpenRouter");
+      throw new Error("OpenRouter response was truncated by its output-token limit (finish_reason=length, partial_chars=0)");
+    } },
+    { id: "gemini", name: "Gemini", available: true, call: async () => { calls.push("Gemini"); return "complete fallback response"; } }
   ], { sleep: async () => {} });
-  assert.deepEqual(calls, ["Groq", "OpenRouter"]);
-  assert.equal(result.provider, "OpenRouter");
-  assert.equal(result.result, "recovered response");
+  assert.deepEqual(calls, ["Groq", "OpenRouter", "Gemini"]);
+  assert.equal(result.provider, "Gemini");
+  assert.equal(result.result, "complete fallback response");
 });
 
 test("falls through Groq and OpenRouter to Gemini after bounded failures", async () => {
