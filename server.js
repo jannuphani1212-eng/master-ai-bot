@@ -117,7 +117,7 @@ async function persistTaskHistory(ownerId, agentId, task, data, failure) {
           qualityScore: item.qualityReview?.score,
           report: item.result,
           error: item.error,
-          metadata: { qualityReview: item.qualityReview || null }
+          metadata: { qualityReview: item.qualityReview || null, artifactAcceptance: item.artifactAcceptance || null }
         });
         if (typeof savedId === "string") specialistReportIds.push(savedId);
       }
@@ -141,7 +141,9 @@ async function persistTaskHistory(ownerId, agentId, task, data, failure) {
         totalSpecialists: data?.totalSpecialists ?? null,
         reusedExistingReports: Boolean(data?.reusedReports),
         reusedReportIds: data?.reusedReportIds || [],
-        specialistReportIds: data?.reusedReports ? data.reusedReportIds : specialistReportIds
+        specialistReportIds: data?.reusedReports ? data.reusedReportIds : specialistReportIds,
+        qualityReview: data?.qualityReview || null,
+        artifactAcceptance: data?.artifactAcceptance || null
       }
     });
     if (data?.history && typeof masterHistoryId === "string") data.history.masterHistoryId = masterHistoryId;
