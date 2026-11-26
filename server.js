@@ -206,7 +206,7 @@ let dailyWorkerRunning = false;
 const DAILY_ASSIGNMENTS = {
   affiliate: "Daily production: research one useful India-focused fashion or watch product opportunity. Deliver a cautious product shortlist, buyer problem, comparison criteria, original short-video or blog campaign asset, disclosure text, and tracking plan. Do not invent live prices, stock, commission rates, affiliate eligibility, links, or earnings. Mark every unverified item clearly. Draft only; no posting.",
   youtube: "Daily production for Global Rhymes 4U: continue the saved rhyme project from its exact next unfinished scene if one exists; otherwise create one original English children's rhyme with a complete script, scene-by-scene visual prompts, consistent character and background bible, title, description, and child-safety/copyright checks. Create production-ready text and prompts only. Do not claim a video clip was generated or upload/publish anything.",
-  blogging: "Daily production: create one original, useful, mobile-friendly blog article draft for an India-focused audience. Choose a topic that supports the owner's existing content business, preferably education or useful product comparisons. Include search intent, a clear outline, complete article draft, title, meta description, internal-link ideas, and fact-check flags. Never fabricate citations or publish the article.",
+  blogging: "Daily production for Sports King 18: create one original, mobile-first sports article with a dated verified sports update AND a detailed featured player biography with verified bio data. Rotate across major sports and maintain a deduplicated player-profile backlog. Research with source URLs, fact-check scores/records/career details, deliver attractive SEO-ready writing and save as a private Blogger draft only after the 9.7/10 editorial gate. Never publish live or invent facts.",
   "app-development": "Daily production: identify one small practical Android-first tool or app feature that could support the owner's YouTube, blogging, affiliate, or SEO operations. Deliver a validated problem statement, user stories, beginner-friendly MVP specification, complete implementation plan, acceptance tests, privacy/security notes, and free-first technology choices. Do not deploy or spend.",
   seo: "Daily cross-workstream SEO: review today's completed affiliate, YouTube, blogging, and app-development outputs in the attached queue context. Produce keyword/topic mapping, search intent, title/meta improvements, internal-link and content repurposing recommendations, technical/measurement checklist, and prioritized fixes for all four workstreams. Do not invent search volumes, rankings, traffic, or performance metrics."
 };
@@ -288,7 +288,24 @@ async function processDailyQueue(ownerId, dayKey) {
         savedAssets.articleWordCount = article.wordCount;
         savedAssets.editorialScore = blogReview.score;
         savedAssets.editorialStatus = blogReview.status;
-        savedAssets.cmsTransfer = "approval_required";
+        savedAssets.cmsTransfer = "quality_gate_blocked";
+        if (blogReview.status === "passed" && Number(blogReview.score) >= 97) {
+          try {
+            const cmsResult = await blogCmsHandlers.createDailyCmsDraft({ ownerId, draftId: savedDraft.id });
+            savedAssets.cmsTransfer = cmsResult.status || "not_connected";
+            savedAssets.bloggerDraftCreated = Boolean(cmsResult.success && cmsResult.status === "created");
+            savedAssets.bloggerDraftAlreadyCreated = Boolean(cmsResult.alreadyCreated || cmsResult.status === "already_created");
+            savedAssets.bloggerSiteName = cmsResult.siteName || null;
+            savedAssets.bloggerDraftUrl = cmsResult.publication?.remote_url || cmsResult.remoteDraft?.url || null;
+            if (!cmsResult.success && cmsResult.message) savedAssets.bloggerDraftMessage = cmsResult.message;
+          } catch (cmsError) {
+            // Keep the verified internal article and report CMS delivery separately.
+            // A transient Blogger error must not discard the completed editorial work.
+            savedAssets.cmsTransfer = "failed";
+            savedAssets.bloggerDraftError = String(cmsError.message || cmsError).slice(0, 500);
+            console.error("Automatic Blogger draft delivery failed:", cmsError.message);
+          }
+        }
       }
       if (job.agent_id === "affiliate") {
         const titleMatch = String(generated.result).match(/^(?:\\*\\*)?(?:Campaign title|Working title|Title)(?:\\*\\*)?\\s*[:：-]\\s*(.+)$/im) ||
@@ -346,7 +363,9 @@ async function processDailyQueue(ownerId, dayKey) {
         type: result.success ? "agent_completed" : "agent_needs_attention",
         title: job.agent_id + (result.success ? " completed daily work" : " needs review"),
         body: result.success
-          ? "Daily draft completed using " + generated.provider + ". Review the saved report before any external action."
+          ? (job.agent_id === "blogging"
+              ? "Sports article passed the 9.7/10 editorial gate. Blogger draft delivery: " + String(savedAssets.cmsTransfer || "not attempted") + ". Live publishing remains disabled."
+              : "Daily draft completed using " + generated.provider + ". Review the saved report before any external action.")
           : "Daily draft was saved but quality review needs attention. Check the agent report before using it.",
         metadata: { jobId: job.id, dayKey, provider: generated.provider, qualityScore: review.score ?? null, ...savedAssets }
       }).catch(notificationError => console.error("Could not save completion notification:", notificationError.message));
