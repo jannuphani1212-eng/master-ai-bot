@@ -1468,6 +1468,7 @@ app.use("/api/blog", requireOwner);
 app.use("/api/blog", auditOwnerRequests);
 app.get("/api/blog/connect-url", blogCmsHandlers.connectUrl);
 app.get("/api/blog/status", blogCmsHandlers.status);
+app.post("/api/blog/verify-connection", blogCmsHandlers.verifyConnection);
 app.post("/api/blog/drafts/:id/create-cms-draft", blogCmsHandlers.createCmsDraft);
 
 app.get("/api/instagram/oauth/callback", instagramHandlers.callback);
