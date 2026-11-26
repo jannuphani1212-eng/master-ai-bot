@@ -304,3 +304,13 @@ footer { border-top: 1px solid rgba(92,174,255,.16); color: #8196bd; }
 .youtube-channel-manager{display:grid;gap:.5rem;margin:1rem 0;padding:1rem;border:1px solid rgba(96,165,250,.22);border-radius:14px;background:rgba(10,18,34,.48)}
 .youtube-channel-manager input,.youtube-channel-manager select{width:100%;padding:.7rem .8rem;border:1px solid #334155;border-radius:9px;background:#101a2c;color:inherit;font:inherit}
 .youtube-channel-manager label{font-weight:600}
+
+/* Dedicated, role-specific specialist dashboards */
+.specialist-dashboard-tools{border-color:rgba(57,232,255,.28)}
+#workspaceDashboardSummary{margin:4px 0 0;max-width:760px;line-height:1.5}
+.workspace-quick-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:14px}
+.workspace-quick-action{display:flex;flex-direction:column;align-items:flex-start;gap:9px;min-height:86px;padding:15px;border:1px solid rgba(92,174,255,.25);border-radius:12px;background:rgba(12,25,54,.72);color:var(--text,#f5f6fa);font:inherit;text-align:left;cursor:pointer}
+.workspace-quick-action strong{font-size:14px;line-height:1.35}
+.workspace-quick-action span{color:#83eaff;font-size:12px;font-weight:800}
+.workspace-quick-action:hover,.workspace-quick-action:focus-visible{border-color:rgba(57,232,255,.65);outline:none}
+@media(max-width:620px){.workspace-quick-actions{grid-template-columns:1fr}}
