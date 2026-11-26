@@ -274,6 +274,7 @@ async function processDailyQueue(ownerId, dayKey) {
           report: generated.result,
           content: {
             title: article.title,
+            seoTitle: article.seoTitle,
             article: article.article,
             metaDescription: article.metaDescription,
             primaryKeyword: article.primaryKeyword,
