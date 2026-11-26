@@ -1521,24 +1521,26 @@ async function runYoutubeVideoJob(job) {
     const scenes = Array.isArray(job.production_spec?.scenes) ? job.production_spec.scenes.slice(0, 8) : [];
     if (scenes.length < 5) throw new Error("Saved production job is missing its complete storyboard.");
     const assetPaths = { ...(job.asset_paths || {}), scenes: { ...(job.asset_paths?.scenes || {}) } };
-    const sceneImages = {};
-    for (let i = 0; i < scenes.length; i++) {
-      const savedPath = assetPaths.scenes[String(i + 1)];
-      if (savedPath) sceneImages[i] = await youtubeVideoJobStore.download(ownerId, job.id, savedPath);
-    }
+    // Keep saved artwork in private storage and fetch it sequentially during
+    // rendering. Downloading every PNG into sceneImages at once contributed
+    // to memory spikes and Render restarts on the 512 MiB free web instance.
+    const loadSceneImage = async index => {
+      const savedPath = assetPaths.scenes[String(index + 1)];
+      return savedPath ? youtubeVideoJobStore.download(ownerId, job.id, savedPath) : null;
+    };
     const completed = new Set(Object.keys(assetPaths.scenes).map(Number));
     await youtubeVideoJobStore.update(ownerId, job.id, {
       status: "rendering",
       total_scenes: scenes.length,
       completed_scenes: [...completed].sort((a, b) => a - b),
-      next_scene: scenes.findIndex((_, index) => !sceneImages[index]) + 1 || null,
+      next_scene: scenes.findIndex((_, index) => !completed.has(index + 1)) + 1 || null,
       retry_at: null,
       last_error: null
     });
     const rendered = await renderNurseryRhymeVideo({
       title: job.rhyme_title,
       scenes: scenes.map(scene => ({ caption: scene.caption || scene.visualDescription })),
-      sceneImages,
+      loadSceneImage,
       narrationText: job.script,
       onSceneRendered: async (index, imageBytes) => {
         const sceneNumber = index + 1;
