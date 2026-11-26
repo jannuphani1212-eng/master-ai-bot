@@ -83,6 +83,33 @@ const agentProfiles = {
   "app-development": {name:"App Development",role:"Plans, builds and troubleshoots application projects.",icon:"▣",tag:"PRODUCT & CODE",capabilities:["Turn ideas into app requirements and user flows","Generate implementation plans and code drafts","Review bugs, tests, architecture and release readiness","Explain Android-first steps in beginner-friendly language"],assets:["No app repository, build pipeline or Play Store connection is currently verified by the app."],recommendations:["Register each app project or repository before showing it as a connected asset.","Keep builds and releases owner-approved."]},
   seo: {name:"SEO",role:"Improves discoverability through research, audits and content optimisation.",icon:"⌕",tag:"DISCOVERY",capabilities:["Build keyword clusters and search-intent maps","Prepare technical and on-page SEO audits","Create content briefs and internal-link plans","Interpret Search Console data when connected"],assets:["No website or Search Console property is currently verified by the app."],recommendations:["Connect a verified website and Search Console property to show real clicks, impressions and positions.","Avoid claiming keyword rankings without current measurement data."]}
 };
+const specialistDashboardProfiles = {
+  master: {title:"Command overview",summary:"Coordinate the five specialist workstreams and review their evidence before approving any external action.",actions:[
+    ["Coordinate all five specialists","Prepare a coordinated plan for all five specialists. For each workstream list today's best next task, dependencies, evidence needed, risks and measurable completion criteria. Do not claim tasks were executed."],
+    ["Review team health","Review the latest available specialist reports and identify blockers, weak outputs, provider failures and safe recovery proposals. Do not rerun failed work."]
+  ]},
+  youtube: {title:"YouTube channel dashboard",summary:"Global Rhymes 4U · content planning, channel review and production readiness. Publishing stays owner-approved.",actions:[
+    ["Plan the next original video","Create one original child-safe nursery rhyme video concept for Global Rhymes 4U with lyrics, scene-by-scene storyboard, consistent characters, thumbnail concept, title, description and rights/safety checklist. Clearly label anything not yet generated."],
+    ["Review channel growth","Prepare a channel performance review using only connected, available metrics. Separate verified metrics from unavailable data and recommendations."]
+  ]},
+  affiliate: {title:"Affiliate campaign dashboard",summary:"Research opportunities, prepare compliant campaigns and track only verified clicks and commissions.",actions:[
+    ["Research a zero-cost campaign","Research one suitable India-focused affiliate campaign. Verify official program terms and product facts, disclose affiliate relationships, and do not invent prices, commissions or links."],
+    ["Review campaign performance","Summarise available campaign, click and commission records. Separate measured results from estimates and identify missing tracking."]
+  ]},
+  blogging: {title:"Sports King 18 editorial dashboard",summary:"Multi-sport coverage, player biographies, sourced articles and private-draft readiness for Sports King 18.",actions:[
+    ["Create today's sports article brief","Prepare a researched Sports King 18 article brief covering a timely sports story and a featured player biography. Include source URLs, fact checks, SEO title and outline. Do not invent current news or quotes."],
+    ["Build a player biography","Create a detailed, sourced player biography with career timeline, achievements, statistics only where verified, and a source list. Flag any facts needing verification."],
+    ["Review editorial quality","Audit the latest saved Blogging Specialist report for completeness, originality, source quality, factual support and SEO. Do not retry generation or publish."]
+  ]},
+  "app-development": {title:"App & game development dashboard",summary:"Plan Android-first apps and 2D/3D games, track implementation, tests and release readiness.",actions:[
+    ["Design an app MVP","Turn an app idea into a beginner-friendly MVP specification with screens, user flows, free-first technology choices, risks and test cases. Do not assume paid services."],
+    ["Plan a 2D/3D game","Create a practical 2D/3D game concept, core loop, levels, assets list, engine comparison and Android performance test plan."]
+  ]},
+  seo: {title:"SEO & search visibility dashboard",summary:"Keyword research, content optimisation, technical checks and evidence-based search performance.",actions:[
+    ["Build a keyword plan","Create an intent-based keyword cluster and content plan for the connected site. Label search volume and ranking data unavailable unless verified."],
+    ["Run an SEO audit","Prepare a technical and on-page SEO audit checklist for the connected website. Separate observed issues from checks that still require live access."]
+  ]}
+};
 const AGENT_HISTORY_KEY = "masterAiBot.agentWorkHistory.v1";
 function readAgentHistory() {
   try { const value=JSON.parse(localStorage.getItem(AGENT_HISTORY_KEY)||"{}"); return value&&typeof value==="object"?value:{}; }
@@ -133,6 +160,14 @@ function showWorkspaceMetric(parent,label,value,detail="") {
   addText(card,"span",label,"muted");addText(card,"strong",String(value));
   if(detail)addText(card,"small",detail,"muted");parent.appendChild(card);
 }
+function prepareWorkspaceTask(agentId,prompt) {
+  agentSelect.value=agentId;
+  taskInput.value=prompt;
+  document.getElementById("agentWorkspace").hidden=true;
+  document.querySelector(".agents-panel").hidden=false;
+  taskForm.scrollIntoView({behavior:"smooth",block:"start"});
+  taskInput.focus();
+}
 function openAgentWorkspace(agentId) {
   const profile=agentProfiles[agentId];if(!profile)return;
   currentWorkspaceAgent=agentId;
@@ -142,6 +177,20 @@ function openAgentWorkspace(agentId) {
   document.getElementById("workspaceEyebrow").textContent=profile.tag+" WORKSPACE";
   document.getElementById("workspaceTitle").textContent=profile.name;
   document.getElementById("workspaceDescription").textContent=profile.role;
+  const dashboard=specialistDashboardProfiles[agentId]||specialistDashboardProfiles.master;
+  document.getElementById("workspaceDashboardTitle").textContent=dashboard.title;
+  document.getElementById("workspaceDashboardSummary").textContent=dashboard.summary;
+  const quickActions=document.getElementById("workspaceQuickActions");
+  quickActions.replaceChildren();
+  dashboard.actions.forEach(([label,prompt])=>{
+    const button=document.createElement("button");
+    button.type="button";button.className="workspace-quick-action";
+    const title=document.createElement("strong");title.textContent=label;
+    const hint=document.createElement("span");hint.textContent="Prepare task →";
+    button.append(title,hint);
+    button.addEventListener("click",()=>prepareWorkspaceTask(agentId,prompt));
+    quickActions.appendChild(button);
+  });
   document.getElementById("workspaceHealth").textContent=(latestStatusData?.specialistHealth?.agents?.find(item=>item.agentId===agentId)?.status||"registered").replace("-"," ");
   const capabilities=document.getElementById("workspaceCapabilities");capabilities.replaceChildren();
   profile.capabilities.forEach(value=>addText(capabilities,"li",value));
