@@ -25,6 +25,7 @@ import { parseSynthesisReuseRequest, validateSavedSpecialistReports } from "./li
 import { createAgentPortfolioHandlers } from "./lib/agent-portfolio.js";
 import { createAuditMiddleware } from "./lib/audit-log.js";
 import { createPersistentQueue } from "./lib/persistent-queue.js";
+import { extractAffiliateCampaignTitle } from "./lib/affiliate-campaign-title.js";
 import { createBlogCmsHandlers } from "./lib/blog-cms-integration.js";
 import { createInstagramIntegrationHandlers } from "./lib/instagram-integration.js";
 import { buildDailyBlogTask, ensureBlogOriginalityCaveat, extractBlogArticle, reviewBlogArticle } from "./lib/blog-automation.js";
@@ -310,9 +311,7 @@ async function processDailyQueue(ownerId, dayKey) {
         }
       }
       if (job.agent_id === "affiliate") {
-        const titleMatch = String(generated.result).match(/^(?:\\*\\*)?(?:Campaign title|Working title|Title)(?:\\*\\*)?\\s*[:：-]\\s*(.+)$/im) ||
-          String(generated.result).match(/^#{1,3}\\s+(.+)$/m);
-        const campaignTitle = String(titleMatch?.[1] || ("Daily affiliate research brief " + dayKey)).trim().slice(0, 180);
+        const campaignTitle = extractAffiliateCampaignTitle(generated.result, dayKey);
         const savedCampaign = await persistentQueue.saveAffiliateCampaign(ownerId, job.id, {
           productName: campaignTitle,
           category: "Research brief",
