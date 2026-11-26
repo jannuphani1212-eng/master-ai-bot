@@ -33,3 +33,14 @@ test("each workspace has a dedicated task route and back/refresh navigation", ()
   assert.match(script, /loadPersistentAgentHistory\(agentId\)/);
   assert.match(script, /loadAgentPortfolio\(agentId\)/);
 });
+
+test("each specialist workspace has a dedicated dashboard and role-specific quick actions", () => {
+  const profilesStart = script.indexOf("const specialistDashboardProfiles = {");
+  const profilesEnd = script.indexOf("const AGENT_HISTORY_KEY", profilesStart);
+  assert.ok(profilesStart >= 0 && profilesEnd > profilesStart, "specialist dashboard registry must exist");
+  const profiles = script.slice(profilesStart, profilesEnd);
+  for (const id of agentIds) assert.match(profiles, new RegExp(id === "app-development" ? '"app-development"\\s*:' : id + "\\s*:"), id + " dashboard profile missing");
+  assert.match(html, /id="workspaceQuickActions"/);
+  assert.match(script, /function prepareWorkspaceTask\(agentId,prompt\)/);
+  assert.match(script, /dashboard\.actions\.forEach/);
+});
