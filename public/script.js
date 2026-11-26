@@ -771,6 +771,26 @@ async function loadBlogCmsConnections() {
     : "No blog sites connected yet. Connect Blogger or WordPress.com below.";
 }
 
+
+async function verifyBloggerConnection() {
+  const button = document.getElementById("verifyBloggerConnectionButton");
+  const status = document.getElementById("blogConnectionVerificationStatus");
+  if (!status) return;
+  if (button) button.disabled = true;
+  status.textContent = "Verifying Blogger access with a read-only request…";
+  try {
+    const data = await approvalApi("/api/blog/verify-connection", { method: "POST" });
+    status.textContent = "Verified: " + (data.remoteBlogTitle || data.siteName || "Blogger site") +
+      " · " + (data.siteUrl || "Connected Blogger account") + ". No content was published or changed.";
+    status.className = "muted";
+  } catch (error) {
+    status.textContent = "Blogger access could not be verified: " + error.message;
+    status.className = "warning-text";
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
 async function connectBlogCms(provider) {
   const status = document.getElementById("blogConnectionStatus");
   try {
@@ -993,6 +1013,7 @@ approvalRefreshButton.addEventListener("click", loadApprovalQueue);
 document.getElementById("connectBloggerButton")?.addEventListener("click", () => connectBlogCms("blogger"));
 document.getElementById("connectWordPressButton")?.addEventListener("click", () => connectBlogCms("wordpress"));
 document.getElementById("refreshBlogConnectionsButton")?.addEventListener("click", loadBlogCmsConnections);
+document.getElementById("verifyBloggerConnectionButton")?.addEventListener("click", verifyBloggerConnection);
 document.getElementById("connectInstagramButton")?.addEventListener("click", connectInstagramAccount);
 document.getElementById("refreshInstagramButton")?.addEventListener("click", loadInstagramConnection);
 
