@@ -12,6 +12,7 @@ import { createSelfHealingMonitor, inferFailureType } from "./lib/self-healing.j
 import { buildRepairProposals } from "./lib/repair-proposals.js";
 import { buildAgentReadinessChecks, HEALTH_CHECK_INTERVAL_MS } from "./lib/agent-health-checks.js";
 import { reviewSpecialistReport } from "./lib/quality-review.js";
+import { evaluateSpecialistArtifact } from "./lib/artifact-contract.js";
 import { createSupabaseApprovalHandlers } from "./lib/supabase-approvals.js";
 import { createOwnerAuthMiddleware } from "./lib/owner-auth.js";
 import { createYoutubeIntegrationHandlers, getYoutubeAgentContext } from "./lib/youtube-integration.js";
@@ -342,12 +343,15 @@ async function processDailyQueue(ownerId, dayKey) {
             warnings: (blogReview?.failures || []).map(item => "Blog editorial check failed: " + item),
             disclaimer: blogReview?.disclaimer || "Editorial quality requires owner review." }
         : reviewSpecialistReport(generated.result);
+      const artifactAcceptance = evaluateSpecialistArtifact(job.agent_id, savedAssets);
+      const qualityPassed = review.status === "passed";
       const result = {
-        success: review.status === "passed",
-        needsAttention: review.status !== "passed",
+        success: qualityPassed && artifactAcceptance.complete,
+        needsAttention: !qualityPassed || !artifactAcceptance.complete,
         agent: job.agent_id,
         provider: generated.provider,
         qualityReview: review,
+        artifactAcceptance,
         report: generated.result,
         savedAssets,
         executionMode: "draft_only",
@@ -357,6 +361,7 @@ async function processDailyQueue(ownerId, dayKey) {
         success: result.success,
         provider: result.provider,
         qualityReview: result.qualityReview,
+        artifactAcceptance: result.artifactAcceptance,
         result: result.report
       });
       await persistentQueue.complete(job.id, workerId, result);
@@ -365,10 +370,10 @@ async function processDailyQueue(ownerId, dayKey) {
         type: result.success ? "agent_completed" : "agent_needs_attention",
         title: job.agent_id + (result.success ? " completed daily work" : " needs review"),
         body: result.success
-          ? (job.agent_id === "blogging"
-              ? "Sports article passed the 9.7/10 editorial gate. Blogger draft delivery: " + String(savedAssets.cmsTransfer || "not attempted") + ". Live publishing remains disabled."
-              : "Daily draft completed using " + generated.provider + ". Review the saved report before any external action.")
-          : "Daily draft was saved but quality review needs attention. Check the agent report before using it.",
+          ? "Required specialist deliverable was saved and verified. Review it before any external action."
+          : (!qualityPassed
+              ? "The report did not pass its quality gate. Review the flagged report before using it."
+              : "The report passed structural review, but the actual deliverable is not complete: " + artifactAcceptance.blockers.join(" ")),
         metadata: { jobId: job.id, dayKey, provider: generated.provider, qualityScore: review.score ?? null, ...savedAssets }
       }).catch(notificationError => console.error("Could not save completion notification:", notificationError.message));
       summary.push({ agentId: job.agent_id, status: result.success ? "completed" : "needs_attention", provider: generated.provider, savedAssets });
