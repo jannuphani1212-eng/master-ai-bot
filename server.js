@@ -325,6 +325,9 @@ async function processDailyQueue(ownerId, dayKey) {
             savedAssets.bloggerDraftError = String(cmsError.message || cmsError).slice(0, 500);
             console.error("Automatic Blogger draft delivery failed:", cmsError.message);
           }
+          if (savedAssets.cmsTransfer === "failed") {
+            throw new Error("Blogger private-draft delivery failed and must be retried: " + String(savedAssets.bloggerDraftError || "unknown CMS error"));
+          }
         }
       }
       if (job.agent_id === "affiliate") {
