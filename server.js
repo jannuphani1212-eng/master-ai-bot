@@ -21,6 +21,7 @@ import { createYoutubeRhymeMemory } from "./lib/youtube-rhyme-memory.js";
 import { createYoutubeVideoJobStore, createYoutubeVideoJobHandlers } from "./lib/youtube-video-jobs.js";
 import { renderNurseryRhymeVideo } from "./lib/youtube-video-renderer.js";
 import { buildYoutubeTaskContext } from "./lib/youtube-task-context.js";
+import { extractAffiliateCampaignTitle } from "./lib/daily-content.js";
 import { parseSynthesisReuseRequest, validateSavedSpecialistReports } from "./lib/synthesis-reuse.js";
 import { createAgentPortfolioHandlers } from "./lib/agent-portfolio.js";
 import { createAuditMiddleware } from "./lib/audit-log.js";
@@ -310,9 +311,7 @@ async function processDailyQueue(ownerId, dayKey) {
         }
       }
       if (job.agent_id === "affiliate") {
-        const titleMatch = String(generated.result).match(/^(?:\\*\\*)?(?:Campaign title|Working title|Title)(?:\\*\\*)?\\s*[:：-]\\s*(.+)$/im) ||
-          String(generated.result).match(/^#{1,3}\\s+(.+)$/m);
-        const campaignTitle = String(titleMatch?.[1] || ("Daily affiliate research brief " + dayKey)).trim().slice(0, 180);
+        const campaignTitle = extractAffiliateCampaignTitle(generated.result, dayKey);
         const savedCampaign = await persistentQueue.saveAffiliateCampaign(ownerId, job.id, {
           productName: campaignTitle,
           category: "Research brief",
