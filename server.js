@@ -277,7 +277,7 @@ async function processDailyQueue(ownerId, dayKey) {
             fullReport: generated.result,
             source: "master_ai_daily_queue",
             dayKey,
-            cmsPublication: "owner_approval_required",
+            cmsPublication: "private_draft_auto_delivery_live_publish_owner_approval_required",
             actualIncome: "not_connected_or_not_measured"
           }
         });
