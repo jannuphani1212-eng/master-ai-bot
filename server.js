@@ -250,7 +250,9 @@ async function processDailyQueue(ownerId, dayKey) {
         ).join("\n\n");
         if (context) task += "\n\nTODAY'S COMPLETED WORKSTREAM OUTPUTS:\n" + context;
       }
-      const generated = await generateAI(task, agentInstructions[job.agent_id], job.agent_id === "blogging" ? 4300 : 2600);
+      // Keep the sports article output budget compatible with the free Groq TPM window.
+      // 1,900 requested tokens maps to 2,500 max_completion_tokens in callGroq.
+      const generated = await generateAI(task, agentInstructions[job.agent_id], job.agent_id === "blogging" ? 1900 : 2600);
       if (job.agent_id === "blogging") generated.result = ensureBlogOriginalityCaveat(generated.result);
       const savedAssets = {};
       let blogReview = null;
