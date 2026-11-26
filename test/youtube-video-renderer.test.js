@@ -113,3 +113,27 @@ test("renderer still creates a playable MP4 when offline narration fails", async
   assert.match(result.narrationError, /simulated speech engine failure/);
   assert.equal(result.audio.narration, "unavailable_rendered_with_instrumental_only");
 });
+
+
+test("renderer loads persisted scene images one at a time without re-checkpointing them", async () => {
+  const saved = [];
+  const loaded = [];
+  for (const caption of ["Saved scene one", "Saved scene two"]) {
+    const svg = createSceneSvg({ title: "Resume Test", caption });
+    const sharp = (await import("sharp")).default;
+    saved.push(await sharp(Buffer.from(svg)).png().toBuffer());
+  }
+  const result = await renderNurseryRhymeVideo({
+    title: "Resume Test",
+    scenes: [{ caption: "Saved scene one" }, { caption: "Saved scene two" }],
+    durationPerScene: 3,
+    loadSceneImage: async index => {
+      loaded.push(index);
+      return saved[index];
+    },
+    onSceneRendered: async () => assert.fail("Persisted scenes must not be checkpointed again.")
+  });
+  assert.deepEqual(loaded, [0, 1]);
+  assert.ok(Buffer.isBuffer(result.video));
+  assert.equal(result.video.subarray(4, 8).toString(), "ftyp");
+});
