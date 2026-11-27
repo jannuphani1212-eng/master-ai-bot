@@ -29,7 +29,7 @@ jobs:
           SCHEDULER_SHARED_SECRET: ${{ secrets.SCHEDULER_SHARED_SECRET }}
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 24); do
+          for attempt in $(seq 1 40); do
             response="$(curl --fail-with-body --silent --show-error \
               --request POST \
               --header "Authorization: Bearer ${SCHEDULER_SHARED_SECRET}" \
@@ -51,7 +51,7 @@ jobs:
               echo "Blogging recovery job completed; editorial review and Blogger draft delivery are recorded in the queue."
               exit 0
             fi
-            if [ "$attempt" -lt 24 ]; then sleep 30; fi
+            if [ "$attempt" -lt 40 ]; then sleep 30; fi
           done
-          echo "Blogging recovery did not reach a completed queue state within 12 minutes." >&2
+          echo "Blogging recovery did not reach a completed queue state within 20 minutes." >&2
           exit 1
