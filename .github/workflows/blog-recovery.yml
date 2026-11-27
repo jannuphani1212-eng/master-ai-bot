@@ -6,6 +6,7 @@ name: Master AI Bot Blogging-only recovery
 # Re-run after pending exhausted queue entries are finalized by the recovery route.
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
