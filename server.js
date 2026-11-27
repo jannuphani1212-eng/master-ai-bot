@@ -32,6 +32,7 @@ import { createSearchConsoleHandlers } from "./lib/search-console-integration.js
 import { createAffiliateHandlers } from "./lib/affiliate-integration.js";
 import { createInstagramIntegrationHandlers } from "./lib/instagram-integration.js";
 import { buildDailyBlogTask, buildBlogRevisionTask, ensureBlogOriginalityCaveat, extractBlogArticle, reviewBlogArticle } from "./lib/blog-automation.js";
+import { fetchSportsResearch, formatSportsResearchContext } from "./lib/sports-research.js";
 import { buildDailyReport } from "./lib/daily-report.js";
 
 const app = express();
@@ -290,6 +291,8 @@ async function processDailyQueue(ownerId, dayKey) {
       // 1,900 requested tokens maps to 2,500 max_completion_tokens in callGroq.
       if (job.agent_id === "blogging") {
         task = buildBlogRevisionTask({ task, attempt: job.attempts, previousError: job.last_error });
+        const sportsResearch = await fetchSportsResearch();
+        task += "\n\n" + formatSportsResearchContext(sportsResearch);
       }
       const generated = await generateAI(task, agentInstructions[job.agent_id], job.agent_id === "blogging" ? 1900 : 2600);
       if (job.agent_id === "blogging") {
