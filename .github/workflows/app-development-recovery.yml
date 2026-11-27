@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: master-ai-bot-app-development-recovery
+  group: master-ai-bot-app-development-recovery-v2
   cancel-in-progress: false
 
 jobs:
@@ -54,7 +54,11 @@ jobs:
                 echo "App Development source generation job completed. Check the owner workspace for files and static validation."
                 exit 0
               fi
-              if [[ "$job_status" == "failed" ]]; then
+              worker_running="$(echo "$status_response" | jq -r '.workerRunning // false' 2>/dev/null || echo false)"
+              if [[ "$job_status" == "failed" ]] ||
+                 [[ "$job_status" == "pending" && "$worker_running" != "true" ]]; then
+                # A Render restart can kill the worker after the job is saved.
+                # Re-call the protected endpoint so it safely resumes that same pending job.
                 triggered=false
               fi
             fi
