@@ -30,6 +30,7 @@ import { createPersistentQueue } from "./lib/persistent-queue.js";
 import { createBlogCmsHandlers } from "./lib/blog-cms-integration.js";
 import { createInstagramIntegrationHandlers } from "./lib/instagram-integration.js";
 import { buildDailyBlogTask, buildBlogRevisionTask, ensureBlogOriginalityCaveat, extractBlogArticle, reviewBlogArticle } from "./lib/blog-automation.js";
+import { buildDailyReport } from "./lib/daily-report.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -423,6 +424,27 @@ async function processDailyQueue(ownerId, dayKey) {
     } finally {
       clearInterval(leaseHeartbeat);
     }
+  }
+  try {
+    const dailyJobs = await persistentQueue.dailyResults(ownerId, dayKey);
+    if (dailyJobs.length) {
+      const report = buildDailyReport(dayKey, dailyJobs);
+      const existingNotifications = await persistentQueue.notifications(ownerId);
+      const alreadySent = existingNotifications.some(item =>
+        item.notification_type === "daily_report" && item.title === report.title
+      );
+      if (!alreadySent) {
+        await persistentQueue.notify(ownerId, {
+          agentId: "master",
+          type: "daily_report",
+          title: report.title,
+          body: report.body,
+          metadata: report.metadata
+        });
+      }
+    }
+  } catch (error) {
+    console.error("Could not save the daily Master AI report:", error.message);
   }
   return summary;
 }
