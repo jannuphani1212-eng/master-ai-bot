@@ -137,3 +137,26 @@ test("renderer loads persisted scene images one at a time without re-checkpointi
   assert.ok(Buffer.isBuffer(result.video));
   assert.equal(result.video.subarray(4, 8).toString(), "ftyp");
 });
+
+
+test("renderer assembles a six-scene rhyme with bounded per-scene encoding", async () => {
+  const result = await renderNurseryRhymeVideo({
+    title: "Six Scene Memory Test",
+    scenes: [
+      { caption: "Scene one" },
+      { caption: "Scene two" },
+      { caption: "Scene three" },
+      { caption: "Scene four" },
+      { caption: "Scene five" },
+      { caption: "Scene six" }
+    ],
+    durationPerScene: 3,
+    narrationText: ""
+  });
+  assert.ok(Buffer.isBuffer(result.video));
+  assert.equal(result.video.subarray(4, 8).toString(), "ftyp");
+  assert.equal(result.sceneCount, 6);
+  assert.equal(result.durationSeconds, 18);
+  assert.equal(result.resolution, "854x480");
+  assert.equal(result.frameRate, 15);
+});
