@@ -34,8 +34,8 @@ jobs:
           triggered=false
           for attempt in $(seq 1 40); do
             if [[ "$triggered" != "true" ]]; then
-              trigger_response="$(curl -sS -X POST "${MASTER_AI_BASE_URL%/}/api/internal/app-development-retry" \
-                -H "x-scheduler-secret: $SCHEDULER_SHARED_SECRET" || true)"
+              trigger_response="$(curl -sS -X POST "${MASTER_AI_BOT_URL%/}/api/internal/app-development-retry" \
+                -H "Authorization: Bearer $SCHEDULER_SHARED_SECRET" || true)"
               echo "App Development trigger response: $trigger_response"
               accepted="$(echo "$trigger_response" | jq -r '.success // false' 2>/dev/null || echo false)"
               if [[ "$accepted" == "true" ]]; then
@@ -43,8 +43,8 @@ jobs:
               fi
             fi
 
-            status_response="$(curl -sS "${MASTER_AI_BASE_URL%/}/api/internal/daily-status" \
-              -H "x-scheduler-secret: $SCHEDULER_SHARED_SECRET" || true)"
+            status_response="$(curl -sS "${MASTER_AI_BOT_URL%/}/api/internal/daily-status" \
+              -H "Authorization: Bearer $SCHEDULER_SHARED_SECRET" || true)"
             day_key="$(echo "$status_response" | jq -r '.dayKey // empty' 2>/dev/null || true)"
             if [[ -n "$day_key" ]]; then
               prefix="daily:${day_key}:app-development:recovery:"
