@@ -29,6 +29,7 @@ import { createAuditMiddleware } from "./lib/audit-log.js";
 import { createPersistentQueue } from "./lib/persistent-queue.js";
 import { createBlogCmsHandlers } from "./lib/blog-cms-integration.js";
 import { createSearchConsoleHandlers } from "./lib/search-console-integration.js";
+import { createAffiliateHandlers } from "./lib/affiliate-integration.js";
 import { createInstagramIntegrationHandlers } from "./lib/instagram-integration.js";
 import { buildDailyBlogTask, buildBlogRevisionTask, ensureBlogOriginalityCaveat, extractBlogArticle, reviewBlogArticle } from "./lib/blog-automation.js";
 import { buildDailyReport } from "./lib/daily-report.js";
@@ -106,6 +107,7 @@ const appProjectHandlers = createAppProjectHandlers();
 const persistentQueue = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY ? createPersistentQueue() : null;
 const blogCmsHandlers = createBlogCmsHandlers();
 const searchConsoleHandlers = createSearchConsoleHandlers();
+const affiliateHandlers = createAffiliateHandlers();
 const instagramHandlers = createInstagramIntegrationHandlers();
 const auditOwnerRequests = createAuditMiddleware();
 async function persistTaskHistory(ownerId, agentId, task, data, failure) {
@@ -159,7 +161,7 @@ async function persistTaskHistory(ownerId, agentId, task, data, failure) {
 }
 // Apply IP limits before authentication so invalid-token floods are throttled too.
 // The app currently runs as one Render instance; this in-memory limit is per instance.
-app.use(["/api/task", "/api/brain", "/api/repair-proposals", "/api/agent-history", "/api/agent-portfolio", "/api/app-projects", "/api/agnes-video", "/api/approvals", "/api/blog", "/api/instagram", "/api/search-console"], limitApiRequests);
+app.use(["/api/task", "/api/brain", "/api/repair-proposals", "/api/agent-history", "/api/agent-portfolio", "/api/app-projects", "/api/agnes-video", "/api/approvals", "/api/blog", "/api/instagram", "/api/search-console", "/api/affiliate", "/go"], limitApiRequests);
 app.use(["/api/task", "/api/brain", "/api/repair-proposals", "/api/agent-history", "/api/agent-portfolio", "/api/app-projects", "/api/notifications", "/api/queue"], requireOwner);
 app.use(["/api/task", "/api/brain", "/api/repair-proposals", "/api/agent-history", "/api/agent-portfolio", "/api/app-projects", "/api/notifications", "/api/queue"], auditOwnerRequests);
 app.get("/api/agent-history", agentHistoryHandlers.list);
@@ -1550,6 +1552,13 @@ app.post("/api/blog/verify-connection", blogCmsHandlers.verifyConnection);
 app.post("/api/blog/drafts/:id/create-cms-draft", blogCmsHandlers.createCmsDraft);
 
 // Search Console callback is public but protected by a short-lived signed OAuth state.
+// Public affiliate redirects are allowlisted, logged and never accept arbitrary destinations.
+app.get("/go/:id", limitApiRequests, affiliateHandlers.redirect);
+app.use("/api/affiliate", requireOwner);
+app.use("/api/affiliate", auditOwnerRequests);
+app.get("/api/affiliate/campaigns", affiliateHandlers.list);
+app.patch("/api/affiliate/campaigns/:id/link", affiliateHandlers.saveLink);
+
 app.get("/api/search-console/oauth/callback", limitApiRequests, searchConsoleHandlers.callback);
 app.use("/api/search-console", requireOwner);
 app.use("/api/search-console", auditOwnerRequests);
