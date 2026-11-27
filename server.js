@@ -646,6 +646,53 @@ app.post("/api/internal/blog-retry", async (req, res) => {
   }
 });
 
+app.post("/api/internal/app-development-retry", async (req, res) => {
+  if (!schedulerAuthorized(req)) return res.status(401).json({ success: false, error: "Unauthorized scheduler request." });
+  if (!persistentQueue) return res.status(503).json({ success: false, error: "Persistent queue is not configured." });
+  const ownerId = String(process.env.SUPABASE_OWNER_USER_ID || "");
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(ownerId)) {
+    return res.status(503).json({ success: false, error: "SUPABASE_OWNER_USER_ID is not configured correctly." });
+  }
+  const dayKey = indiaDayKey();
+  try {
+    const recent = await persistentQueue.status(ownerId);
+    const prefix = "daily:" + dayKey + ":app-development:recovery:";
+    const recoveries = recent.filter(item => String(item.idempotency_key || "").startsWith(prefix));
+    const active = recoveries.find(item => ["pending", "running"].includes(item.status));
+    if (active && active.status === "pending" && Number(active.attempts || 0) >= Number(active.max_attempts || 4)) {
+      const finalized = await persistentQueue.finalizeExhaustedPending(active.id);
+      if (finalized.finalized) active.status = "failed";
+    }
+    if (active && ["pending", "running"].includes(active.status)) {
+      let resumedStatus = active.status;
+      let finalAttemptExpired = false;
+      if (active.status === "running" && !dailyWorkerRunning) {
+        const recovery = await persistentQueue.recoverExpired(active.id, 2);
+        if (recovery.recovered) resumedStatus = recovery.status;
+        finalAttemptExpired = recovery.recovered && recovery.status === "failed";
+      }
+      if (!finalAttemptExpired) {
+        void startDailyWorker(ownerId, dayKey).catch(error => console.error("App Development recovery worker stopped:", error.message));
+        return res.status(202).json({ success: true, accepted: false, existing: true, status: resumedStatus, dayKey, message: "An existing App Development recovery was found; stale worker leases are recovered safely and pending work is resumed." });
+      }
+      console.warn("Expired final App Development attempt marked failed; enqueueing a fresh recovery job.");
+    }
+    const recoveryNumber = recoveries.length + 1;
+    const queued = await persistentQueue.enqueue(ownerId, [{
+      agentId: "app-development",
+      task: DAILY_ASSIGNMENTS["app-development"],
+      priority: 20,
+      idempotencyKey: prefix + recoveryNumber,
+      payload: { recovery: true, recoveryNumber, source: "owner_requested_safe_recovery" }
+    }]);
+    void startDailyWorker(ownerId, dayKey).catch(error => console.error("App Development recovery worker stopped:", error.message));
+    return res.status(202).json({ success: true, accepted: queued.inserted > 0, dayKey, recoveryNumber, queued, message: "An App Development-only job was saved. Source files are stored in the owner workspace and statically checked; builds and runtime tests remain separate." });
+  } catch (error) {
+    console.error("App Development recovery request failed:", error.message);
+    return res.status(503).json({ success: false, dayKey, error: error.message });
+  }
+});
+
 app.get("/api/internal/daily-status", async (req, res) => {
   if (!schedulerAuthorized(req)) return res.status(401).json({ success: false, error: "Unauthorized scheduler request." });
   if (!persistentQueue) return res.status(503).json({ success: false, error: "Persistent queue is not configured." });
