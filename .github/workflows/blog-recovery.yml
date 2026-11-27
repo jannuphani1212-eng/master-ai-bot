@@ -2,7 +2,7 @@ name: Master AI Bot Blogging-only recovery
 # Retry the pending draft with the official-source biography claim gate enabled.
 # Resume the stale worker lease after the recovery and token-budget safeguards deploy.
 # Resume after the free sports RSS evidence adapter is deployed.
-# Re-trigger the protected recovery workflow after the recovery worker's retry window.
+# Re-trigger the protected recovery workflow after the official biography evidence gate is deployed.
 
 on:
   push:
