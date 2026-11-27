@@ -55,7 +55,7 @@ test("Groq TPM rate limit is detected and retry delay is bounded", () => {
   const error = new Error("Groq HTTP 429: Rate limit reached on tokens per minute (TPM). Try again in 2.6775s.");
   assert.equal(isRetryableTpmRateLimit(error), true);
   assert.equal(getTpmRetryDelayMs(error), 2678);
-  assert.equal(getTpmRetryDelayMs(new Error("try again in 999s")), 15000);
+  assert.equal(getTpmRetryDelayMs(new Error("HTTP 429 TPM rate limit, try again in 999s")), 60000);
   assert.equal(isRetryableTpmRateLimit(new Error("HTTP 429 daily request quota")), false);
 });
 
