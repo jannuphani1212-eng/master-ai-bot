@@ -44,6 +44,25 @@
 <div class="workspace-metrics" id="workspaceMetrics"></div>
 <div class="workspace-columns"><section class="workspace-block"><h3>What this agent does</h3><ul id="workspaceCapabilities"></ul></section><section class="workspace-block"><h3>Connected assets & portfolio</h3><div id="workspaceAssets"></div></section></div>
 <section class="workspace-block specialist-dashboard-tools"><div class="workspace-section-heading"><div><h3 id="workspaceDashboardTitle">Specialist dashboard</h3><p class="muted" id="workspaceDashboardSummary"></p></div><span class="workspace-kicker">WORKSPACE TOOLS</span></div><div id="workspaceQuickActions" class="workspace-quick-actions"></div></section>
+<section class="workspace-block" id="appProjectEditor" hidden>
+<div class="workspace-section-heading"><div><h3>App & Game Project Studio</h3><p class="muted">Create a saved project, open its files and store source code in your owner account. Saving code does not mean it has been built or tested.</p></div><span class="workspace-kicker">OWNER ONLY</span></div>
+<form id="appProjectCreateForm" class="approval-form">
+<label for="appProjectName">Project name</label><input id="appProjectName" maxlength="160" required placeholder="Example: Daily Sports Scoreboard">
+<label for="appProjectType">Project type</label><select id="appProjectType"><option value="app">Android / Web app</option><option value="game_2d">2D game</option><option value="game_3d">3D game</option></select>
+<label for="appProjectDescription">What should it do?</label><textarea id="appProjectDescription" rows="3" maxlength="4000" placeholder="Describe the user problem and main features"></textarea>
+<button type="submit" id="appProjectCreateButton" class="primary-button">Create project record</button>
+</form>
+<div class="workspace-section-heading"><h3>Saved projects</h3><button type="button" id="appProjectRefreshButton" class="secondary">Refresh</button></div>
+<div id="appProjectList" class="approval-list" aria-live="polite">Sign in to load saved projects.</div>
+<div class="workspace-section-heading"><h3>Source file editor</h3><span id="appProjectSelectedLabel" class="muted">No project selected</span></div>
+<form id="appProjectFileForm" class="approval-form">
+<label for="appProjectFilePath">Relative file path</label><input id="appProjectFilePath" maxlength="240" value="README.md" required placeholder="src/main.js">
+<label for="appProjectFileLanguage">Language</label><input id="appProjectFileLanguage" maxlength="40" value="markdown">
+<label for="appProjectFileContent">File content</label><textarea id="appProjectFileContent" rows="12" required placeholder="Write or paste source code here"></textarea>
+<button type="submit" id="appProjectSaveFileButton" class="primary-button" disabled>Save source file</button>
+</form>
+<p id="appProjectStudioStatus" class="muted" aria-live="polite">Project creation and source-file saving require owner sign-in. Build execution is not enabled in this release.</p>
+</section>
 <section class="workspace-block"><div class="workspace-section-heading"><h3>Work history</h3><span class="muted" id="workspaceHistorySource">Browser-local history</span></div><div id="workspaceHistory"></div></section>
 <section class="workspace-block"><h3>Current recommendations</h3><div id="workspaceRecommendations"></div></section>
 <section class="workspace-block repair-proposals-block" id="workspaceRepairProposals" hidden><div class="workspace-section-heading"><h3>Self-repair proposals</h3><span class="muted">Owner review only</span></div><div id="workspaceRepairProposalList"></div></section>
