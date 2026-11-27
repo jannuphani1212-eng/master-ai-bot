@@ -27,6 +27,8 @@ jobs:
           SCHEDULER_SHARED_SECRET: ${{ secrets.SCHEDULER_SHARED_SECRET }}
         run: |
           set -euo pipefail
+          # Allow the Render auto-deploy from this commit to become live before calling the service.
+          sleep 75
           if [[ -z "${MASTER_AI_BOT_URL:-}" || -z "${SCHEDULER_SHARED_SECRET:-}" ]]; then
             echo "Required scheduler secrets are not configured."
             exit 1
