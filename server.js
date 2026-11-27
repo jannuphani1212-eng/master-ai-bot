@@ -534,6 +534,41 @@ app.post("/api/internal/daily-run", async (req, res) => {
   }
 });
 
+app.post("/api/internal/blog-retry", async (req, res) => {
+  if (!schedulerAuthorized(req)) return res.status(401).json({ success: false, error: "Unauthorized scheduler request." });
+  if (!persistentQueue) return res.status(503).json({ success: false, error: "Persistent queue is not configured." });
+  const ownerId = String(process.env.SUPABASE_OWNER_USER_ID || "");
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(ownerId)) {
+    return res.status(503).json({ success: false, error: "SUPABASE_OWNER_USER_ID is not configured correctly." });
+  }
+  const dayKey = indiaDayKey();
+  try {
+    const recent = await persistentQueue.status(ownerId);
+    const prefix = "daily:" + dayKey + ":blogging:recovery:";
+    const recoveries = recent.filter(item => String(item.idempotency_key || "").startsWith(prefix));
+    const active = recoveries.find(item => ["pending", "running"].includes(item.status));
+    if (active) return res.status(202).json({ success: true, accepted: false, existing: true, status: active.status, message: "A Blogging recovery job is already queued or running." });
+    const recoveryNumber = recoveries.length + 1;
+    const priorTopics = await persistentQueue.recentBlogTopics(ownerId, 200);
+    const task = buildDailyBlogTask({ dayKey, priorTopics: priorTopics.map(item => item.topic) });
+    const queued = await persistentQueue.enqueue(ownerId, [{
+      agentId: "blogging",
+      task,
+      priority: 30,
+      idempotencyKey: prefix + recoveryNumber,
+      payload: { recovery: true, recoveryNumber, source: "owner_requested_safe_recovery" }
+    }]);
+    void startDailyWorker(ownerId, dayKey).catch(error => console.error("Blog recovery worker stopped:", error.message));
+    return res.status(202).json({
+      success: true, accepted: queued.inserted > 0, dayKey, recoveryNumber, queued,
+      message: "A Blogging-only recovery job was saved. It will be checked, stored as a private draft, and kept unpublished unless its editorial gate passes. Publishing remains approval-only."
+    });
+  } catch (error) {
+    console.error("Blog recovery enqueue failed:", error.message);
+    return res.status(503).json({ success: false, dayKey, error: error.message });
+  }
+});
+
 app.get("/api/internal/daily-status", async (req, res) => {
   if (!schedulerAuthorized(req)) return res.status(401).json({ success: false, error: "Unauthorized scheduler request." });
   if (!persistentQueue) return res.status(503).json({ success: false, error: "Persistent queue is not configured." });
