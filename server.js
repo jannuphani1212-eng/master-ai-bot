@@ -288,13 +288,13 @@ async function processDailyQueue(ownerId, dayKey) {
         }
       }
       // Keep the sports article output budget compatible with the free Groq TPM window.
-      // 1,900 requested tokens maps to 2,500 max_completion_tokens in callGroq.
+      // 2,100 requested tokens maps to about 2,800 max_completion_tokens in callGroq.
       if (job.agent_id === "blogging") {
         task = buildBlogRevisionTask({ task, attempt: job.attempts, previousError: job.last_error });
         const sportsResearch = await fetchSportsResearch();
         task += "\n\n" + formatSportsResearchContext(sportsResearch);
       }
-      const generated = await generateAI(task, agentInstructions[job.agent_id], job.agent_id === "blogging" ? 1900 : 2600);
+      const generated = await generateAI(task, agentInstructions[job.agent_id], job.agent_id === "blogging" ? 2100 : 2600);
       if (job.agent_id === "blogging") {
         await persistentQueue.checkpoint(job.id, workerId, {
           checkpoint: "ai_response_received",
@@ -558,8 +558,13 @@ app.post("/api/internal/blog-retry", async (req, res) => {
     const recoveries = recent.filter(item => String(item.idempotency_key || "").startsWith(prefix));
     const active = recoveries.find(item => ["pending", "running"].includes(item.status));
     if (active) {
+      let resumedStatus = active.status;
+      if (active.status === "running" && !dailyWorkerRunning) {
+        const recovered = await persistentQueue.recoverExpired(active.id, 2);
+        if (recovered) resumedStatus = "pending";
+      }
       void startDailyWorker(ownerId, dayKey).catch(error => console.error("Blog recovery resume worker stopped:", error.message));
-      return res.status(202).json({ success: true, accepted: false, existing: true, status: active.status, message: "An existing Blogging recovery was found; the background worker has been asked to resume pending work." });
+      return res.status(202).json({ success: true, accepted: false, existing: true, status: resumedStatus, message: "An existing Blogging recovery was found; stale worker leases are safely recovered and pending work is resumed." });
     }
     const recoveryNumber = recoveries.length + 1;
     const priorTopics = await persistentQueue.recentBlogTopics(ownerId, 200);
