@@ -31,6 +31,11 @@ jobs:
             exit 1
           fi
 
+          # Start one fresh App Development recovery for this workflow run.
+          initial_trigger="$(curl --max-time 20 -sS -X POST "${MASTER_AI_BOT_URL%/}/api/internal/app-development-retry" \
+            -H "Authorization: Bearer $SCHEDULER_SHARED_SECRET" || true)"
+          echo "Initial App Development trigger response: $initial_trigger"
+
           for attempt in $(seq 1 40); do
             status_response="$(curl --max-time 20 -sS "${MASTER_AI_BOT_URL%/}/api/internal/daily-status" \
               -H "Authorization: Bearer $SCHEDULER_SHARED_SECRET" || true)"
