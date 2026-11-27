@@ -1,0 +1,65 @@
+name: Master AI Bot App Development recovery
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/app-development-recovery.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: master-ai-bot-app-development-recovery
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Generate and save an App Development project
+        env:
+          MASTER_AI_BASE_URL: ${{ secrets.MASTER_AI_BASE_URL }}
+          SCHEDULER_SHARED_SECRET: ${{ secrets.SCHEDULER_SHARED_SECRET }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${MASTER_AI_BASE_URL:-}" || -z "${SCHEDULER_SHARED_SECRET:-}" ]]; then
+            echo "Required scheduler secrets are not configured."
+            exit 1
+          fi
+
+          triggered=false
+          for attempt in $(seq 1 40); do
+            if [[ "$triggered" != "true" ]]; then
+              trigger_response="$(curl -sS -X POST "${MASTER_AI_BASE_URL%/}/api/internal/app-development-retry" \
+                -H "x-scheduler-secret: $SCHEDULER_SHARED_SECRET" || true)"
+              echo "App Development trigger response: $trigger_response"
+              accepted="$(echo "$trigger_response" | jq -r '.success // false' 2>/dev/null || echo false)"
+              if [[ "$accepted" == "true" ]]; then
+                triggered=true
+              fi
+            fi
+
+            status_response="$(curl -sS "${MASTER_AI_BASE_URL%/}/api/internal/daily-status" \
+              -H "x-scheduler-secret: $SCHEDULER_SHARED_SECRET" || true)"
+            day_key="$(echo "$status_response" | jq -r '.dayKey // empty' 2>/dev/null || true)"
+            if [[ -n "$day_key" ]]; then
+              prefix="daily:${day_key}:app-development:recovery:"
+              job_status="$(echo "$status_response" | jq -r --arg prefix "$prefix" '([.jobs[]? | select((.idempotency_key // "") | startswith($prefix))] | sort_by(.created_at // "") | last | .status) // empty' 2>/dev/null || true)"
+              echo "App Development recovery status: ${job_status:-not-yet-visible}"
+              if [[ "$job_status" == "completed" ]]; then
+                echo "App Development source generation job completed. Check the owner workspace for files and static validation."
+                exit 0
+              fi
+              if [[ "$job_status" == "failed" ]]; then
+                triggered=false
+              fi
+            fi
+            sleep 30
+          done
+
+          echo "App Development recovery did not finish within the monitoring window."
+          exit 1
