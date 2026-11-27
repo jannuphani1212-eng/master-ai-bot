@@ -98,3 +98,13 @@ test("all specialists share India, Android-first, zero-upfront-budget defaults a
     assert.match(prompt, /Recommendations/);
   }
 });
+
+
+test("Blogging daily production prompt enforces article length and metadata character limits", () => {
+  const prompt = getSpecialistInstructions("blogging");
+  assert.match(prompt, /at least 850 words/);
+  assert.match(prompt, /Aim for 950–1,100 words/);
+  assert.match(prompt, /meta description of 140–155 characters/);
+  assert.match(prompt, /Count characters before responding/);
+  assert.match(prompt, /Never fabricate source-backed status/);
+});
