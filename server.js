@@ -547,7 +547,10 @@ app.post("/api/internal/blog-retry", async (req, res) => {
     const prefix = "daily:" + dayKey + ":blogging:recovery:";
     const recoveries = recent.filter(item => String(item.idempotency_key || "").startsWith(prefix));
     const active = recoveries.find(item => ["pending", "running"].includes(item.status));
-    if (active) return res.status(202).json({ success: true, accepted: false, existing: true, status: active.status, message: "A Blogging recovery job is already queued or running." });
+    if (active) {
+      void startDailyWorker(ownerId, dayKey).catch(error => console.error("Blog recovery resume worker stopped:", error.message));
+      return res.status(202).json({ success: true, accepted: false, existing: true, status: active.status, message: "An existing Blogging recovery was found; the background worker has been asked to resume pending work." });
+    }
     const recoveryNumber = recoveries.length + 1;
     const priorTopics = await persistentQueue.recentBlogTopics(ownerId, 200);
     const task = buildDailyBlogTask({ dayKey, priorTopics: priorTopics.map(item => item.topic) });
