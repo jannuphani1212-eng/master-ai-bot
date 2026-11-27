@@ -52,6 +52,7 @@ test("reports thin sections separately from missing headings", () => {
   ));
   assert.ok(review.thinSections.includes("Executive summary"));
   assert.deepEqual(review.missingSections, []);
+  assert.equal(review.evidenceReview, "needs_verification");
   assert.equal(review.status, "needs_review");
 });
 
@@ -88,4 +89,63 @@ test("recognizes Research & Evidence headings in bold numbered specialist report
   assert.equal(review.passedSections.includes("Research and evidence"), true);
   assert.equal(review.missingSections.includes("Research and evidence"), false);
   assert.equal(review.status, "passed");
+});
+
+test("uses App Development-specific sections for source project reports", () => {
+  const report = [
+    "## Executive summary",
+    "A complete mobile-first prototype was generated and saved.",
+    "## User problem and audience",
+    "It helps an owner organize a YouTube video queue on Android.",
+    "## MVP scope and features",
+    "Add, reorder, and remove video entries with local persistence.",
+    "## Verified facts",
+    "The source files are stored in the owner-scoped project workspace.",
+    "## Assumptions",
+    "The owner uses a modern mobile browser.",
+    "## Estimates",
+    "No paid tools or recurring costs are required for this prototype.",
+    "## Recommendations",
+    "Review the source files before sharing the prototype.",
+    "## Source files",
+    "index.html, styles.css, app.js, and README.md are included.",
+    "## Acceptance criteria",
+    "The queue can be added, reordered, removed, and reloaded.",
+    "## Security and privacy",
+    "Queue data remains in localStorage and no secrets are included.",
+    "## Static validation and limitations",
+    "Syntax checks passed; build and runtime tests were not run.",
+    "## Next steps",
+    "Review the project and run it in a browser before release."
+  ].join("\n");
+  const review = reviewSpecialistReport(report, "app-development");
+  assert.equal(review.score, 100);
+  assert.equal(review.status, "passed");
+  assert.deepEqual(review.missingSections, []);
+});
+
+test("recognizes the first generated App Development report format", () => {
+  const report = [
+    "**User Problem**",
+    "A mobile-first tool helps the owner add, reorder, and remove YouTube videos.",
+    "**MVP Scope**",
+    "Add a video, fetch public metadata, reorder the queue, and save it locally.",
+    "## PROJECT METADATA",
+    "PROJECT NAME: Mobile YouTube Queue Manager",
+    "PROJECT TYPE: app",
+    "## FILES",
+    "index.html, styles.css, app.js, and README.md are saved.",
+    "**Acceptance Criteria**",
+    "Users can add, reorder, remove, and reload queue entries.",
+    "## Privacy & Security",
+    "Queue data is local and the public metadata endpoint is read-only.",
+    "## Limitations",
+    "Build and runtime tests were not run.",
+    "## Next Steps",
+    "Review the files and test the prototype in a mobile browser."
+  ].join("\n");
+  const review = reviewSpecialistReport(report, "app-development");
+  assert.equal(review.score, 100);
+  assert.equal(review.status, "passed");
+  assert.deepEqual(review.missingSections, []);
 });

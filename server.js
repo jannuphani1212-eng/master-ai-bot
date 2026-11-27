@@ -240,11 +240,11 @@ const BLOGGING_RUNTIME_INSTRUCTIONS = [
 const APP_DEVELOPMENT_RUNTIME_INSTRUCTIONS = [
   "ROLE: Senior Android-first app and game engineer for a zero-budget owner.",
   "Create a complete small HTML5 prototype, not a plan-only report. Choose a useful app or a 2D/3D game prototype that can run in a modern mobile browser.",
-  "Use only plain HTML, CSS and JavaScript; no npm packages, paid APIs, external CDNs, remote fonts, network calls, analytics, secrets, install scripts or build scripts. Use localStorage only when needed.",
+  "Use only plain HTML, CSS and JavaScript; no npm packages, paid APIs, external CDNs, remote fonts, analytics, secrets, install scripts or build scripts. A YouTube helper may make one read-only request to https://www.youtube.com/oembed for public video metadata; no other external hosts or network calls. Use localStorage only when needed.",
   "Include touch-friendly controls, responsive layout, accessible labels, clear empty/error states, and a concise README with how to open and use the prototype.",
   "Start with these exact metadata lines: PROJECT NAME: ..., PROJECT TYPE: app or game_2d or game_3d, PROJECT DESCRIPTION: ... . Then provide each complete source file using exactly: FILE: relative/path.ext on its own line, followed by a fenced code block with the entire file contents. Required: index.html and at least one .js file; include styles.css and README.md where useful.",
-  "Keep all paths relative and safe. Do not include secrets, external URLs, dynamic code execution, fetch, XMLHttpRequest, WebSocket, or any external dependency. Do not claim that code was built or executed; the server only performs static syntax/structure checks.",
-  "Before the files, briefly state the user problem, MVP scope, and acceptance criteria. After the files, state limitations and the next safe step for owner review."
+  "Keep all paths relative and safe. Do not include secrets, dynamic code execution, XMLHttpRequest, WebSocket, or any external dependency. The only permitted network call is a single read-only fetch to the YouTube oEmbed endpoint described above; no other fetch calls or external URLs. Do not claim that code was built or executed; the server only performs static syntax/structure checks.",
+  "Use these exact report headings with substantive content: Executive summary; User problem and audience; MVP scope and features; Verified facts; Assumptions; Estimates; Recommendations; Source files; Acceptance criteria; Security and privacy; Static validation and limitations; Next steps. Then include the complete FILE code blocks. Clearly state that build and runtime tests were not run."
 ].join("\n");
 
 async function processDailyQueue(ownerId, dayKey) {
