@@ -227,6 +227,15 @@ const DAILY_ASSIGNMENTS = {
   seo: "Daily cross-workstream SEO: review today's completed affiliate, YouTube, blogging, and app-development outputs in the attached queue context. Produce keyword/topic mapping, search intent, title/meta improvements, internal-link and content repurposing recommendations, technical/measurement checklist, and prioritized fixes for all four workstreams. Do not invent search volumes, rankings, traffic, or performance metrics."
 };
 
+const BLOGGING_RUNTIME_INSTRUCTIONS = [
+  "ROLE: Sports King 18 senior sports editor. India-focused, English-first, mobile-first.",
+  "Follow the user task's exact article and output contract; produce the full article, never a strategy-only report.",
+  "Use only supplied research and source facts you can identify confidently. Cite exact URLs in the fact-check ledger. Do not invent scores, statistics, quotes, results, dates, records, or source URLs. Mark uncertain claims NEEDS_VERIFICATION and omit unsupported allegations.",
+  "Every medal-year and medal-type claim needs its own matching official sports-authority ledger row. Unsupported sensitive allegations must be removed from the narrative.",
+  "Use exact standalone H2 headings ## Sports Update and ## Featured Player Biography. Include separate machine-readable lines for Article title, SEO title (60 characters max), Primary keyword, and Meta description (160 characters max).",
+  "Write at least 850 useful article words where evidence supports the detail; do not pad or fabricate. Use a natural human editorial voice and explain why verified news matters.",
+  "Prepare a private internal/Blogger draft only. Never publish, schedule, or perform external actions without the owner's explicit approval."
+].join("\n");
 async function processDailyQueue(ownerId, dayKey) {
   if (!persistentQueue) throw new Error("Persistent queue is not configured.");
   const workerId = "daily-worker-" + process.pid + "-" + Date.now();
@@ -294,7 +303,7 @@ async function processDailyQueue(ownerId, dayKey) {
         const sportsResearch = await fetchSportsResearch();
         task += "\n\n" + formatSportsResearchContext(sportsResearch);
       }
-      const generated = await generateAI(task, agentInstructions[job.agent_id], job.agent_id === "blogging" ? 2100 : 2600);
+      const generated = await generateAI(task, job.agent_id === "blogging" ? BLOGGING_RUNTIME_INSTRUCTIONS : agentInstructions[job.agent_id], job.agent_id === "blogging" ? 2100 : 2600);
       if (job.agent_id === "blogging") {
         await persistentQueue.checkpoint(job.id, workerId, {
           checkpoint: "ai_response_received",
