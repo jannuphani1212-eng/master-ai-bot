@@ -82,8 +82,10 @@
 <label for="appProjectFileLanguage">Language</label><input id="appProjectFileLanguage" maxlength="40" value="markdown">
 <label for="appProjectFileContent">File content</label><textarea id="appProjectFileContent" rows="12" required placeholder="Write or paste source code here"></textarea>
 <button type="submit" id="appProjectSaveFileButton" class="primary-button" disabled>Save source file</button>
+<button type="button" id="appProjectValidateButton" class="secondary" disabled>Validate saved source</button>
+<div id="appProjectValidationResults" class="approval-list" aria-live="polite"></div>
 </form>
-<p id="appProjectStudioStatus" class="muted" aria-live="polite">Project creation and source-file saving require owner sign-in. Build execution is not enabled in this release.</p>
+<p id="appProjectStudioStatus" class="muted" aria-live="polite">Owner-only source validation checks JavaScript syntax, JSON, and basic HTML/CSS structure without executing project code. Native Android/3D builds are not yet enabled.</p>
 </section>
 <section class="workspace-block"><div class="workspace-section-heading"><h3>Work history</h3><span class="muted" id="workspaceHistorySource">Browser-local history</span></div><div id="workspaceHistory"></div></section>
 <section class="workspace-block"><h3>Current recommendations</h3><div id="workspaceRecommendations"></div></section>
