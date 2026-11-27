@@ -225,7 +225,6 @@ async function openAppProject(projectId, projectName) {
     document.getElementById("appProjectFileContent").value = first?.content || "";
     document.getElementById("appProjectSaveFileButton").disabled = false;
     document.getElementById("appProjectValidateButton").disabled = false;
-    document.getElementById("appProjectValidateButton").disabled = false;
     setAppProjectStudioStatus(files.length + " saved file(s) loaded. Select/edit a file and save to persist changes.");
   } catch (error) {
     setAppProjectStudioStatus(error.message, true);
@@ -252,6 +251,7 @@ document.getElementById("appProjectCreateForm")?.addEventListener("submit", asyn
     selectedAppProjectId = data.project.id;
     document.getElementById("appProjectSelectedLabel").textContent = data.project.name;
     document.getElementById("appProjectSaveFileButton").disabled = false;
+    document.getElementById("appProjectValidateButton").disabled = false;
     document.getElementById("appProjectFilePath").value = "README.md";
     document.getElementById("appProjectFileLanguage").value = "markdown";
     document.getElementById("appProjectFileContent").value = "# " + data.project.name + "\n\nProject notes and build plan.\n";
