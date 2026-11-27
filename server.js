@@ -559,12 +559,17 @@ app.post("/api/internal/blog-retry", async (req, res) => {
     const active = recoveries.find(item => ["pending", "running"].includes(item.status));
     if (active) {
       let resumedStatus = active.status;
+      let finalAttemptExpired = false;
       if (active.status === "running" && !dailyWorkerRunning) {
-        const recovered = await persistentQueue.recoverExpired(active.id, 2);
-        if (recovered) resumedStatus = "pending";
+        const recovery = await persistentQueue.recoverExpired(active.id, 2);
+        if (recovery.recovered) resumedStatus = recovery.status;
+        finalAttemptExpired = recovery.recovered && recovery.status === "failed";
       }
-      void startDailyWorker(ownerId, dayKey).catch(error => console.error("Blog recovery resume worker stopped:", error.message));
-      return res.status(202).json({ success: true, accepted: false, existing: true, status: resumedStatus, message: "An existing Blogging recovery was found; stale worker leases are safely recovered and pending work is resumed." });
+      if (!finalAttemptExpired) {
+        void startDailyWorker(ownerId, dayKey).catch(error => console.error("Blog recovery resume worker stopped:", error.message));
+        return res.status(202).json({ success: true, accepted: false, existing: true, status: resumedStatus, message: "An existing Blogging recovery was found; stale worker leases are recovered safely and pending work is resumed." });
+      }
+      console.warn("Expired final Blogging attempt marked failed; enqueueing a fresh recovery job.");
     }
     const recoveryNumber = recoveries.length + 1;
     const priorTopics = await persistentQueue.recentBlogTopics(ownerId, 200);
