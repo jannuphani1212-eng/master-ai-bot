@@ -557,7 +557,14 @@ app.post("/api/internal/blog-retry", async (req, res) => {
     const prefix = "daily:" + dayKey + ":blogging:recovery:";
     const recoveries = recent.filter(item => String(item.idempotency_key || "").startsWith(prefix));
     const active = recoveries.find(item => ["pending", "running"].includes(item.status));
-    if (active) {
+    if (active && active.status === "pending" && Number(active.attempts || 0) >= Number(active.max_attempts || 4)) {
+      const finalized = await persistentQueue.finalizeExhaustedPending(active.id);
+      if (finalized.finalized) {
+        console.warn("Exhausted pending Blogging recovery marked failed; enqueueing a fresh recovery job.");
+        active.status = "failed";
+      }
+    }
+    if (active && ["pending", "running"].includes(active.status)) {
       let resumedStatus = active.status;
       let finalAttemptExpired = false;
       if (active.status === "running" && !dailyWorkerRunning) {
