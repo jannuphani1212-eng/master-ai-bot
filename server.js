@@ -223,7 +223,7 @@ const DAILY_ASSIGNMENTS = {
   affiliate: "Daily production: research one useful India-focused fashion or watch product opportunity. Deliver a cautious product shortlist, buyer problem, comparison criteria, original short-video or blog campaign asset, disclosure text, and tracking plan. Do not invent live prices, stock, commission rates, affiliate eligibility, links, or earnings. Mark every unverified item clearly. Draft only; no posting.",
   youtube: "Daily production for Global Rhymes 4U: continue the saved rhyme project from its exact next unfinished scene if one exists; otherwise create one original English children's rhyme with a complete script, scene-by-scene visual prompts, consistent character and background bible, title, description, and child-safety/copyright checks. Create production-ready text and prompts only. Do not claim a video clip was generated or upload/publish anything.",
   blogging: "Daily production for Sports King 18: create one original, mobile-first sports article with a dated verified sports update AND a detailed featured player biography with verified bio data. Rotate across major sports and maintain a deduplicated player-profile backlog. Research with source URLs, fact-check scores/records/career details, deliver attractive SEO-ready writing and save as a private Blogger draft only after the 9.7/10 editorial gate. Never publish live or invent facts.",
-  "app-development": "Daily production: identify one small practical Android-first tool or app feature that could support the owner's YouTube, blogging, affiliate, or SEO operations. Deliver a validated problem statement, user stories, beginner-friendly MVP specification, complete implementation plan, acceptance tests, privacy/security notes, and free-first technology choices. Do not deploy or spend.",
+  "app-development": "Daily production: build one small Android-first HTML5 app or game prototype that supports the owner's YouTube, blogging, affiliate, or SEO operations. Rotate between useful apps and 2D/3D game prototypes; avoid duplicating existing projects. Produce complete source files in the required FILE code-block format, a README, acceptance criteria, privacy/security notes, and zero-cost technology choices. Do not deploy, spend, use paid APIs, or claim a real build/test was executed.",
   seo: "Daily cross-workstream SEO: review today's completed affiliate, YouTube, blogging, and app-development outputs in the attached queue context. Produce keyword/topic mapping, search intent, title/meta improvements, internal-link and content repurposing recommendations, technical/measurement checklist, and prioritized fixes for all four workstreams. Do not invent search volumes, rankings, traffic, or performance metrics."
 };
 
@@ -236,6 +236,17 @@ const BLOGGING_RUNTIME_INSTRUCTIONS = [
   "Write at least 850 useful article words where evidence supports the detail; do not pad or fabricate. Use a natural human editorial voice and explain why verified news matters.",
   "Prepare a private internal/Blogger draft only. Never publish, schedule, or perform external actions without the owner's explicit approval."
 ].join("\n");
+
+const APP_DEVELOPMENT_RUNTIME_INSTRUCTIONS = [
+  "ROLE: Senior Android-first app and game engineer for a zero-budget owner.",
+  "Create a complete small HTML5 prototype, not a plan-only report. Choose a useful app or a 2D/3D game prototype that can run in a modern mobile browser.",
+  "Use only plain HTML, CSS and JavaScript; no npm packages, paid APIs, external CDNs, remote fonts, network calls, analytics, secrets, install scripts or build scripts. Use localStorage only when needed.",
+  "Include touch-friendly controls, responsive layout, accessible labels, clear empty/error states, and a concise README with how to open and use the prototype.",
+  "Start with these exact metadata lines: PROJECT NAME: ..., PROJECT TYPE: app or game_2d or game_3d, PROJECT DESCRIPTION: ... . Then provide each complete source file using exactly: FILE: relative/path.ext on its own line, followed by a fenced code block with the entire file contents. Required: index.html and at least one .js file; include styles.css and README.md where useful.",
+  "Keep all paths relative and safe. Do not include secrets, external URLs, dynamic code execution, fetch, XMLHttpRequest, WebSocket, or any external dependency. Do not claim that code was built or executed; the server only performs static syntax/structure checks.",
+  "Before the files, briefly state the user problem, MVP scope, and acceptance criteria. After the files, state limitations and the next safe step for owner review."
+].join("\n");
+
 async function processDailyQueue(ownerId, dayKey) {
   if (!persistentQueue) throw new Error("Persistent queue is not configured.");
   const workerId = "daily-worker-" + process.pid + "-" + Date.now();
@@ -296,6 +307,18 @@ async function processDailyQueue(ownerId, dayKey) {
           console.warn("Daily SEO Search Console context unavailable:", error.message);
         }
       }
+      if (job.agent_id === "app-development") {
+        try {
+          const existingProjects = await appProjectHandlers.list(ownerId);
+          const portfolio = existingProjects.slice(0, 12).map(project =>
+            "- " + project.name + " (" + project.project_type + ", " + project.status + ")"
+          ).join("\n");
+          task += "\n\nEXISTING APP/GAME PROJECTS — avoid duplicates and choose a different useful concept:\n" +
+            (portfolio || "No existing App Development projects are saved yet.");
+        } catch (error) {
+          console.warn("App project portfolio context unavailable:", error.message);
+        }
+      }
       // Keep the sports article output budget compatible with the free Groq TPM window.
       // 2,100 requested tokens maps to about 2,800 max_completion_tokens in callGroq.
       if (job.agent_id === "blogging") {
@@ -303,7 +326,10 @@ async function processDailyQueue(ownerId, dayKey) {
         const sportsResearch = await fetchSportsResearch();
         task += "\n\n" + formatSportsResearchContext(sportsResearch);
       }
-      const generated = await generateAI(task, job.agent_id === "blogging" ? BLOGGING_RUNTIME_INSTRUCTIONS : agentInstructions[job.agent_id], job.agent_id === "blogging" ? 2100 : 2600);
+      const runtimeInstructions = job.agent_id === "blogging" ? BLOGGING_RUNTIME_INSTRUCTIONS
+        : job.agent_id === "app-development" ? APP_DEVELOPMENT_RUNTIME_INSTRUCTIONS
+          : agentInstructions[job.agent_id];
+      const generated = await generateAI(task, runtimeInstructions, job.agent_id === "blogging" ? 2100 : 2600);
       if (job.agent_id === "blogging") {
         await persistentQueue.checkpoint(job.id, workerId, {
           checkpoint: "ai_response_received",
@@ -409,6 +435,18 @@ async function processDailyQueue(ownerId, dayKey) {
         } catch (memoryError) {
           console.error("Daily YouTube rhyme state could not be saved:", memoryError.message);
         }
+      }
+      if (job.agent_id === "app-development") {
+        const savedProject = await appProjectHandlers.createFromGeneratedReport(ownerId, job.id, generated.result);
+        savedAssets.appProjectId = savedProject.projectId;
+        savedAssets.appProjectName = savedProject.projectName;
+        savedAssets.appProjectType = savedProject.projectType;
+        savedAssets.appProjectStatus = savedProject.status;
+        savedAssets.sourceFiles = savedProject.files;
+        savedAssets.staticValidationStatus = savedProject.validation.status;
+        savedAssets.staticValidation = savedProject.validation;
+        savedAssets.buildStatus = "not_run";
+        savedAssets.testStatus = "not_run";
       }
       const review = job.agent_id === "blogging"
         ? { ...blogReview, status: blogReview?.status || "needs_review", score: blogReview?.score ?? 0,
