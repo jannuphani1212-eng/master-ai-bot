@@ -81,7 +81,7 @@ const agentProfiles = {
   affiliate: {name:"Affiliate Marketing",role:"Plans ethical product research, campaigns, content and conversion tracking.",icon:"↗",tag:"REVENUE",capabilities:["Compare affiliate programs and product opportunities","Draft product reviews, Shorts and promotional content","Plan disclosures and campaign tracking","Separate verified commission terms from assumptions"],assets:["No affiliate program or campaign connection is currently verified by the app."],recommendations:["Connect or record each affiliate program only after its account is actually authorized.","Verify current commission rates, cookie windows and program rules from official sources."]},
   blogging: {name:"Blogging",role:"Builds editorial plans, article outlines and useful drafts.",icon:"✎",tag:"CONTENT",capabilities:["Research reader intent and article topics","Create outlines, drafts, FAQs and editorial calendars","Prepare internal-link and update recommendations","Track draft and publishing work in the task history"],assets:["No blog or CMS connection is currently verified by the app."],recommendations:["Add a Blogger or WordPress connection before treating any site or published article as a live asset.","Use the first article to establish a content and traffic baseline."]},
   "app-development": {name:"App Development",role:"Plans, builds and troubleshoots application projects.",icon:"▣",tag:"PRODUCT & CODE",capabilities:["Turn ideas into app requirements and user flows","Generate implementation plans and code drafts","Review bugs, tests, architecture and release readiness","Explain Android-first steps in beginner-friendly language"],assets:["No app repository, build pipeline or Play Store connection is currently verified by the app."],recommendations:["Register each app project or repository before showing it as a connected asset.","Keep builds and releases owner-approved."]},
-  seo: {name:"SEO",role:"Improves discoverability through research, audits and content optimisation.",icon:"⌕",tag:"DISCOVERY",capabilities:["Build keyword clusters and search-intent maps","Prepare technical and on-page SEO audits","Create content briefs and internal-link plans","Interpret Search Console data when connected"],assets:["No website or Search Console property is currently verified by the app."],recommendations:["Connect a verified website and Search Console property to show real clicks, impressions and positions.","Avoid claiming keyword rankings without current measurement data."]}
+  seo: {name:"SEO",role:"Improves discoverability through research, audits and content optimisation.",icon:"⌕",tag:"DISCOVERY",capabilities:["Build keyword clusters and search-intent maps","Prepare technical and on-page SEO audits","Create content briefs and internal-link plans","Use connected Blogger / WordPress content for on-page recommendations","Interpret Search Console data when connected"],assets:["Connected blog sites and saved drafts are loaded from your owner portfolio.","Search Console metrics remain unavailable until a property is connected."],recommendations:["SEO research and on-page improvements can proceed using connected blog content without Search Console.","Never claim keyword rankings, clicks, impressions or positions unless measured data is connected."]}
 };
 const specialistDashboardProfiles = {
   master: {title:"Command overview",summary:"Coordinate the five specialist workstreams and review their evidence before approving any external action.",actions:[
@@ -266,9 +266,15 @@ async function loadAgentPortfolio(agentId) {
       addPortfolioMetric("Connected sites", item.connectedSites, "Blogger / WordPress records");
       addPortfolioMetric("Saved drafts", item.drafts, "Blog draft records");
     } else if (agentId === "seo") {
+      addText(assets, "p", "Connected content sites: " + (item.connectedContentSites ?? "Unavailable"), "muted");
+      (item.contentSitesPreview || []).forEach(site => addText(assets, "p", site.name + " · " + site.provider + (site.url ? " · " + site.url : ""), "muted"));
+      addText(assets, "p", "Saved content drafts: " + (item.savedContentDrafts ?? "Unavailable"), "muted");
+      (item.savedContentPreview || []).forEach(draft => addText(assets, "p", "Content: " + draft.topic + (draft.targetKeyword ? " · Keyword: " + draft.targetKeyword : "") + " · " + draft.status, "muted"));
       addText(assets, "p", "Search Console accounts: " + (item.searchConsoleAccounts ?? "Unavailable"), "muted");
       (item.accountsPreview || []).forEach(account => addText(assets, "p", account.googleEmail, "muted"));
-      addPortfolioMetric("Search Console accounts", item.searchConsoleAccounts, "Read-only connection records");
+      addPortfolioMetric("Content sites", item.connectedContentSites, "Connected Blogger / WordPress records");
+      addPortfolioMetric("Saved content drafts", item.savedContentDrafts, "Available for SEO optimisation");
+      addPortfolioMetric("Search Console accounts", item.searchConsoleAccounts, "Read-only performance data connections");
     } else if (agentId === "app-development") {
       addText(assets, "p", item.note, "warning-text");
     }
