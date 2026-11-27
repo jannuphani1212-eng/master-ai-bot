@@ -168,7 +168,134 @@ function prepareWorkspaceTask(agentId,prompt) {
   taskForm.scrollIntoView({behavior:"smooth",block:"start"});
   taskInput.focus();
 }
+let selectedAppProjectId = null;
+const appProjectStudioStatus = document.getElementById("appProjectStudioStatus");
+function setAppProjectStudioStatus(message, warning=false) {
+  if (!appProjectStudioStatus) return;
+  appProjectStudioStatus.textContent = message;
+  appProjectStudioStatus.classList.toggle("warning-text", warning);
+}
+async function refreshAppProjects() {
+  const list = document.getElementById("appProjectList");
+  if (!list) return;
+  if (!(await ensureApprovalSession())) {
+    list.textContent = "Sign in as owner to view saved projects.";
+    setAppProjectStudioStatus("Owner sign-in is required to create projects or save source files.", true);
+    return;
+  }
+  list.textContent = "Loading saved projects…";
+  try {
+    const response = await ownerAuthenticatedFetch("/api/app-projects", { cache: "no-store" });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.success) throw new Error(data.error || "Projects could not be loaded.");
+    list.replaceChildren();
+    const projects = Array.isArray(data.projects) ? data.projects : [];
+    if (!projects.length) addText(list, "p", "No projects saved yet. Create your first app or game above.", "muted");
+    projects.forEach(project => {
+      const card = document.createElement("article");
+      card.className = "workspace-history-item";
+      addText(card, "strong", project.name || "Untitled project");
+      addText(card, "p", (project.project_type || "app") + " · " + (project.status || "planning"), "muted");
+      if (project.description) addText(card, "p", project.description, "muted");
+      const open = document.createElement("button");
+      open.type = "button"; open.className = "secondary"; open.textContent = "Open files";
+      open.addEventListener("click", () => void openAppProject(project.id, project.name));
+      card.appendChild(open);
+      list.appendChild(card);
+    });
+    setAppProjectStudioStatus(projects.length + " saved project(s) loaded. Build/test status is not inferred from saved files.");
+  } catch (error) {
+    list.textContent = "Project list unavailable: " + error.message;
+    setAppProjectStudioStatus(error.message, true);
+  }
+}
+async function openAppProject(projectId, projectName) {
+  if (!(await ensureApprovalSession())) return;
+  setAppProjectStudioStatus("Opening project files…");
+  try {
+    const response = await ownerAuthenticatedFetch("/api/app-projects/" + encodeURIComponent(projectId), { cache: "no-store" });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.success) throw new Error(data.error || "Project could not be opened.");
+    selectedAppProjectId = projectId;
+    document.getElementById("appProjectSelectedLabel").textContent = projectName || "Selected project";
+    const files = Array.isArray(data.project?.files) ? data.project.files : [];
+    const first = files[0];
+    document.getElementById("appProjectFilePath").value = first?.file_path || "README.md";
+    document.getElementById("appProjectFileLanguage").value = first?.language || "markdown";
+    document.getElementById("appProjectFileContent").value = first?.content || "";
+    document.getElementById("appProjectSaveFileButton").disabled = false;
+    setAppProjectStudioStatus(files.length + " saved file(s) loaded. Select/edit a file and save to persist changes.");
+  } catch (error) {
+    setAppProjectStudioStatus(error.message, true);
+  }
+}
+document.getElementById("appProjectCreateForm")?.addEventListener("submit", async event => {
+  event.preventDefault();
+  if (!(await ensureApprovalSession())) return;
+  const button = document.getElementById("appProjectCreateButton");
+  button.disabled = true;
+  setAppProjectStudioStatus("Creating project record…");
+  try {
+    const response = await ownerAuthenticatedFetch("/api/app-projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: document.getElementById("appProjectName").value.trim(),
+        projectType: document.getElementById("appProjectType").value,
+        description: document.getElementById("appProjectDescription").value.trim()
+      })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.success) throw new Error(data.error || "Project creation failed.");
+    selectedAppProjectId = data.project.id;
+    document.getElementById("appProjectSelectedLabel").textContent = data.project.name;
+    document.getElementById("appProjectSaveFileButton").disabled = false;
+    document.getElementById("appProjectFilePath").value = "README.md";
+    document.getElementById("appProjectFileLanguage").value = "markdown";
+    document.getElementById("appProjectFileContent").value = "# " + data.project.name + "\n\nProject notes and build plan.\n";
+    await refreshAppProjects();
+    setAppProjectStudioStatus("Project saved. Add or edit a source file below and save it to persistent storage.");
+  } catch (error) {
+    setAppProjectStudioStatus(error.message, true);
+  } finally {
+    button.disabled = false;
+  }
+});
+document.getElementById("appProjectFileForm")?.addEventListener("submit", async event => {
+  event.preventDefault();
+  if (!selectedAppProjectId) {
+    setAppProjectStudioStatus("Create or open a project before saving source files.", true);
+    return;
+  }
+  if (!(await ensureApprovalSession())) return;
+  const button = document.getElementById("appProjectSaveFileButton");
+  button.disabled = true;
+  setAppProjectStudioStatus("Saving source file…");
+  try {
+    const response = await ownerAuthenticatedFetch("/api/app-projects/" + encodeURIComponent(selectedAppProjectId) + "/files", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ files: [{
+        filePath: document.getElementById("appProjectFilePath").value.trim(),
+        language: document.getElementById("appProjectFileLanguage").value.trim(),
+        content: document.getElementById("appProjectFileContent").value
+      }] })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.success) throw new Error(data.error || "Source file could not be saved.");
+    setAppProjectStudioStatus("Saved " + data.savedFiles + " source file(s). This confirms storage only, not a successful build or test.");
+    await refreshAppProjects();
+  } catch (error) {
+    setAppProjectStudioStatus(error.message, true);
+  } finally {
+    button.disabled = false;
+  }
+});
+document.getElementById("appProjectRefreshButton")?.addEventListener("click", () => void refreshAppProjects());
+
 function openAgentWorkspace(agentId) {
+  const appEditor = document.getElementById("appProjectEditor");
+  if (appEditor) appEditor.hidden = agentId !== "app-development";
   const profile=agentProfiles[agentId];if(!profile)return;
   currentWorkspaceAgent=agentId;
   const panel=document.getElementById("agentWorkspace");
@@ -221,6 +348,7 @@ function openAgentWorkspace(agentId) {
   const sourceLabel=document.getElementById("workspaceHistorySource");
   if(sourceLabel) sourceLabel.textContent=approvalAccessToken?"Loading your saved history…":"Browser-local history";
   if(approvalAccessToken) { void loadPersistentAgentHistory(agentId); void loadAgentPortfolio(agentId); }
+  if(agentId === "app-development") void refreshAppProjects();
   if(agentId==="youtube") loadWorkspaceYoutube();
   if(agentId==="master" && approvalAccessToken) void loadRepairProposals();
   panel.scrollIntoView({behavior:"smooth",block:"start"});
