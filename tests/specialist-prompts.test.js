@@ -98,3 +98,13 @@ test("all specialists share India, Android-first, zero-upfront-budget defaults a
     assert.match(prompt, /Recommendations/);
   }
 });
+
+
+test("App Development prompt requires safe offline source and complete report sections", () => {
+  const prompt = getSpecialistInstructions("app-development");
+  assert.match(prompt, /Do not call fetch, XMLHttpRequest, WebSocket/);
+  assert.match(prompt, /local sample\/demo data/);
+  assert.match(prompt, /all eight shared report headings exactly/);
+  assert.match(prompt, /\*\*FILE: index\.html\*\*/);
+  assert.match(prompt, /Static parsing is not a runtime test/);
+});
