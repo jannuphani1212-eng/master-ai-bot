@@ -293,9 +293,135 @@ document.getElementById("appProjectFileForm")?.addEventListener("submit", async 
 });
 document.getElementById("appProjectRefreshButton")?.addEventListener("click", () => void refreshAppProjects());
 
+function setSearchConsoleStatus(message, isError=false) {
+  const node=document.getElementById("searchConsoleStatus");
+  if(!node)return;
+  node.textContent=message;
+  node.classList.toggle("warning-text",Boolean(isError));
+}
+
+function setDefaultSearchConsoleDates() {
+  const end=new Date();end.setUTCDate(end.getUTCDate()-3);
+  const start=new Date(end);start.setUTCDate(start.getUTCDate()-27);
+  const format=date=>date.toISOString().slice(0,10);
+  const startInput=document.getElementById("searchConsoleStartDate");
+  const endInput=document.getElementById("searchConsoleEndDate");
+  if(startInput&&!startInput.value)startInput.value=format(start);
+  if(endInput&&!endInput.value)endInput.value=format(end);
+}
+
+async function loadSearchConsoleStatus() {
+  if(!(await ensureApprovalSession())) {
+    setSearchConsoleStatus("Sign in as owner to connect Google Search Console.",true);
+    return;
+  }
+  setSearchConsoleStatus("Checking the read-only Search Console connection…");
+  try {
+    const response=await ownerAuthenticatedFetch("/api/search-console/status",{
+      headers:{Authorization:"Bearer "+approvalAccessToken},
+      cache:"no-store"
+    });
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok||!data.success)throw new Error(data.error||"Search Console status is unavailable.");
+    const select=document.getElementById("searchConsoleProperty");
+    select.replaceChildren();
+    const properties=Array.isArray(data.properties)?data.properties:[];
+    if(!data.connected) {
+      select.add(new Option("Connect Search Console first",""));
+      setSearchConsoleStatus("Not connected. Connect the Google account that owns the Sports King 18 Search Console property.");
+      return;
+    }
+    properties.forEach(property=>{
+      const option=new Option(property.siteUrl+" · "+property.permissionLevel,property.siteUrl);
+      select.add(option);
+    });
+    const preferred=properties.find(property=>property.siteUrl.toLowerCase().includes("sportsking18.blogspot.com"));
+    if(preferred)select.value=preferred.siteUrl;
+    if(!properties.length) {
+      select.add(new Option("No verified properties found",""));
+      setSearchConsoleStatus("Connected as "+data.googleEmail+", but Google returned no Search Console properties. Add and verify Sports King 18 in Search Console, then refresh.",true);
+    } else {
+      setSearchConsoleStatus("Connected as "+data.googleEmail+". "+properties.length+" read-only property/properties available.");
+    }
+    setDefaultSearchConsoleDates();
+  } catch(error) {
+    setSearchConsoleStatus(error.message,true);
+  }
+}
+
+async function loadSearchConsoleAnalytics() {
+  if(!(await ensureApprovalSession()))return;
+  const button=document.getElementById("searchConsoleQueryButton");
+  const siteUrl=document.getElementById("searchConsoleProperty").value;
+  const startDate=document.getElementById("searchConsoleStartDate").value;
+  const endDate=document.getElementById("searchConsoleEndDate").value;
+  if(!siteUrl){setSearchConsoleStatus("Choose a verified Search Console property first.",true);return;}
+  button.disabled=true;
+  setSearchConsoleStatus("Loading verified Search Console data…");
+  try {
+    const response=await ownerAuthenticatedFetch("/api/search-console/analytics",{
+      method:"POST",
+      headers:{Authorization:"Bearer "+approvalAccessToken,"Content-Type":"application/json"},
+      body:JSON.stringify({siteUrl,startDate,endDate})
+    });
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok||!data.success)throw new Error(data.error||"Search Console report could not be loaded.");
+    const rows=Array.isArray(data.rows)?data.rows:[];
+    const results=document.getElementById("searchConsoleResults");
+    results.replaceChildren();
+    const summary=document.createElement("p");
+    summary.className="muted";
+    summary.textContent="Verified Google Search Console data for "+siteUrl+" · "+startDate+" to "+endDate+" · "+rows.length+" rows.";
+    results.appendChild(summary);
+    if(!rows.length){addText(results,"p","Google returned no finalized rows for this property and date range.","muted");return;}
+    const table=document.createElement("table");
+    table.className="data-table";
+    const head=document.createElement("thead");
+    const headerRow=document.createElement("tr");
+    ["Search query","Page","Clicks","Impressions","CTR","Avg. position"].forEach(label=>{const th=document.createElement("th");th.textContent=label;headerRow.appendChild(th);});
+    head.appendChild(headerRow);table.appendChild(head);
+    const body=document.createElement("tbody");
+    rows.slice(0,50).forEach(row=>{
+      const tr=document.createElement("tr");
+      const values=[row.keys?.[0]||"—",row.keys?.[1]||"—",row.clicks??0,row.impressions??0,
+        Number.isFinite(Number(row.ctr))?(Number(row.ctr)*100).toFixed(1)+"%":"—",
+        Number.isFinite(Number(row.position))?Number(row.position).toFixed(1):"—"];
+      values.forEach(value=>{const td=document.createElement("td");td.textContent=String(value);tr.appendChild(td);});
+      body.appendChild(tr);
+    });
+    table.appendChild(body);results.appendChild(table);
+    setSearchConsoleStatus("Search Console data loaded and verified. The SEO specialist may now use these measured metrics.");
+  } catch(error) {
+    setSearchConsoleStatus(error.message,true);
+  } finally {
+    button.disabled=false;
+  }
+}
+
+document.getElementById("searchConsoleConnectButton")?.addEventListener("click",async()=>{
+  const button=document.getElementById("searchConsoleConnectButton");
+  if(!(await ensureApprovalSession()))return;
+  button.disabled=true;
+  try {
+    const response=await ownerAuthenticatedFetch("/api/search-console/connect-url",{
+      headers:{Authorization:"Bearer "+approvalAccessToken},cache:"no-store"
+    });
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok||!data.success||!data.url)throw new Error(data.error||"Could not start Google Search Console connection.");
+    window.location.assign(data.url);
+  } catch(error) {
+    setSearchConsoleStatus(error.message,true);
+    button.disabled=false;
+  }
+});
+document.getElementById("searchConsoleRefreshButton")?.addEventListener("click",()=>void loadSearchConsoleStatus());
+document.getElementById("searchConsoleQueryButton")?.addEventListener("click",()=>void loadSearchConsoleAnalytics());
+
 function openAgentWorkspace(agentId) {
   const appEditor = document.getElementById("appProjectEditor");
   if (appEditor) appEditor.hidden = agentId !== "app-development";
+  const searchConsolePanel = document.getElementById("searchConsolePanel");
+  if (searchConsolePanel) searchConsolePanel.hidden = agentId !== "seo";
   const profile=agentProfiles[agentId];if(!profile)return;
   currentWorkspaceAgent=agentId;
   const panel=document.getElementById("agentWorkspace");
@@ -350,6 +476,7 @@ function openAgentWorkspace(agentId) {
   if(approvalAccessToken) { void loadPersistentAgentHistory(agentId); void loadAgentPortfolio(agentId); }
   if(agentId === "app-development") void refreshAppProjects();
   if(agentId==="youtube") loadWorkspaceYoutube();
+  if(agentId==="seo") { setDefaultSearchConsoleDates(); void loadSearchConsoleStatus(); }
   if(agentId==="master" && approvalAccessToken) void loadRepairProposals();
   panel.scrollIntoView({behavior:"smooth",block:"start"});
 }
