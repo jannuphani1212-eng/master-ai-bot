@@ -46,14 +46,25 @@ test("does not mistake affiliate research for a tracked campaign", () => {
   assert.equal(result.status, "research_brief_only");
 });
 
-test("requires source, build and tests for app-development completion", () => {
+test("keeps statically checked source incomplete until a real build and tests pass", () => {
   const result = evaluateSpecialistArtifact("app-development", {
-    sourceFiles: ["src/index.js"],
-    buildStatus: "passed",
-    testStatus: "failed"
+    sourceFiles: ["index.html", "app.js"],
+    staticValidationStatus: "passed",
+    buildStatus: "not_run",
+    testStatus: "not_run"
   });
   assert.equal(result.complete, false);
-  assert.equal(result.status, "source_generated_not_validated");
+  assert.equal(result.status, "source_generated_static_checks_passed");
+  assert.match(result.blockers[0], /successful build and tests/);
+});
+
+test("marks generated source needing fixes when static validation fails", () => {
+  const result = evaluateSpecialistArtifact("app-development", {
+    sourceFiles: ["index.html", "app.js"],
+    staticValidationStatus: "failed"
+  });
+  assert.equal(result.complete, false);
+  assert.equal(result.status, "source_generated_needs_fixes");
 });
 
 test("requires saved SEO work and verified measurement", () => {
