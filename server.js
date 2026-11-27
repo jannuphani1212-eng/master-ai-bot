@@ -292,6 +292,13 @@ async function processDailyQueue(ownerId, dayKey) {
         task = buildBlogRevisionTask({ task, attempt: job.attempts, previousError: job.last_error });
       }
       const generated = await generateAI(task, agentInstructions[job.agent_id], job.agent_id === "blogging" ? 1900 : 2600);
+      if (job.agent_id === "blogging") {
+        await persistentQueue.checkpoint(job.id, workerId, {
+          checkpoint: "ai_response_received",
+          provider: generated.provider,
+          report: String(generated.result || "").slice(0, 18000)
+        });
+      }
       if (job.agent_id === "blogging") generated.result = ensureBlogOriginalityCaveat(generated.result);
       const savedAssets = {};
       let blogReview = null;
