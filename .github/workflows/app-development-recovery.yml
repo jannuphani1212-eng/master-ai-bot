@@ -22,11 +22,11 @@ jobs:
     steps:
       - name: Generate and save an App Development project
         env:
-          MASTER_AI_BASE_URL: ${{ secrets.MASTER_AI_BASE_URL }}
+          MASTER_AI_BOT_URL: https://master-ai-bot-iskj.onrender.com
           SCHEDULER_SHARED_SECRET: ${{ secrets.SCHEDULER_SHARED_SECRET }}
         run: |
           set -euo pipefail
-          if [[ -z "${MASTER_AI_BASE_URL:-}" || -z "${SCHEDULER_SHARED_SECRET:-}" ]]; then
+          if [[ -z "${MASTER_AI_BOT_URL:-}" || -z "${SCHEDULER_SHARED_SECRET:-}" ]]; then
             echo "Required scheduler secrets are not configured."
             exit 1
           fi
