@@ -170,6 +170,7 @@ app.get("/api/app-projects", appProjectHandlers.listHandler);
 app.post("/api/app-projects", appProjectHandlers.createHandler);
 app.get("/api/app-projects/:id", appProjectHandlers.getHandler);
 app.put("/api/app-projects/:id/files", appProjectHandlers.saveFilesHandler);
+app.post("/api/app-projects/:id/validate", appProjectHandlers.validateHandler);
 
 app.get("/api/queue", async (req, res) => {
   if (!persistentQueue) return res.status(503).json({ success: false, error: "Persistent queue is not configured." });
