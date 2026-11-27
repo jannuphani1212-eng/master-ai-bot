@@ -560,7 +560,7 @@ app.post("/api/internal/blog-retry", async (req, res) => {
     if (active) {
       let resumedStatus = active.status;
       let finalAttemptExpired = false;
-      if (active.status === "running" && !dailyWorkerRunning) {
+      if (!dailyWorkerRunning) {
         const recovery = await persistentQueue.recoverExpired(active.id, 2);
         if (recovery.recovered) resumedStatus = recovery.status;
         finalAttemptExpired = recovery.recovered && recovery.status === "failed";
