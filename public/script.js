@@ -293,6 +293,78 @@ document.getElementById("appProjectFileForm")?.addEventListener("submit", async 
 });
 document.getElementById("appProjectRefreshButton")?.addEventListener("click", () => void refreshAppProjects());
 
+function setAffiliateCampaignStatus(message,isError=false) {
+  const node=document.getElementById("affiliateCampaignStatus");
+  if(!node)return;
+  node.textContent=message;
+  node.classList.toggle("warning-text",Boolean(isError));
+}
+
+async function loadAffiliateCampaigns() {
+  if(!(await ensureApprovalSession())) {
+    setAffiliateCampaignStatus("Sign in as owner to manage affiliate campaign links.",true);
+    return;
+  }
+  setAffiliateCampaignStatus("Loading saved affiliate research drafts…");
+  try {
+    const response=await ownerAuthenticatedFetch("/api/affiliate/campaigns",{
+      headers:{Authorization:"Bearer "+approvalAccessToken},cache:"no-store"
+    });
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok||!data.success)throw new Error(data.error||"Affiliate campaigns are unavailable.");
+    const list=document.getElementById("affiliateCampaignList");
+    list.replaceChildren();
+    const campaigns=Array.isArray(data.campaigns)?data.campaigns:[];
+    if(!campaigns.length){addText(list,"p","No affiliate research drafts have been saved yet.","muted");}
+    campaigns.forEach(campaign=>{
+      const card=document.createElement("article");card.className="workspace-history-item";
+      addText(card,"strong",campaign.product_name||"Untitled campaign");
+      addText(card,"p",(campaign.category||"Campaign")+" · "+(campaign.status||"draft")+" · "+Number(campaign.clickCount||0)+" tracked clicks","muted");
+      const productLabel=document.createElement("label");productLabel.textContent="Merchant product URL";
+      const productInput=document.createElement("input");productInput.type="url";productInput.maxLength=1200;
+      productInput.placeholder="https://www.amazon.in/…";productInput.value=campaign.product_url||"";
+      productLabel.appendChild(productInput);card.appendChild(productLabel);
+      const affiliateLabel=document.createElement("label");affiliateLabel.textContent="Your approved affiliate URL";
+      const affiliateInput=document.createElement("input");affiliateInput.type="url";affiliateInput.maxLength=1200;
+      affiliateInput.placeholder="Paste the link from your affiliate program";affiliateInput.value=campaign.affiliate_url||"";
+      affiliateLabel.appendChild(affiliateInput);card.appendChild(affiliateLabel);
+      const save=document.createElement("button");save.type="button";save.className="secondary";save.textContent="Save links and create tracker";
+      save.addEventListener("click",async()=>{
+        save.disabled=true;setAffiliateCampaignStatus("Saving owner-provided links…");
+        try {
+          const update=await ownerAuthenticatedFetch("/api/affiliate/campaigns/"+encodeURIComponent(campaign.id)+"/link",{
+            method:"PATCH",headers:{Authorization:"Bearer "+approvalAccessToken,"Content-Type":"application/json"},
+            body:JSON.stringify({productUrl:productInput.value.trim(),affiliateUrl:affiliateInput.value.trim()})
+          });
+          const result=await update.json().catch(()=>({}));
+          if(!update.ok||!result.success)throw new Error(result.error||"Affiliate links could not be saved.");
+          setAffiliateCampaignStatus("Tracked link created. Product facts and commission remain unverified until independently checked.");
+          await loadAffiliateCampaigns();
+          const refreshed=document.getElementById("affiliateCampaignList");
+          const link=document.createElement("p");link.className="muted";link.textContent="Tracked link: "+result.trackingUrl;
+          refreshed.prepend(link);
+        } catch(error) {
+          setAffiliateCampaignStatus(error.message,true);
+        } finally { save.disabled=false; }
+      });
+      card.appendChild(save);
+      if(campaign.trackingUrl) {
+        const link=document.createElement("p");link.className="muted";link.textContent="Tracked link: "+campaign.trackingUrl;card.appendChild(link);
+        const copy=document.createElement("button");copy.type="button";copy.className="secondary";copy.textContent="Copy tracked link";
+        copy.addEventListener("click",async()=>{
+          try { await navigator.clipboard.writeText(campaign.trackingUrl);setAffiliateCampaignStatus("Tracked link copied."); }
+          catch { setAffiliateCampaignStatus("Copy is unavailable in this browser. Select the tracked link text to copy it.",true); }
+        });
+        card.appendChild(copy);
+      }
+      list.appendChild(card);
+    });
+    setAffiliateCampaignStatus(campaigns.length+" saved campaign draft(s) loaded. No commission or product claim is marked verified.");
+  } catch(error) {
+    setAffiliateCampaignStatus(error.message,true);
+  }
+}
+
 function setSearchConsoleStatus(message, isError=false) {
   const node=document.getElementById("searchConsoleStatus");
   if(!node)return;
@@ -422,6 +494,8 @@ function openAgentWorkspace(agentId) {
   if (appEditor) appEditor.hidden = agentId !== "app-development";
   const searchConsolePanel = document.getElementById("searchConsolePanel");
   if (searchConsolePanel) searchConsolePanel.hidden = agentId !== "seo";
+  const affiliateCampaignPanel = document.getElementById("affiliateCampaignPanel");
+  if (affiliateCampaignPanel) affiliateCampaignPanel.hidden = agentId !== "affiliate";
   const profile=agentProfiles[agentId];if(!profile)return;
   currentWorkspaceAgent=agentId;
   const panel=document.getElementById("agentWorkspace");
@@ -477,6 +551,7 @@ function openAgentWorkspace(agentId) {
   if(agentId === "app-development") void refreshAppProjects();
   if(agentId==="youtube") loadWorkspaceYoutube();
   if(agentId==="seo") { setDefaultSearchConsoleDates(); void loadSearchConsoleStatus(); }
+  if(agentId==="affiliate") void loadAffiliateCampaigns();
   if(agentId==="master" && approvalAccessToken) void loadRepairProposals();
   panel.scrollIntoView({behavior:"smooth",block:"start"});
 }
