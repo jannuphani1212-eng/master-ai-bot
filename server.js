@@ -313,8 +313,12 @@ async function processDailyQueue(ownerId, dayKey) {
           const portfolio = existingProjects.slice(0, 12).map(project =>
             "- " + project.name + " (" + project.project_type + ", " + project.status + ")"
           ).join("\n");
-          task += "\n\nEXISTING APP/GAME PROJECTS — avoid duplicates and choose a different useful concept:\n" +
-            (portfolio || "No existing App Development projects are saved yet.");
+          const hasGameProject = existingProjects.some(project => /^game_/.test(String(project.project_type || "")));
+          const portfolioGuidance = !hasGameProject
+            ? "The saved portfolio has apps but no games. Prioritize a small game_2d or game_3d prototype next; do not create another app."
+            : "Rotate between app, game_2d and game_3d project types, and avoid duplicate concepts.";
+          task += "\n\nEXISTING APP/GAME PROJECTS — avoid duplicates:\n" +
+            (portfolio || "No existing App Development projects are saved yet.") + "\n" + portfolioGuidance;
         } catch (error) {
           console.warn("App project portfolio context unavailable:", error.message);
         }
@@ -452,7 +456,7 @@ async function processDailyQueue(ownerId, dayKey) {
         ? { ...blogReview, status: blogReview?.status || "needs_review", score: blogReview?.score ?? 0,
             warnings: (blogReview?.failures || []).map(item => "Blog editorial check failed: " + item),
             disclaimer: blogReview?.disclaimer || "Editorial quality requires owner review." }
-        : reviewSpecialistReport(generated.result);
+        : reviewSpecialistReport(generated.result, job.agent_id);
       if (job.agent_id === "seo") {
         savedAssets.keywordResearchSaved = review.status === "passed";
         savedAssets.contentOptimizationSaved = review.status === "passed";
