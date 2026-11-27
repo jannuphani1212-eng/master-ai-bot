@@ -42,9 +42,6 @@ jobs:
               "${MASTER_AI_BOT_URL}/api/internal/daily-status")"
             printf '%s\n' "$status"
 
-            state="$(printf '%s' "$status" | jq -r '
-              [.jobs[] | select(.idempotency_key | startswith("daily:" + . as $unused))] | length
-            ' 2>/dev/null || true)"
             latest_blog="$(printf '%s' "$status" | jq -c '
               [.jobs[] | select(.agent_id == "blogging" and (.idempotency_key | contains(":blogging:recovery:")))]
               | sort_by(.created_at) | last // empty
