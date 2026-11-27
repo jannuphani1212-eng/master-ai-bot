@@ -52,7 +52,7 @@ test("reports thin sections separately from missing headings", () => {
   ));
   assert.ok(review.thinSections.includes("Executive summary"));
   assert.deepEqual(review.missingSections, []);
-  assert.equal(review.evidenceReview, "no_automatic_warning");
+  assert.equal(review.evidenceReview, "needs_verification");
   assert.equal(review.status, "needs_review");
 });
 
