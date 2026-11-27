@@ -252,6 +252,7 @@ async function processDailyQueue(ownerId, dayKey) {
           console.log("Daily YouTube channel context unavailable:", error.message);
         }
       }
+      let searchConsoleContext = null;
       if (job.agent_id === "seo") {
         const earlier = await persistentQueue.dailyResults(ownerId, dayKey);
         const context = earlier.filter(item => item.agent_id !== "seo").map(item =>
@@ -261,6 +262,26 @@ async function processDailyQueue(ownerId, dayKey) {
             : "OUTPUT NOT AVAILABLE. " + String(item.last_error || "The workstream has not completed yet.").slice(0, 500))
         ).join("\n\n");
         if (context) task += "\n\nTODAY'S COMPLETED WORKSTREAM OUTPUTS:\n" + context;
+        try {
+          searchConsoleContext = await searchConsoleHandlers.dailyContext(ownerId);
+          if (searchConsoleContext?.verified) {
+            task += "\n\nVERIFIED GOOGLE SEARCH CONSOLE DATA (READ ONLY):\n" +
+              "Property: " + searchConsoleContext.siteUrl + "\n" +
+              "Finalized data range: " + searchConsoleContext.startDate + " to " + searchConsoleContext.endDate + "\n" +
+              "These are the top rows returned by the Search Console API, not complete site totals. " +
+              "Use the measured clicks, impressions, CTR and average position only as observations; do not infer missing rows.\n" +
+              JSON.stringify(searchConsoleContext.rows || []);
+          } else {
+            task += "\n\nSEARCH CONSOLE DATA STATUS: NOT VERIFIED. " +
+              String(searchConsoleContext?.reason || "No connected Search Console property is available.") +
+              " Do not invent clicks, impressions, CTR, rankings or positions. Save research and on-page recommendations separately from measured performance.";
+          }
+        } catch (error) {
+          searchConsoleContext = { verified: false, reason: error.message };
+          task += "\n\nSEARCH CONSOLE DATA STATUS: NOT VERIFIED. " + String(error.message).slice(0, 300) +
+            " Do not invent clicks, impressions, CTR, rankings or positions.";
+          console.warn("Daily SEO Search Console context unavailable:", error.message);
+        }
       }
       // Keep the sports article output budget compatible with the free Groq TPM window.
       // 1,900 requested tokens maps to 2,500 max_completion_tokens in callGroq.
@@ -372,6 +393,16 @@ async function processDailyQueue(ownerId, dayKey) {
             warnings: (blogReview?.failures || []).map(item => "Blog editorial check failed: " + item),
             disclaimer: blogReview?.disclaimer || "Editorial quality requires owner review." }
         : reviewSpecialistReport(generated.result);
+      if (job.agent_id === "seo") {
+        savedAssets.keywordResearchSaved = review.status === "passed";
+        savedAssets.contentOptimizationSaved = review.status === "passed";
+        savedAssets.searchConsoleDataVerified = Boolean(searchConsoleContext?.verified);
+        savedAssets.searchConsoleProperty = searchConsoleContext?.siteUrl || null;
+        savedAssets.searchConsoleRows = Array.isArray(searchConsoleContext?.rows) ? searchConsoleContext.rows.length : 0;
+        savedAssets.searchConsoleDateRange = searchConsoleContext?.verified
+          ? { startDate: searchConsoleContext.startDate, endDate: searchConsoleContext.endDate }
+          : null;
+      }
       const artifactAcceptance = evaluateSpecialistArtifact(job.agent_id, savedAssets);
       const qualityPassed = review.status === "passed";
       const result = {
