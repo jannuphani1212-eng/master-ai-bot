@@ -31,6 +31,8 @@ jobs:
           SCHEDULER_SHARED_SECRET: ${{ secrets.SCHEDULER_SHARED_SECRET }}
         run: |
           set -euo pipefail
+          # Allow the Render auto-deploy from this commit to become live before calling the service.
+          sleep 75
           for attempt in $(seq 1 40); do
             response="$(curl --fail-with-body --silent --show-error \
               --request POST \
