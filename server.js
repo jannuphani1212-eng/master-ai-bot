@@ -564,6 +564,11 @@ app.post("/api/internal/blog-retry", async (req, res) => {
         const recovery = await persistentQueue.recoverExpired(active.id, 2);
         if (recovery.recovered) resumedStatus = recovery.status;
         finalAttemptExpired = recovery.recovered && recovery.status === "failed";
+      } else if (active.status === "pending" && !dailyWorkerRunning &&
+        Number(active.attempts || 0) >= 4) {
+        const recovery = await persistentQueue.failPendingExhausted(active.id);
+        if (recovery.recovered) resumedStatus = recovery.status;
+        finalAttemptExpired = recovery.recovered && recovery.status === "failed";
       }
       if (!finalAttemptExpired) {
         void startDailyWorker(ownerId, dayKey).catch(error => console.error("Blog recovery resume worker stopped:", error.message));
