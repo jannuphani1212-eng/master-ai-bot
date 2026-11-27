@@ -1,4 +1,5 @@
 name: Master AI Bot App Development recovery
+# Re-run the owner-scoped prototype generator after the review-routing fix.
 
 on:
   push:
