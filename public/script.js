@@ -224,6 +224,8 @@ async function openAppProject(projectId, projectName) {
     document.getElementById("appProjectFileLanguage").value = first?.language || "markdown";
     document.getElementById("appProjectFileContent").value = first?.content || "";
     document.getElementById("appProjectSaveFileButton").disabled = false;
+    document.getElementById("appProjectValidateButton").disabled = false;
+    document.getElementById("appProjectValidateButton").disabled = false;
     setAppProjectStudioStatus(files.length + " saved file(s) loaded. Select/edit a file and save to persist changes.");
   } catch (error) {
     setAppProjectStudioStatus(error.message, true);
@@ -291,6 +293,41 @@ document.getElementById("appProjectFileForm")?.addEventListener("submit", async 
     button.disabled = false;
   }
 });
+
+document.getElementById("appProjectValidateButton")?.addEventListener("click", async () => {
+  if (!selectedAppProjectId) {
+    setAppProjectStudioStatus("Create or open a project before validating saved source.", true);
+    return;
+  }
+  if (!(await ensureApprovalSession())) return;
+  const button = document.getElementById("appProjectValidateButton");
+  const output = document.getElementById("appProjectValidationResults");
+  button.disabled = true;
+  output.replaceChildren();
+  setAppProjectStudioStatus("Checking saved source safely. Project code will not be executed…");
+  try {
+    const response = await ownerAuthenticatedFetch("/api/app-projects/" + encodeURIComponent(selectedAppProjectId) + "/validate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}"
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok && response.status !== 422) throw new Error(data.error || "Source validation could not run.");
+    const validation = data.validation || {};
+    addText(output, "strong", validation.status === "passed" ? "Source validation passed" : "Source validation found issues");
+    addText(output, "p", validation.summary || "No validation summary returned.", "muted");
+    (validation.checks || []).forEach(check => {
+      addText(output, "p", (check.status || "unknown").toUpperCase() + " · " + (check.file || "Project") + " · " + (check.message || check.type || "Check"));
+    });
+    addText(output, "p", validation.executionPolicy || "No project code was executed.", "muted");
+    setAppProjectStudioStatus(validation.summary || "Validation finished.", !validation.success);
+  } catch (error) {
+    setAppProjectStudioStatus(error.message, true);
+  } finally {
+    button.disabled = false;
+  }
+});
+
 document.getElementById("appProjectRefreshButton")?.addEventListener("click", () => void refreshAppProjects());
 
 function setAffiliateCampaignStatus(message,isError=false) {
