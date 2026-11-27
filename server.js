@@ -24,6 +24,7 @@ import { renderNurseryRhymeVideo } from "./lib/youtube-video-renderer.js";
 import { buildYoutubeTaskContext } from "./lib/youtube-task-context.js";
 import { parseSynthesisReuseRequest, validateSavedSpecialistReports } from "./lib/synthesis-reuse.js";
 import { createAgentPortfolioHandlers } from "./lib/agent-portfolio.js";
+import { createAppProjectHandlers } from "./lib/app-projects.js";
 import { createAuditMiddleware } from "./lib/audit-log.js";
 import { createPersistentQueue } from "./lib/persistent-queue.js";
 import { createBlogCmsHandlers } from "./lib/blog-cms-integration.js";
@@ -99,6 +100,7 @@ const youtubeRhymeMemory = createYoutubeRhymeMemory();
 const youtubeVideoJobStore = createYoutubeVideoJobStore();
 const youtubeVideoJobHandlers = createYoutubeVideoJobHandlers(youtubeVideoJobStore);
 const agentPortfolioHandlers = createAgentPortfolioHandlers();
+const appProjectHandlers = createAppProjectHandlers();
 const persistentQueue = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY ? createPersistentQueue() : null;
 const blogCmsHandlers = createBlogCmsHandlers();
 const instagramHandlers = createInstagramIntegrationHandlers();
@@ -154,11 +156,15 @@ async function persistTaskHistory(ownerId, agentId, task, data, failure) {
 }
 // Apply IP limits before authentication so invalid-token floods are throttled too.
 // The app currently runs as one Render instance; this in-memory limit is per instance.
-app.use(["/api/task", "/api/brain", "/api/repair-proposals", "/api/agent-history", "/api/agent-portfolio", "/api/agnes-video", "/api/approvals", "/api/blog", "/api/instagram"], limitApiRequests);
-app.use(["/api/task", "/api/brain", "/api/repair-proposals", "/api/agent-history", "/api/agent-portfolio", "/api/notifications", "/api/queue"], requireOwner);
-app.use(["/api/task", "/api/brain", "/api/repair-proposals", "/api/agent-history", "/api/agent-portfolio", "/api/notifications", "/api/queue"], auditOwnerRequests);
+app.use(["/api/task", "/api/brain", "/api/repair-proposals", "/api/agent-history", "/api/agent-portfolio", "/api/app-projects", "/api/agnes-video", "/api/approvals", "/api/blog", "/api/instagram"], limitApiRequests);
+app.use(["/api/task", "/api/brain", "/api/repair-proposals", "/api/agent-history", "/api/agent-portfolio", "/api/app-projects", "/api/notifications", "/api/queue"], requireOwner);
+app.use(["/api/task", "/api/brain", "/api/repair-proposals", "/api/agent-history", "/api/agent-portfolio", "/api/app-projects", "/api/notifications", "/api/queue"], auditOwnerRequests);
 app.get("/api/agent-history", agentHistoryHandlers.list);
 app.get("/api/agent-portfolio", agentPortfolioHandlers.get);
+app.get("/api/app-projects", appProjectHandlers.listHandler);
+app.post("/api/app-projects", appProjectHandlers.createHandler);
+app.get("/api/app-projects/:id", appProjectHandlers.getHandler);
+app.put("/api/app-projects/:id/files", appProjectHandlers.saveFilesHandler);
 
 app.get("/api/queue", async (req, res) => {
   if (!persistentQueue) return res.status(503).json({ success: false, error: "Persistent queue is not configured." });
