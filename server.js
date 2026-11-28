@@ -666,6 +666,9 @@ app.post("/api/internal/app-development-retry", async (req, res) => {
     const prefix = "daily:" + dayKey + ":app-development:recovery:";
     const recoveries = recent.filter(item => String(item.idempotency_key || "").startsWith(prefix));
     const active = recoveries.find(item => ["pending", "running"].includes(item.status));
+    if (recoveries.length >= 4 && !active) {
+      return res.status(429).json({ success: false, dayKey, error: "The daily App Development recovery limit of four jobs has been reached. Wait for provider quota reset or fix the generation issue before another attempt." });
+    }
     if (active && active.status === "pending" && Number(active.attempts || 0) >= Number(active.max_attempts || 4)) {
       const finalized = await persistentQueue.finalizeExhaustedPending(active.id);
       if (finalized.finalized) active.status = "failed";
@@ -708,7 +711,7 @@ app.get("/api/internal/daily-status", async (req, res) => {
   try {
     const allJobs = await persistentQueue.status(ownerId);
     const jobs = allJobs.filter(job => job.idempotency_key === "daily:" + dayKey + ":" + job.agent_id);
-    const recoveryJobs = allJobs.filter(job => String(job.idempotency_key || "").startsWith("daily:" + dayKey + ":blogging:recovery:"));
+    const recoveryJobs = allJobs.filter(job => String(job.idempotency_key || "").startsWith("daily:" + dayKey + ":") && String(job.idempotency_key || "").includes(":recovery:"));
     const counts = jobs.reduce((acc, job) => { acc[job.status] = (acc[job.status] || 0) + 1; return acc; }, {});
     return res.json({ success: true, dayKey, jobs, recoveryJobs, counts, workerRunning: dailyWorkerRunning, finished: jobs.length === 5 && jobs.every(job => ["completed", "failed"].includes(job.status)) });
   } catch (error) {
