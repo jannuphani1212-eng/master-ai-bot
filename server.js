@@ -526,19 +526,7 @@ async function processDailyQueue(ownerId, dayKey) {
     const dailyJobs = await persistentQueue.dailyResults(ownerId, dayKey);
     if (dailyJobs.length) {
       const report = buildDailyReport(dayKey, dailyJobs);
-      const existingNotifications = await persistentQueue.notifications(ownerId);
-      const alreadySent = existingNotifications.some(item =>
-        item.notification_type === "daily_report" && item.title === report.title
-      );
-      if (!alreadySent) {
-        await persistentQueue.notify(ownerId, {
-          agentId: "master",
-          type: "daily_report",
-          title: report.title,
-          body: report.body,
-          metadata: report.metadata
-        });
-      }
+      await persistentQueue.upsertDailyReport(ownerId, report);
     }
   } catch (error) {
     console.error("Could not save the daily Master AI report:", error.message);
