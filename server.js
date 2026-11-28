@@ -703,7 +703,7 @@ app.get("/api/internal/daily-status", async (req, res) => {
   const ownerId = String(process.env.SUPABASE_OWNER_USER_ID || "");
   const dayKey = indiaDayKey();
   try {
-    const jobs = (await persistentQueue.status(ownerId)).filter(job => String(job.idempotency_key || "").startsWith("daily:" + dayKey + ":"));
+    const jobs = (await persistentQueue.status(ownerId)).filter(job => job.idempotency_key === "daily:" + dayKey + ":" + job.agent_id);
     const counts = jobs.reduce((acc, job) => { acc[job.status] = (acc[job.status] || 0) + 1; return acc; }, {});
     return res.json({ success: true, dayKey, jobs, counts, workerRunning: dailyWorkerRunning, finished: jobs.length === 5 && jobs.every(job => ["completed", "failed"].includes(job.status)) });
   } catch (error) {
