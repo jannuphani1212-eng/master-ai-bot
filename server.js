@@ -377,6 +377,8 @@ async function processDailyQueue(ownerId, dayKey) {
             source: "master_ai_daily_queue",
             dayKey,
             cmsPublication: "private_draft_auto_delivery_live_publish_owner_approval_required",
+            researchStatus: sportsResearch?.status || "unavailable",
+            researchItemCount: Number(sportsResearch?.itemCount || 0),
             actualIncome: "not_connected_or_not_measured"
           }
         });
