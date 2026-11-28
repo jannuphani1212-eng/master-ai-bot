@@ -1,0 +1,35 @@
+name: Master AI Bot provider quota recovery
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: master-ai-bot-provider-quota-recovery
+  cancel-in-progress: false
+
+jobs:
+  recover-due-provider-jobs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Check for expired provider cooldowns
+        env:
+          MASTER_AI_BOT_URL: https://master-ai-bot-iskj.onrender.com
+          SCHEDULER_SHARED_SECRET: ${{ secrets.SCHEDULER_SHARED_SECRET }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${SCHEDULER_SHARED_SECRET:-}" ]]; then
+            echo "SCHEDULER_SHARED_SECRET is not configured; refusing recovery."
+            exit 1
+          fi
+          response="$(curl --fail-with-body --silent --show-error --max-time 30 \
+            --request POST \
+            --header "Authorization: Bearer ${SCHEDULER_SHARED_SECRET}" \
+            "${MASTER_AI_BOT_URL%/}/api/internal/provider-quota-recovery")"
+          printf '%s\n' "$response"
+          printf '%s' "$response" | jq -e '.success == true' >/dev/null
