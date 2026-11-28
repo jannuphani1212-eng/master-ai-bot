@@ -11,6 +11,8 @@ const diagnosticsDialog = document.getElementById("diagnosticsDialog");
 const ownerLoginDialog = document.getElementById("ownerLoginDialog");
 const ownerSignInButton = document.getElementById("ownerSignInButton");
 const toastElement = document.getElementById("toast");
+let knownDailyNotificationIds = null;
+let dailyOperationsPollTimer = null;
 const wakeMessage = document.getElementById("wakeMessage");
 const taskFeed = document.getElementById("taskFeed");
 const approvalPanel = document.getElementById("approvalPanel");
@@ -985,6 +987,7 @@ function saveApprovalRefreshToken(token) {
 
 function clearApprovalSession() {
   approvalAccessToken = "";
+  knownDailyNotificationIds = null;
   saveApprovalRefreshToken("");
   updateTaskAuthStatus();
 }
@@ -1089,11 +1092,11 @@ async function approvalApi(path, options = {}) {
   return data;
 }
 
-async function loadDailyOperations() {
+async function loadDailyOperations({ background = false } = {}) {
   const status = document.getElementById("dailyQueueStatus");
   const list = document.getElementById("dailyNotificationList");
   if (!status || !list || !approvalAccessToken) return;
-  status.textContent = "Loading queue and agent notifications…";
+  if (!background) status.textContent = "Loading queue and agent notifications…";
   try {
     const [queueData, notificationData] = await Promise.all([
       approvalApi("/api/queue"),
@@ -1107,6 +1110,13 @@ async function loadDailyOperations() {
     status.textContent = "Saved queue · " + jobs.length + " recent jobs · Pending " + (counts.pending || 0) +
       " · Running " + (counts.running || 0) + " · Completed " + (counts.completed || 0) + " · Failed " + (counts.failed || 0);
     const items = Array.isArray(notificationData.notifications) ? notificationData.notifications : [];
+    if (knownDailyNotificationIds !== null) {
+      const freshItems = items.filter(item => item.id && !knownDailyNotificationIds.has(item.id) && !item.read_at);
+      for (const item of freshItems.slice(0, 3)) {
+        showToast("New agent update: " + String(item.title || "Work update").slice(0, 110));
+      }
+    }
+    knownDailyNotificationIds = new Set(items.map(item => item.id).filter(Boolean));
     list.replaceChildren();
     if (!items.length) {
       list.textContent = "No agent notifications yet. The first scheduled run will add completion and retry updates here.";
@@ -1145,6 +1155,20 @@ async function loadDailyOperations() {
     status.textContent = "Daily operations status unavailable: " + error.message;
     list.textContent = "Sign in and confirm the queue database setup is complete.";
   }
+}
+
+function startDailyOperationsPolling() {
+  if (dailyOperationsPollTimer !== null) return;
+  dailyOperationsPollTimer = window.setInterval(() => {
+    if (approvalAccessToken && document.visibilityState === "visible") {
+      void loadDailyOperations({ background: true });
+    }
+  }, 30000);
+  document.addEventListener("visibilitychange", () => {
+    if (approvalAccessToken && document.visibilityState === "visible") {
+      void loadDailyOperations({ background: true });
+    }
+  });
 }
 
 async function loadBlogCmsConnections() {
@@ -1263,6 +1287,7 @@ async function loadApprovalQueue() {
     const data = await approvalApi("/api/approvals");
     renderApprovalQueue(Array.isArray(data.approvals) ? data.approvals : []);
     await loadDailyOperations();
+    startDailyOperationsPolling();
     await loadBlogCmsConnections();
     await loadInstagramConnection();
     setApprovalMessage("Signed in. Your owner-only approval queue is ready.");
