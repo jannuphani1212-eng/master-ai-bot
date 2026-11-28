@@ -1,10 +1,6 @@
 name: Master AI Bot Blogging-only recovery
-# Retry the pending draft with the official-source biography claim gate enabled.
-# Resume the stale worker lease after the recovery and token-budget safeguards deploy.
-# Resume after the free sports RSS evidence adapter is deployed.
-# Re-trigger the protected recovery workflow after the official biography evidence gate is deployed.
-# Re-run after pending exhausted queue entries are finalized by the recovery route.
-# Re-trigger after table-format biography birth-date parsing is deployed.
+# Recovery is successful only after a private Blogger draft is actually delivered
+# and the application records a passed editorial/artifact acceptance gate.
 
 on:
   workflow_dispatch:
@@ -24,7 +20,7 @@ concurrency:
 jobs:
   recover-blogging:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 45
     steps:
       - name: Recover and verify a private Blogging draft
         env:
@@ -46,15 +42,31 @@ jobs:
               | sort_by(.created_at) | last // empty
             ')"
             blog_state="$(printf '%s' "$latest_blog" | jq -r '.status // empty')"
+
             if [ "$blog_state" = "completed" ]; then
-              echo "Blogging generation job completed. The application must still show a passed editorial gate and a saved private Blogger draft before this work is considered ready."
-              exit 0
+              delivery_ok="$(printf '%s' "$latest_blog" | jq -r '
+                (.result.success == true)
+                and (.result.artifactAcceptance.complete == true)
+                and (
+                  .result.savedAssets.bloggerDraftCreated == true
+                  or .result.savedAssets.bloggerDraftAlreadyCreated == true
+                )
+              ')"
+              if [ "$delivery_ok" = "true" ]; then
+                echo "Verified: editorial gate passed and a private Blogger draft was delivered. Publishing remains owner-approval-only."
+                exit 0
+              fi
+              echo "Queue generation completed, but editorial acceptance or private Blogger draft delivery is not verified. This is NOT a successful recovery." >&2
+              printf '%s\n' "$latest_blog" | jq '{status, result_success: .result.success, artifactAcceptance: .result.artifactAcceptance, savedAssets: .result.savedAssets, last_error}'
+              exit 1
             fi
+
             if [ "$blog_state" = "failed" ] && [ "$triggered" -eq 1 ]; then
               blog_error="$(printf '%s' "$latest_blog" | jq -r '.last_error // "No failure detail returned."')"
               echo "Blogging recovery failed after its one allowed trigger: $blog_error" >&2
               exit 1
             fi
+
             if [ "$triggered" -eq 0 ]; then
               response="$(curl --fail-with-body --silent --show-error \
                 --request POST \
@@ -66,5 +78,5 @@ jobs:
             fi
             if [ "$attempt" -lt 40 ]; then sleep 30; fi
           done
-          echo "Blogging recovery did not reach a completed queue state within 20 minutes." >&2
+          echo "Blogging recovery did not reach verified private-draft delivery within 20 minutes." >&2
           exit 1
