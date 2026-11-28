@@ -684,6 +684,9 @@ app.post("/api/internal/app-development-retry", async (req, res) => {
       }
       console.warn("Expired final App Development attempt marked failed; enqueueing a fresh recovery job.");
     }
+    if (recoveries.length >= 4) {
+      return res.status(429).json({ success: false, dayKey, error: "The daily App Development recovery limit of four jobs has been reached. Wait for provider quota reset or fix the generation issue before another attempt." });
+    }
     const recoveryNumber = recoveries.length + 1;
     const queued = await persistentQueue.enqueue(ownerId, [{
       agentId: "app-development",
@@ -708,7 +711,7 @@ app.get("/api/internal/daily-status", async (req, res) => {
   try {
     const allJobs = await persistentQueue.status(ownerId);
     const jobs = allJobs.filter(job => job.idempotency_key === "daily:" + dayKey + ":" + job.agent_id);
-    const recoveryJobs = allJobs.filter(job => String(job.idempotency_key || "").startsWith("daily:" + dayKey + ":blogging:recovery:"));
+    const recoveryJobs = allJobs.filter(job => String(job.idempotency_key || "").startsWith("daily:" + dayKey + ":") && String(job.idempotency_key || "").includes(":recovery:"));
     const counts = jobs.reduce((acc, job) => { acc[job.status] = (acc[job.status] || 0) + 1; return acc; }, {});
     return res.json({ success: true, dayKey, jobs, recoveryJobs, counts, workerRunning: dailyWorkerRunning, finished: jobs.length === 5 && jobs.every(job => ["completed", "failed"].includes(job.status)) });
   } catch (error) {
