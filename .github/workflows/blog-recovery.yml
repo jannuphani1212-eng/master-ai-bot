@@ -53,8 +53,14 @@ jobs:
             ')"
             blog_state="$(printf '%s' "$latest_blog" | jq -r '.status // empty')"
             if [ "$blog_state" = "completed" ]; then
-              echo "Blogging recovery job completed; editorial review and Blogger draft delivery are recorded in the queue."
+              echo "Blogging generation job completed. The application must still show a passed editorial gate and a saved private Blogger draft before this work is considered ready."
               exit 0
+            fi
+            if [ "$blog_state" = "failed" ]; then
+              blog_error="$(printf '%s' "$latest_blog" | jq -r '.last_error // "No failure detail returned."')"
+              echo "Blogging recovery exhausted its retry budget: $blog_error" >&2
+              echo "Stopping this workflow instead of repeatedly re-triggering the same failed editorial task." >&2
+              exit 1
             fi
             if [ "$attempt" -lt 40 ]; then sleep 30; fi
           done
