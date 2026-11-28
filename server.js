@@ -512,12 +512,14 @@ async function processDailyQueue(ownerId, dayKey) {
       selfHealingMonitor.record(job.agent_id, { success: false, failureType: inferFailureType(error.message), error: error.message });
       await persistentQueue.notify(ownerId, {
         agentId: job.agent_id,
-        type: retry.terminal ? "agent_failed" : "agent_retry_scheduled",
-        title: job.agent_id + (retry.terminal ? " daily task failed" : " daily task will retry"),
-        body: error.message.slice(0, 1200),
-        metadata: { jobId: job.id, dayKey, terminal: retry.terminal, retryInSeconds: retry.retryInSeconds }
+        type: retry.blocked ? "agent_blocked" : retry.terminal ? "agent_failed" : "agent_retry_scheduled",
+        title: job.agent_id + (retry.blocked ? " waiting for provider quota reset" : retry.terminal ? " daily task failed" : " daily task will retry"),
+        body: retry.blocked
+          ? "The task is safely preserved as blocked because configured AI providers reported daily quota exhaustion. No repeated provider calls will be made; retry after provider quota availability returns. " + error.message.slice(0, 900)
+          : error.message.slice(0, 1200),
+        metadata: { jobId: job.id, dayKey, terminal: retry.terminal, blocked: retry.blocked, queueStatus: retry.status, retryInSeconds: retry.retryInSeconds }
       }).catch(notificationError => console.error("Could not save failure notification:", notificationError.message));
-      summary.push({ agentId: job.agent_id, status: retry.terminal ? "failed" : "retry_scheduled", error: error.message });
+      summary.push({ agentId: job.agent_id, status: retry.blocked ? "blocked" : retry.terminal ? "failed" : "retry_scheduled", error: error.message });
       if (!retry.terminal) await new Promise(resolve => setTimeout(resolve, retry.retryInSeconds * 1000));
     } finally {
       clearInterval(leaseHeartbeat);
@@ -702,7 +704,7 @@ app.get("/api/internal/daily-status", async (req, res) => {
     const jobs = allJobs.filter(job => job.idempotency_key === "daily:" + dayKey + ":" + job.agent_id);
     const recoveryJobs = allJobs.filter(job => String(job.idempotency_key || "").startsWith("daily:" + dayKey + ":") && String(job.idempotency_key || "").includes(":recovery:"));
     const counts = jobs.reduce((acc, job) => { acc[job.status] = (acc[job.status] || 0) + 1; return acc; }, {});
-    return res.json({ success: true, dayKey, jobs, recoveryJobs, counts, workerRunning: dailyWorkerRunning, finished: jobs.length === 5 && jobs.every(job => ["completed", "failed"].includes(job.status)) });
+    return res.json({ success: true, dayKey, jobs, recoveryJobs, counts, workerRunning: dailyWorkerRunning, finished: jobs.length === 5 && jobs.every(job => ["completed", "failed", "blocked"].includes(job.status)) });
   } catch (error) {
     return res.status(503).json({ success: false, error: error.message });
   }
