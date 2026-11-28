@@ -21,6 +21,7 @@ import { createAgentHistoryHandlers } from "./lib/supabase-task-history.js";
 import { createYoutubeRhymeMemory } from "./lib/youtube-rhyme-memory.js";
 import { createYoutubeVideoJobStore, createYoutubeVideoJobHandlers } from "./lib/youtube-video-jobs.js";
 import { renderNurseryRhymeVideo } from "./lib/youtube-video-renderer.js";
+import { evaluateYoutubeRenderRequest } from "./lib/youtube-render-policy.js";
 import { buildYoutubeTaskContext } from "./lib/youtube-task-context.js";
 import { parseSynthesisReuseRequest, validateSavedSpecialistReports } from "./lib/synthesis-reuse.js";
 import { createAgentPortfolioHandlers } from "./lib/agent-portfolio.js";
@@ -1856,6 +1857,18 @@ async function resumeYoutubeVideoJobs() {
   }
 }
 app.post("/api/youtube/production-jobs", async (req, res) => {
+  const renderPolicy = evaluateYoutubeRenderRequest(req.body || {});
+  if (!renderPolicy.allowed) {
+    return res.status(503).json({
+      success: false,
+      code: renderPolicy.code,
+      error: renderPolicy.message,
+      requestedRenderStyle: "true_3d",
+      availableRenderStyle: "2d_vector_cartoon",
+      ownerApprovalRequired: true,
+      publishingEnabled: false
+    });
+  }
   let job = null;
   try {
     const rhymeTitle = String(req.body?.rhyme_title || req.body?.rhymeTitle || "Rainbow's Little Parade").trim().slice(0, 180);
