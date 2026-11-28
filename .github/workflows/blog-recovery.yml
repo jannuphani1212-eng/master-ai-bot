@@ -1,18 +1,9 @@
 name: Master AI Bot Blogging-only recovery
-# Retry the pending draft with the official-source biography claim gate enabled.
-# Resume the stale worker lease after the recovery and token-budget safeguards deploy.
-# Resume after the free sports RSS evidence adapter is deployed.
-# Re-trigger the protected recovery workflow after the official biography evidence gate is deployed.
-# Re-run after pending exhausted queue entries are finalized by the recovery route.
-# Re-trigger after table-format biography birth-date parsing is deployed.
+# Manual, owner-initiated recovery only. Daily production is handled by daily-autonomous-ops.yml.
+# Do not trigger this workflow on pushes to this workflow file: that can create recovery loops.
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - .github/workflows/blog-recovery.yml
 
 permissions:
   contents: read
@@ -24,7 +15,7 @@ concurrency:
 jobs:
   recover-blogging:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 25
     steps:
       - name: Recover and verify a private Blogging draft
         env:
@@ -32,7 +23,11 @@ jobs:
           SCHEDULER_SHARED_SECRET: ${{ secrets.SCHEDULER_SHARED_SECRET }}
         run: |
           set -euo pipefail
-          # Allow the Render auto-deploy from this commit to become live before calling the service.
+          if [ -z "${SCHEDULER_SHARED_SECRET}" ]; then
+            echo "SCHEDULER_SHARED_SECRET is not configured; refusing to trigger recovery." >&2
+            exit 1
+          fi
+          # Allow the current Render deployment to become live before calling the service.
           sleep 75
           triggered=0
           for attempt in $(seq 1 40); do
@@ -47,7 +42,7 @@ jobs:
             ')"
             blog_state="$(printf '%s' "$latest_blog" | jq -r '.status // empty')"
             if [ "$blog_state" = "completed" ]; then
-              echo "Blogging generation job completed. The application must still show a passed editorial gate and a saved private Blogger draft before this work is considered ready."
+              echo "Blogging generation job completed. A passed editorial gate and saved private Blogger draft are still required before this work is considered ready."
               exit 0
             fi
             if [ "$blog_state" = "failed" ] && [ "$triggered" -eq 1 ]; then
