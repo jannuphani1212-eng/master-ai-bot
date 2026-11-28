@@ -375,7 +375,7 @@ async function loadAffiliateCampaigns() {
           });
           const result=await update.json().catch(()=>({}));
           if(!update.ok||!result.success)throw new Error(result.error||"Affiliate links could not be saved.");
-          setAffiliateCampaignStatus("Tracked link created. Product facts and commission remain unverified until independently checked.");
+          setAffiliateCampaignStatus("Owner-provided links saved as a draft. Tracking remains disabled until you approve a proposal and separately activate it.");
           await loadAffiliateCampaigns();
         } catch(error) {
           setAffiliateCampaignStatus(error.message,true);
