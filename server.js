@@ -562,28 +562,36 @@ async function processDailyQueue(ownerId, dayKey) {
 }
 
 async function recoverDueProviderJobs(ownerId) {
-  const requeued = await persistentQueue.requeueDueBlocked(ownerId);
-  for (const job of requeued) {
+  const recovered = await persistentQueue.requeueDueBlocked(ownerId);
+  const requeued = recovered.filter(job => job.status === "pending");
+  const finalized = recovered.filter(job => job.status === "failed");
+  for (const job of recovered) {
     try {
+      const exhausted = job.status === "failed";
       await persistentQueue.notify(ownerId, {
         agentId: job.agent_id,
-        type: "agent_retry_scheduled",
-        title: job.agent_id + " provider cooldown elapsed; task requeued",
-        body: "The 24-hour provider quota cooldown elapsed. The saved task has safely returned to the queue for a bounded retry. If free-provider quotas are still unavailable, it will be blocked again without repeated rapid calls.",
+        type: exhausted ? "agent_failed" : "agent_retry_scheduled",
+        title: exhausted
+          ? job.agent_id + " task stopped after provider cooldown"
+          : job.agent_id + " provider cooldown elapsed; task requeued",
+        body: exhausted
+          ? "The 24-hour provider quota cooldown elapsed, but this task had already used all allowed attempts. It was safely marked failed and will not make another provider call. Review the task before creating a new run."
+          : "The 24-hour provider quota cooldown elapsed. The saved task has safely returned to the queue for a bounded retry. If free-provider quotas are still unavailable, it will be blocked again without repeated rapid calls.",
         metadata: {
           jobId: job.id,
           idempotencyKey: job.idempotency_key,
           attempts: job.attempts,
           maxAttempts: job.max_attempts,
-          queueStatus: "pending"
+          queueStatus: job.status
         }
       });
     } catch (notificationError) {
-      console.error("Provider cooldown retry notification could not be saved:", notificationError.message);
+      console.error("Provider cooldown recovery notification could not be saved:", notificationError.message);
     }
   }
   if (requeued.length) console.log("Provider cooldown recovery requeued " + requeued.length + " blocked job(s).");
-  return requeued;
+  if (finalized.length) console.log("Provider cooldown recovery finalized " + finalized.length + " exhausted job(s) as failed.");
+  return { requeued, finalized };
 }
 
 async function startDailyWorker(ownerId, dayKey) {
@@ -615,16 +623,18 @@ app.post("/api/internal/provider-quota-recovery", async (req, res) => {
     return res.status(503).json({ success: false, error: "SUPABASE_OWNER_USER_ID is not configured correctly." });
   }
   try {
-    const requeued = await recoverDueProviderJobs(ownerId);
-    if (requeued.length) {
+    const recovery = await recoverDueProviderJobs(ownerId);
+    if (recovery.requeued.length) {
       void startDailyWorker(ownerId, indiaDayKey()).catch(error => console.error("Provider quota recovery worker stopped:", error.message));
     }
     return res.status(200).json({
       success: true,
-      requeued: requeued.length,
-      jobs: requeued.map(job => ({ id: job.id, agentId: job.agent_id, attempts: job.attempts, maxAttempts: job.max_attempts })),
-      message: requeued.length
-        ? "Due provider-blocked jobs were safely requeued; the existing worker is processing them."
+      requeued: recovery.requeued.length,
+      finalized: recovery.finalized.length,
+      jobs: recovery.requeued.map(job => ({ id: job.id, agentId: job.agent_id, attempts: job.attempts, maxAttempts: job.max_attempts })),
+      finalizedJobs: recovery.finalized.map(job => ({ id: job.id, agentId: job.agent_id, attempts: job.attempts, maxAttempts: job.max_attempts })),
+      message: recovery.requeued.length || recovery.finalized.length
+        ? "Due provider-blocked jobs were recovered; eligible jobs were requeued and exhausted jobs were marked failed with owner notifications."
         : "No provider-blocked jobs have reached their cooldown expiry."
     });
   } catch (error) {
