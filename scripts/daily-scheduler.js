@@ -35,7 +35,7 @@ try {
     }));
     if (status.finished) {
       console.log("All five daily jobs reached a terminal state:", JSON.stringify(status));
-      if ((status.counts?.failed || 0) > 0) process.exitCode = 1;
+      if ((status.counts?.failed || 0) > 0 || (status.counts?.blocked || 0) > 0) process.exitCode = 1;
       break;
     }
     // Re-trigger idempotently so a web-service restart cannot strand queued jobs.
