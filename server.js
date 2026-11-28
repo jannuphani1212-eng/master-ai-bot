@@ -558,36 +558,40 @@ async function processDailyQueue(ownerId, dayKey) {
   return summary;
 }
 
+async function recoverDueProviderJobs(ownerId) {
+  const requeued = await persistentQueue.requeueDueBlocked(ownerId);
+  for (const job of requeued) {
+    try {
+      await persistentQueue.notify(ownerId, {
+        agentId: job.agent_id,
+        type: "agent_retry_scheduled",
+        title: job.agent_id + " provider cooldown elapsed; task requeued",
+        body: "The 24-hour provider quota cooldown elapsed. The saved task has safely returned to the queue for a bounded retry. If free-provider quotas are still unavailable, it will be blocked again without repeated rapid calls.",
+        metadata: {
+          jobId: job.id,
+          idempotencyKey: job.idempotency_key,
+          attempts: job.attempts,
+          maxAttempts: job.max_attempts,
+          queueStatus: "pending"
+        }
+      });
+    } catch (notificationError) {
+      console.error("Provider cooldown retry notification could not be saved:", notificationError.message);
+    }
+  }
+  if (requeued.length) console.log("Provider cooldown recovery requeued " + requeued.length + " blocked job(s).");
+  return requeued;
+}
+
 async function startDailyWorker(ownerId, dayKey) {
   if (dailyWorkerRunning) return false;
   dailyWorkerRunning = true;
   try {
-    let requeued = [];
     try {
-      requeued = await persistentQueue.requeueDueBlocked(ownerId);
+      await recoverDueProviderJobs(ownerId);
     } catch (requeueError) {
       console.error("Provider cooldown recovery could not requeue due jobs:", requeueError.message);
     }
-    for (const job of requeued) {
-      try {
-        await persistentQueue.notify(ownerId, {
-          agentId: job.agent_id,
-          type: "agent_retry_scheduled",
-          title: job.agent_id + " provider cooldown elapsed; task requeued",
-          body: "The 24-hour provider quota cooldown elapsed. The saved task has safely returned to the queue for a bounded retry. If free-provider quotas are still unavailable, it will be blocked again without repeated rapid calls.",
-          metadata: {
-            jobId: job.id,
-            idempotencyKey: job.idempotency_key,
-            attempts: job.attempts,
-            maxAttempts: job.max_attempts,
-            queueStatus: "pending"
-          }
-        });
-      } catch (notificationError) {
-        console.error("Provider cooldown retry notification could not be saved:", notificationError.message);
-      }
-    }
-    if (requeued.length) console.log("Provider cooldown recovery requeued " + requeued.length + " blocked job(s).");
     await processDailyQueue(ownerId, dayKey);
   } finally {
     dailyWorkerRunning = false;
@@ -599,6 +603,32 @@ function schedulerAuthorized(req) {
   const provided = String(req.get("authorization") || "").replace(/^Bearer\s+/i, "");
   return secureSecretMatches(provided, process.env.SCHEDULER_SHARED_SECRET);
 }
+
+app.post("/api/internal/provider-quota-recovery", async (req, res) => {
+  if (!schedulerAuthorized(req)) return res.status(401).json({ success: false, error: "Unauthorized scheduler request." });
+  if (!persistentQueue) return res.status(503).json({ success: false, error: "Persistent queue is not configured." });
+  const ownerId = String(process.env.SUPABASE_OWNER_USER_ID || "");
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(ownerId)) {
+    return res.status(503).json({ success: false, error: "SUPABASE_OWNER_USER_ID is not configured correctly." });
+  }
+  try {
+    const requeued = await recoverDueProviderJobs(ownerId);
+    if (requeued.length) {
+      void startDailyWorker(ownerId, indiaDayKey()).catch(error => console.error("Provider quota recovery worker stopped:", error.message));
+    }
+    return res.status(200).json({
+      success: true,
+      requeued: requeued.length,
+      jobs: requeued.map(job => ({ id: job.id, agentId: job.agent_id, attempts: job.attempts, maxAttempts: job.max_attempts })),
+      message: requeued.length
+        ? "Due provider-blocked jobs were safely requeued; the existing worker is processing them."
+        : "No provider-blocked jobs have reached their cooldown expiry."
+    });
+  } catch (error) {
+    console.error("Provider quota recovery check failed:", error.message);
+    return res.status(503).json({ success: false, error: error.message });
+  }
+});
 
 app.post("/api/internal/daily-run", async (req, res) => {
   if (!schedulerAuthorized(req)) return res.status(401).json({ success: false, error: "Unauthorized scheduler request." });
