@@ -34,21 +34,15 @@ jobs:
           set -euo pipefail
           # Allow the Render auto-deploy from this commit to become live before calling the service.
           sleep 75
+          triggered=0
           for attempt in $(seq 1 40); do
-            response="$(curl --fail-with-body --silent --show-error \
-              --request POST \
-              --header "Authorization: Bearer ${SCHEDULER_SHARED_SECRET}" \
-              --header "Content-Type: application/json" \
-              "${MASTER_AI_BOT_URL}/api/internal/blog-retry")"
-            printf 'Recovery trigger %s: %s\n' "$attempt" "$response"
-
             status="$(curl --fail-with-body --silent --show-error \
               --header "Authorization: Bearer ${SCHEDULER_SHARED_SECRET}" \
               "${MASTER_AI_BOT_URL}/api/internal/daily-status")"
             printf '%s\n' "$status"
 
             latest_blog="$(printf '%s' "$status" | jq -c '
-              [.jobs[] | select(.agent_id == "blogging" and (.idempotency_key | contains(":blogging:recovery:")))]
+              [.recoveryJobs[] | select(.agent_id == "blogging")]
               | sort_by(.created_at) | last // empty
             ')"
             blog_state="$(printf '%s' "$latest_blog" | jq -r '.status // empty')"
@@ -56,11 +50,19 @@ jobs:
               echo "Blogging generation job completed. The application must still show a passed editorial gate and a saved private Blogger draft before this work is considered ready."
               exit 0
             fi
-            if [ "$blog_state" = "failed" ]; then
+            if [ "$blog_state" = "failed" ] && [ "$triggered" -eq 1 ]; then
               blog_error="$(printf '%s' "$latest_blog" | jq -r '.last_error // "No failure detail returned."')"
-              echo "Blogging recovery exhausted its retry budget: $blog_error" >&2
-              echo "Stopping this workflow instead of repeatedly re-triggering the same failed editorial task." >&2
+              echo "Blogging recovery failed after its one allowed trigger: $blog_error" >&2
               exit 1
+            fi
+            if [ "$triggered" -eq 0 ]; then
+              response="$(curl --fail-with-body --silent --show-error \
+                --request POST \
+                --header "Authorization: Bearer ${SCHEDULER_SHARED_SECRET}" \
+                --header "Content-Type: application/json" \
+                "${MASTER_AI_BOT_URL}/api/internal/blog-retry")"
+              printf 'Single recovery trigger: %s\n' "$response"
+              triggered=1
             fi
             if [ "$attempt" -lt 40 ]; then sleep 30; fi
           done
