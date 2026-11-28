@@ -382,6 +382,38 @@ async function loadAffiliateCampaigns() {
         } finally { save.disabled=false; }
       });
       card.appendChild(save);
+      if(campaign.status === "draft" && campaign.affiliate_url) {
+        const requestActivation=document.createElement("button");
+        requestActivation.type="button";
+        requestActivation.className="secondary";
+        requestActivation.textContent="Request owner approval to activate tracking";
+        requestActivation.addEventListener("click",async()=>{
+          requestActivation.disabled=true;
+          setAffiliateCampaignStatus("Creating an approval proposal for these exact saved links…");
+          try {
+            await approvalApi("/api/approvals",{
+              method:"POST",
+              body:JSON.stringify({
+                title:"Activate affiliate tracking: "+(campaign.product_name||"Campaign"),
+                actionType:"publish",
+                payload:{
+                  operation:"affiliate_campaign_activate",
+                  campaignId:campaign.id,
+                  productUrl:campaign.product_url,
+                  affiliateUrl:campaign.affiliate_url,
+                  merchant:campaign.merchant,
+                  externalEffect:"Enable this campaign's public tracked redirect only; do not publish content."
+                }
+              })
+            });
+            setAffiliateCampaignStatus("Approval proposal created. Review it in the Owner Approval Center. Tracking remains disabled until you approve it and then separately activate it.");
+            await loadApprovalQueue();
+          } catch(error) {
+            setAffiliateCampaignStatus(error.message,true);
+          } finally { requestActivation.disabled=false; }
+        });
+        card.appendChild(requestActivation);
+      }
       if(campaign.trackingUrl) {
         const link=document.createElement("p");link.className="muted";link.textContent="Tracked link: "+campaign.trackingUrl;card.appendChild(link);
         const copy=document.createElement("button");copy.type="button";copy.className="secondary";copy.textContent="Copy tracked link";
@@ -1264,6 +1296,33 @@ function renderApprovalQueue(items) {
     details.textContent = JSON.stringify(item.payload || {}, null, 2);
     card.appendChild(details);
     if (item.decision_note) addText(card, "p", "Decision note: " + item.decision_note);
+
+    if (item.status === "approved" && item.action_type === "publish" &&
+        item.payload?.operation === "affiliate_campaign_activate") {
+      const activate = document.createElement("button");
+      activate.type = "button";
+      activate.textContent = "Activate approved affiliate tracking";
+      activate.addEventListener("click", async () => {
+        const campaignId = item.payload?.campaignId;
+        if (!campaignId || !window.confirm("Activate the public tracked redirect for this exact approved affiliate campaign? This does not publish a post or verify commissions.")) return;
+        activate.disabled = true;
+        try {
+          const result = await approvalApi("/api/affiliate/campaigns/" + encodeURIComponent(campaignId) + "/activate", {
+            method: "POST",
+            body: JSON.stringify({ approvalId: item.id })
+          });
+          setApprovalMessage(result.message || "Affiliate tracking activated.");
+          showToast("Owner-approved affiliate tracking activated.");
+          await loadApprovalQueue();
+          if (currentWorkspaceAgent === "affiliate") await loadAffiliateCampaigns();
+        } catch (error) {
+          setApprovalMessage(error.message, true);
+        } finally {
+          activate.disabled = false;
+        }
+      });
+      card.appendChild(activate);
+    }
 
     if (item.status === "pending") {
       const actions = document.createElement("div");
