@@ -279,6 +279,7 @@ async function processDailyQueue(ownerId, dayKey) {
         }
       }
       let searchConsoleContext = null;
+      let sportsResearch = null;
       if (job.agent_id === "seo") {
         const earlier = await persistentQueue.dailyResults(ownerId, dayKey);
         const context = earlier.filter(item => item.agent_id !== "seo").map(item =>
@@ -329,7 +330,7 @@ async function processDailyQueue(ownerId, dayKey) {
       // 2,100 requested tokens maps to about 2,800 max_completion_tokens in callGroq.
       if (job.agent_id === "blogging") {
         task = buildBlogRevisionTask({ task, attempt: job.attempts, previousError: job.last_error });
-        const sportsResearch = await fetchSportsResearch();
+        sportsResearch = await fetchSportsResearch();
         task += "\n\n" + formatSportsResearchContext(sportsResearch);
       }
       const runtimeInstructions = job.agent_id === "blogging" ? BLOGGING_RUNTIME_INSTRUCTIONS
@@ -351,7 +352,12 @@ async function processDailyQueue(ownerId, dayKey) {
         if (article.extractionStatus !== "complete") {
           throw new Error("Blog article extraction failed: full article body was not found or was too short. The draft was not saved; the queue will retry.");
         }
-        blogReview = reviewBlogArticle({ ...article, dayKey });
+        blogReview = reviewBlogArticle({
+          ...article,
+          dayKey,
+          researchStatus: sportsResearch?.status || "unavailable",
+          researchItemCount: Number(sportsResearch?.itemCount || 0)
+        });
         const savedDraft = await persistentQueue.saveBlogDraft(ownerId, job.id, {
           topic: article.title,
           language: "English",
