@@ -921,7 +921,7 @@ async function callGroq(task, instructions, maxTokens = 900) {
       if (response.status === 429) {
         // Honor the provider's Retry-After guidance when present. This cooldown
         // prevents later specialists from repeatedly hitting the same quota window.
-        setCooldown("groq", /tokens per day|\\bTPD\\b|daily quota|per day/i.test(details)
+        setCooldown("groq", /tokens per day|\bTPD\b|daily quota|per day/i.test(details)
           ? getProviderQuotaCooldownSeconds(details)
           : getRetrySeconds(details, response.headers.get("retry-after")));
       }
@@ -1014,7 +1014,7 @@ async function callOpenRouter(
       const details = await response.text();
 
       if (response.status === 429) {
-        setCooldown("openrouter", /tokens per day|\\bTPD\\b|daily quota|per day/i.test(details)
+        setCooldown("openrouter", /tokens per day|\bTPD\b|daily quota|per day/i.test(details)
           ? getProviderQuotaCooldownSeconds(details)
           : getRetrySeconds(details, response.headers.get("retry-after")));
       }
