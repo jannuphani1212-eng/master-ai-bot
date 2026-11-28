@@ -394,7 +394,21 @@ async function processDailyQueue(ownerId, dayKey) {
             "Failed checks: " + (blogReview.failures || []).join(", "),
             "Blockers: " + (blogReview.blockers || []).join(" ")
           ].join(" ");
-          throw new Error(details.slice(0, 1800));
+          const evidenceBlockedChecks = [
+            "researchFeedReady",
+            "researchReadiness",
+            "sportsEvidenceCoverage",
+            "biographyBirthDetailsHaveAuthoritativeSource",
+            "biographyMilestonesHaveOfficialSources",
+            "biographyKnownFactsConsistent",
+            "biographyAgeConsistent"
+          ];
+          const evidenceBlocked = evidenceBlockedChecks.some(check => blogReview.checks?.[check] === false);
+          const editorialError = new Error(details.slice(0, 1800));
+          // These blockers cannot be repaired by asking the same model to rewrite
+          // against the same research packet; preserve the draft and stop retries.
+          editorialError.nonRetryable = evidenceBlocked;
+          throw editorialError;
         }
         if (blogReview.status === "passed" && Number(blogReview.score) >= 97) {
           try {
