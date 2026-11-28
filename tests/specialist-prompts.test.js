@@ -33,6 +33,23 @@ test("specialist prompts contain domain-specific quality requirements", () => {
   assert.match(getSpecialistInstructions("seo"), /crawlability/);
 });
 
+test("YouTube prompt distinguishes true 3D video from 2D fallbacks and enforces free-provider gating", () => {
+  const prompt = getSpecialistInstructions("youtube");
+  assert.match(prompt, /TRUE 3D QUALITY GATE/);
+  assert.match(prompt, /A still-image slideshow, SVG scene, 2D vector cartoon/);
+  assert.match(prompt, /FREE-PROVIDER GATE/);
+  assert.match(prompt, /VIDEO ACCEPTANCE GATE/);
+  assert.match(prompt, /Never silently fall back to 2D/);
+});
+
+test("App Development prompt requires real 3D runtimes and verified build artifacts", () => {
+  const prompt = getSpecialistInstructions("app-development");
+  assert.match(prompt, /BEST-OUTPUT APP\/GAME GATE/);
+  assert.match(prompt, /TRUE 3D GAME GATE/);
+  assert.match(prompt, /A 2D canvas, SVG illustration/);
+  assert.match(prompt, /BUILD-ARTIFACT HONESTY/);
+  assert.match(prompt, /NOT TESTED/);
+});
 test("unknown specialist IDs are rejected", () => {
   assert.throws(
     () => getSpecialistInstructions("unknown"),
