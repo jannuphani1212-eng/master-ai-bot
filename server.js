@@ -548,6 +548,23 @@ async function startDailyWorker(ownerId, dayKey) {
   if (dailyWorkerRunning) return false;
   dailyWorkerRunning = true;
   try {
+    const requeued = await persistentQueue.requeueDueBlocked(ownerId);
+    for (const job of requeued) {
+      await persistentQueue.notify(ownerId, {
+        agentId: job.agent_id,
+        type: "agent_retry_scheduled",
+        title: job.agent_id + " provider cooldown elapsed; task requeued",
+        body: "The 24-hour provider quota cooldown elapsed. The saved task has safely returned to the queue for a bounded retry. If free-provider quotas are still unavailable, it will be blocked again without repeated rapid calls.",
+        metadata: {
+          jobId: job.id,
+          idempotencyKey: job.idempotency_key,
+          attempts: job.attempts,
+          maxAttempts: job.max_attempts,
+          queueStatus: "pending"
+        }
+      });
+    }
+    if (requeued.length) console.log("Provider cooldown recovery requeued " + requeued.length + " blocked job(s).");
     await processDailyQueue(ownerId, dayKey);
   } finally {
     dailyWorkerRunning = false;
