@@ -666,9 +666,6 @@ app.post("/api/internal/app-development-retry", async (req, res) => {
     const prefix = "daily:" + dayKey + ":app-development:recovery:";
     const recoveries = recent.filter(item => String(item.idempotency_key || "").startsWith(prefix));
     const active = recoveries.find(item => ["pending", "running"].includes(item.status));
-    if (recoveries.length >= 4 && !active) {
-      return res.status(429).json({ success: false, dayKey, error: "The daily App Development recovery limit of four jobs has been reached. Wait for provider quota reset or fix the generation issue before another attempt." });
-    }
     if (active && active.status === "pending" && Number(active.attempts || 0) >= Number(active.max_attempts || 4)) {
       const finalized = await persistentQueue.finalizeExhaustedPending(active.id);
       if (finalized.finalized) active.status = "failed";
@@ -686,6 +683,9 @@ app.post("/api/internal/app-development-retry", async (req, res) => {
         return res.status(202).json({ success: true, accepted: false, existing: true, status: resumedStatus, dayKey, message: "An existing App Development recovery was found; stale worker leases are recovered safely and pending work is resumed." });
       }
       console.warn("Expired final App Development attempt marked failed; enqueueing a fresh recovery job.");
+    }
+    if (recoveries.length >= 4) {
+      return res.status(429).json({ success: false, dayKey, error: "The daily App Development recovery limit of four jobs has been reached. Wait for provider quota reset or fix the generation issue before another attempt." });
     }
     const recoveryNumber = recoveries.length + 1;
     const queued = await persistentQueue.enqueue(ownerId, [{
