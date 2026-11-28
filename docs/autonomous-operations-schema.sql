@@ -7,7 +7,7 @@ create table if not exists public.master_ai_job_queue (
   priority smallint not null default 100 check (priority between 0 and 1000),
   task text not null check (char_length(task) between 1 and 10000),
   idempotency_key text not null,
-  status text not null default 'pending' check (status in ('pending','running','completed','failed')),
+  status text not null default 'pending' check (status in ('pending','running','completed','failed','blocked')),
   attempts integer not null default 0 check (attempts >= 0),
   max_attempts integer not null default 4 check (max_attempts between 1 and 8),
   next_run_at timestamptz not null default now(),
