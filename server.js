@@ -1719,6 +1719,7 @@ app.use("/api/affiliate", requireOwner);
 app.use("/api/affiliate", auditOwnerRequests);
 app.get("/api/affiliate/campaigns", affiliateHandlers.list);
 app.patch("/api/affiliate/campaigns/:id/link", affiliateHandlers.saveLink);
+app.post("/api/affiliate/campaigns/:id/activate", affiliateHandlers.activate);
 
 app.get("/api/search-console/oauth/callback", limitApiRequests, searchConsoleHandlers.callback);
 app.use("/api/search-console", requireOwner);

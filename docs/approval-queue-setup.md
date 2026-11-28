@@ -32,6 +32,21 @@ Do not add these values to GitHub or send them in chat. Set them only in Render'
 
 An approval record means only that the owner approved a proposal. It must not itself trigger publishing, spending, sending, deletion, account changes, or deployment. Each external-action adapter must have its own explicit allowlist, validation, audit trail, and confirmation step. Until those are separately implemented and tested, the system remains proposal-only.
 
+## Affiliate tracking activation (two owner actions)
+
+Affiliate tracking uses the existing `publish` action category with a typed payload operation, `affiliate_campaign_activate`; no database action-type constraint change is required. The affiliate workspace creates this proposal from the exact owner-saved product URL, affiliate URL, merchant, and campaign ID.
+
+The flow is deliberately two-step after saving links:
+
+1. The owner creates the activation proposal from the affiliate campaign card.
+2. The owner reviews and approves that proposal in the Owner Approval Center. Approval records a decision only.
+3. The owner then clicks **Activate approved affiliate tracking** on that approved proposal and confirms the action.
+4. The backend verifies the authenticated owner, proposal owner/creator/decider, approved status, action type, operation, campaign ID, merchant and exact saved URLs. It then conditionally changes only that owner's unchanged draft to active and stores the approval ID and activation audit fields in `content_json`.
+
+Activation enables only the public tracked redirect for that campaign. It does not publish a blog/social post, certify product claims, verify commissions, or record income. Pending/rejected proposals, altered links, non-owner proposals, already-active campaigns and replay attempts are rejected. If campaign links change after approval, create a new proposal. The redirect remains blocked unless the campaign is active and `externalPublishingApproved` is true.
+
+The backend route is owner-authenticated at `POST /api/affiliate/campaigns/:id/activate`. It uses the existing private Supabase service key already required by the affiliate integration; the browser never receives that key.
+
 ## 5. Verification checklist
 
 - [ ] Supabase Auth user created for the owner.
