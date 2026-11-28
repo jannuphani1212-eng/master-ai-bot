@@ -629,6 +629,9 @@ app.post("/api/internal/blog-retry", async (req, res) => {
       }
       console.warn("Expired final Blogging attempt marked failed; enqueueing a fresh recovery job.");
     }
+    if (recoveries.length >= 4) {
+      return res.status(429).json({ success: false, dayKey, error: "The daily Blogging recovery limit of four jobs has been reached. Stop retrying until the provider quota or editorial failure is resolved." });
+    }
     const recoveryNumber = recoveries.length + 1;
     const priorTopics = await persistentQueue.recentBlogTopics(ownerId, 200);
     const task = buildDailyBlogTask({ dayKey, priorTopics: priorTopics.map(item => item.topic) });
@@ -703,9 +706,11 @@ app.get("/api/internal/daily-status", async (req, res) => {
   const ownerId = String(process.env.SUPABASE_OWNER_USER_ID || "");
   const dayKey = indiaDayKey();
   try {
-    const jobs = (await persistentQueue.status(ownerId)).filter(job => job.idempotency_key === "daily:" + dayKey + ":" + job.agent_id);
+    const allJobs = await persistentQueue.status(ownerId);
+    const jobs = allJobs.filter(job => job.idempotency_key === "daily:" + dayKey + ":" + job.agent_id);
+    const recoveryJobs = allJobs.filter(job => String(job.idempotency_key || "").startsWith("daily:" + dayKey + ":blogging:recovery:"));
     const counts = jobs.reduce((acc, job) => { acc[job.status] = (acc[job.status] || 0) + 1; return acc; }, {});
-    return res.json({ success: true, dayKey, jobs, counts, workerRunning: dailyWorkerRunning, finished: jobs.length === 5 && jobs.every(job => ["completed", "failed"].includes(job.status)) });
+    return res.json({ success: true, dayKey, jobs, recoveryJobs, counts, workerRunning: dailyWorkerRunning, finished: jobs.length === 5 && jobs.every(job => ["completed", "failed"].includes(job.status)) });
   } catch (error) {
     return res.status(503).json({ success: false, error: error.message });
   }
