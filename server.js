@@ -7,6 +7,7 @@ import { runProviderFallback } from "./lib/provider-fallback.js";
 import { extractCompletionText } from "./lib/completion-text.js";
 import { mergeMissingReportSections } from "./lib/report-repair.js";
 import { getRetrySeconds as getProviderRetrySeconds } from "./lib/retry-after.js";
+import { getProviderQuotaCooldownSeconds } from "./lib/rate-limit.js";
 import { getMasterInstructions, getSpecialistInstructions } from "./lib/specialist-prompts.js";
 import { createSelfHealingMonitor, inferFailureType } from "./lib/self-healing.js";
 import { buildRepairProposals } from "./lib/repair-proposals.js";
@@ -920,7 +921,9 @@ async function callGroq(task, instructions, maxTokens = 900) {
       if (response.status === 429) {
         // Honor the provider's Retry-After guidance when present. This cooldown
         // prevents later specialists from repeatedly hitting the same quota window.
-        setCooldown("groq", getRetrySeconds(details, response.headers.get("retry-after")));
+        setCooldown("groq", /tokens per day|\\bTPD\\b|daily quota|per day/i.test(details)
+          ? getProviderQuotaCooldownSeconds(details)
+          : getRetrySeconds(details, response.headers.get("retry-after")));
       }
 
       console.error(
@@ -1011,7 +1014,9 @@ async function callOpenRouter(
       const details = await response.text();
 
       if (response.status === 429) {
-        setCooldown("openrouter", getRetrySeconds(details, response.headers.get("retry-after")));
+        setCooldown("openrouter", /tokens per day|\\bTPD\\b|daily quota|per day/i.test(details)
+          ? getProviderQuotaCooldownSeconds(details)
+          : getRetrySeconds(details, response.headers.get("retry-after")));
       }
 
       console.error(
@@ -1085,7 +1090,7 @@ async function generateAI(task, instructions, maxTokens = 900) {
 
       if (provider.id === "gemini") {
         if (/429|RESOURCE_EXHAUSTED/i.test(error.message)) {
-          setCooldown("gemini", 3600);
+          setCooldown("gemini", getProviderQuotaCooldownSeconds(error.message));
         } else if (/503|UNAVAILABLE|timeout|fetch failed/i.test(error.message)) {
           setCooldown("gemini", getRetrySeconds(error.message));
         }
