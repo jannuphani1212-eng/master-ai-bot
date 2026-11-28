@@ -356,7 +356,8 @@ async function processDailyQueue(ownerId, dayKey) {
           ...article,
           dayKey,
           researchStatus: sportsResearch?.status || "unavailable",
-          researchItemCount: Number(sportsResearch?.itemCount || 0)
+          researchItemCount: Number(sportsResearch?.itemCount || 0),
+          researchItems: Array.isArray(sportsResearch?.items) ? sportsResearch.items : []
         });
         const savedDraft = await persistentQueue.saveBlogDraft(ownerId, job.id, {
           topic: article.title,
